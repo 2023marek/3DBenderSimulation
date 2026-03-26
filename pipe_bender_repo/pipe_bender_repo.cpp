@@ -6,6 +6,15 @@
 int main()
 {
     std::cout << "Hello World!\n";
+    std::cout <<  "Hello from feature branch!\n";
+     std::cout <<  "Hello from master branch!\n";
+     std::cout <<  "Hello from feature branch again!\n";
+     std::cout <<  "Hello from master branch again!\n";
+     std::cout <<  "Hello from feature branch again and again!\n";
+     std::cout <<  "Hello from master branch again and again!\n";
+     std::cout <<  "Hello from feature branch again and again and again!\n";
+	 std::cout << "Hello from master branch again and again and again!\n";
+	 return 0;
 }
 
 // Run program: Ctrl + F5 or Debug > Start Without Debugging menu
