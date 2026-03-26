@@ -5,15 +5,8 @@
 
 int main()
 {
-    std::cout << "Hello World!\n";
-    std::cout <<  "Hello from feature branch!\n";
-     std::cout <<  "Hello from master branch!\n";
-     std::cout <<  "Hello from feature branch again!\n";
-     std::cout <<  "Hello from master branch again!\n";
-     std::cout <<  "Hello from feature branch again and again!\n";
-     std::cout <<  "Hello from master branch again and again!\n";
-     std::cout <<  "Hello from feature branch again and again and again!\n";
-	 std::cout << "Hello from master branch again and again and again!\n";
+    std::cout << "Message from branch B"<<std::endl;
+    
 	 return 0;
 }
 
