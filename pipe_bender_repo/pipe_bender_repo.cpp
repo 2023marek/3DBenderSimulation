@@ -5,14 +5,10 @@
 
 int main()
 {
-<<<<<<< HEAD
+
     std::cout << "Message from branch B"<<std::endl;
     
-=======
-    std::cout << "Hello World!\n";
-    std::cout <<  "Hello from feature branch!\n";
-    std::cout << "Message frrom branch A" << std::endl;
->>>>>>> feature/change-message-A
+  
 	 return 0;
 }
 
