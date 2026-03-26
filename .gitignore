@@ -1,0 +1,29 @@
+# Visual Studio
+.vs/
+*.user
+*.suo
+
+# Build directories
+Debug/
+Release/
+x64/
+[Bb]in/
+[Oo]bj/
+
+# Build artifacts
+*.bin
+*.obj
+*.exe
+*.pdb
+*.ilk
+*.log
+*.tlog
+*.recipe
+
+# CMake (if ever used)
+CMakeFiles/
+CMakeCache.txt
+
+# OS
+.DS_Store
+Thumbs.db
