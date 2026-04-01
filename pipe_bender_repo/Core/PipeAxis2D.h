@@ -4,6 +4,7 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include "../Core/Math/Vec2D.h"
 
 static constexpr double PI = 3.14159265358979323846;
 
@@ -19,7 +20,7 @@ public:
 
     struct Node
     {
-        Vec2 pos;
+        Vec2D pos;
         double theta = 0.0;
     };
 
@@ -76,7 +77,7 @@ public:
     {
         nodes.clear();
 
-        Vec2 P{ 0.0,0.0 };
+        Vec2D P{ 0.0,0.0 };
         double theta = 0.0;
 
         nodes.push_back({ P,theta });
@@ -130,7 +131,7 @@ private:
 
 private:
 
-    void buildFeed(Vec2& P, double& theta, double length)
+    void buildFeed(Vec2D& P, double& theta, double length)
     {
         int n = static_cast<int>(std::round(length / ds));
 
@@ -143,7 +144,7 @@ private:
         }
     }
 
-    void buildBend(Vec2& P,
+    void buildBend(Vec2D& P,
         double& theta,
         double R,
         double angle,
@@ -160,15 +161,15 @@ private:
 
         int s = static_cast<int>(dir);
 
-        Vec2 T{ std::cos(theta), std::sin(theta) };
-        Vec2 N;
+        Vec2D T{ std::cos(theta), std::sin(theta) };
+        Vec2D N;
 
         if (dir == BendDirection::CCW)
             N = { -T.y, T.x };
         else
             N = { T.y, -T.x };
 
-        Vec2 C
+        Vec2D C
         {
             P.x + R * N.x,
             P.y + R * N.y

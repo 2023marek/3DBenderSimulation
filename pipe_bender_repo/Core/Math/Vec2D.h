@@ -2,17 +2,17 @@
 
 #include <cmath>
 
-struct Vec2
+struct Vec2D
 {
     double x;
     double y;
 
-    Vec2()
+    Vec2D()
         : x(0.0), y(0.0)
     {
     }
 
-    Vec2(double X, double Y)
+    Vec2D(double X, double Y)
         : x(X), y(Y)
     {
     }

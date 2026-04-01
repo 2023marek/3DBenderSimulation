@@ -4,7 +4,7 @@
 
 struct MachineModel
 {
-    Vec2 bendCenter{ 0,0 };
+    Vec2D bendCenter{ 0,0 };
 
     double bendRadius = 50.0;
 
