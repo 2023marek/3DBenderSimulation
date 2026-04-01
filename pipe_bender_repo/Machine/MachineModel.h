@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/Vec2.h"
+#include "../core/Math/Vec2D.h"
 
 struct MachineModel
 {

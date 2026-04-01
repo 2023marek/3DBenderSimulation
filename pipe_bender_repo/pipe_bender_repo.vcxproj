@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Core\Math\Vec2D.h" />
     <ClInclude Include="Core\Operations.h" />
     <ClInclude Include="Core\PipeAxis2D.h" />
     <ClInclude Include="Machine\MachineModel.h" />
