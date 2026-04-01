@@ -18,6 +18,18 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Core\Operations.h" />
+    <ClInclude Include="Core\PipeAxis2D.h" />
+    <ClInclude Include="Machine\MachineModel.h" />
+    <ClInclude Include="Render\GnuplotExporter.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="pipe.dat" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="App\main.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
