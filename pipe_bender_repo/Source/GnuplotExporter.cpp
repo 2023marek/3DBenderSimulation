@@ -8,14 +8,27 @@
 
 void GnuplotExporter::exportPipe(const PipeAxis2D& pipe,
     const std::string& filename)
+
 {
     std::ofstream file(filename);
+    if (!file)
+    {
+        std::cerr << "Cannot open " << filename << "\n";
+        return;
+    }
+    file << "# x y theta\n";
+    std::cout <<"  x   y   theta\n";
 
     for (const auto& n : pipe.getNodes())
     {
         file << n.pos.x << " "
+            << n.pos.y << "\n"
+			<< n.theta << "\n";
+        std::cout << n.pos.x << "   "
             << n.pos.y << "\n";
     }
+	std::cout << "Exported " << pipe.getNodes().size() << " nodes to " << filename << "\n";
+
 }
 
 void GnuplotExporter::exportMachine(const MachineModel& machine,

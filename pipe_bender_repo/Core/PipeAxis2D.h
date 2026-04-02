@@ -89,34 +89,13 @@ public:
                 buildFeed(P, theta, op.length);
             }
             else
-            {
+            { 
                 buildBend(P, theta, op.R, op.angle, op.dir);
             }
         }
     }
 
-    void exportForGnuplot(const std::string& filename) const
-    {
-        std::ofstream file(filename);
-
-        if (!file)
-        {
-            std::cerr << "Cannot open " << filename << "\n";
-            return;
-        }
-
-        file << "# x y theta\n";
-
-        for (const auto& n : nodes)
-        {
-            file << n.pos.x << " "
-                << n.pos.y << " "
-                << n.theta << "\n";
-        }
-
-        std::cout << "Exported " << nodes.size() << " nodes to " << filename << "\n";
-    }
-
+   
     const std::vector<Node>& getNodes() const
     {
         return nodes;
