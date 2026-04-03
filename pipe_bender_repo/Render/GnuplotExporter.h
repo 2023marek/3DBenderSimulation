@@ -19,4 +19,4 @@ public:
 
     static void exportScene(const PipeAxis2D& pipe,
         const MachineModel& machine);
-};
+}; 

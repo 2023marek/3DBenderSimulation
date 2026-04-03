@@ -33,6 +33,7 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="pipe.dat" />
+    <None Include="plot_pipe.plt" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="App\main.cpp">
