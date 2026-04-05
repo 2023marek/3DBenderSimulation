@@ -8,56 +8,81 @@
 #include <string>
 
 // ================= PUBLIC =================
-void runGnuplot(const std::string& scriptFile);  
+void GnuplotExporter::exportPipe(const PipeAxis2D& pipe)
+{
+    const std::string dataFile = "pipe.dat";
+    const std::string scriptFile = "plot_pipe.plt";
 
-void GnuplotExporter::exportPipe(const PipeAxis2D& pipe,
+    exportPipeData(pipe, dataFile);
+    createPlotScript(dataFile, scriptFile);
+    runGnuplot(scriptFile);
+}
+
+void GnuplotExporter::exportPipeData(const PipeAxis2D& pipe,
     const std::string& filename)
-
 {
     std::ofstream file(filename);
+
     if (!file)
     {
         std::cerr << "Cannot open " << filename << "\n";
         return;
     }
-    file << "# x y theta\n";
-    std::cout <<"  x   y   theta\n";
-    if (pipe.getNodes().empty())
-    {
-        std::cerr << "ERROR: Pipe has no nodes!\n";
-        return;
-    }
+
     for (const auto& n : pipe.getNodes())
     {
         file << n.pos.x << " "
             << n.pos.y << " "
-			<< n.theta << "\n";
-        
+            << n.theta << "\n";
     }
+
     file.close();
-	std::cout << "Exported " << pipe.getNodes().size() << " nodes to " << filename << "\n";
-
-    std::ofstream script("plot_pipe.plt");
-    auto path = std::filesystem::current_path().string();
-    std::replace(path.begin(), path.end(), '\\', '/');
-
-    auto fullFile = std::filesystem::absolute(filename).string();
-    std::replace(fullFile.begin(), fullFile.end(), '\\', '/');
-
-     
-
-    script << "cd \"" << path << "\"\n";
-    script << "set terminal wxt\n";
-    script << "set grid\n";
-    script << "set size ratio -1\n";
-    script << "plot \\\n";
-    script << "\"" << fullFile << "\" using 1:2 with lines lw 2 title \"Pipe\", \\\n";
-    script << "\"" << fullFile << "\" using 1:2:(75*cos($3)):(75*sin($3)) "
-        << "with vectors head filled lt 2 title \"Direction\"\n";
-    script << "pause -1\n";
-    script.close();
-	runGnuplot("plot_pipe.plt");
 }
+
+    void GnuplotExporter::createPlotScript(const std::string & dataFile,
+        const std::string & scriptFile)
+    {
+        std::ofstream script(scriptFile);
+
+        script << "set terminal wxt\n";
+        script << "set grid\n";
+        script << "set size ratio -1\n";
+
+        script << "while (1) {\n";
+        script << "plot \\\n";
+        script << "\"" << dataFile << "\" using 1:2 with lines lw 2 title 'Pipe', \\\n";
+        script << "\"" << dataFile << "\" every 5 using 1:2:(5*cos($3)):(5*sin($3)) "
+            << "with vectors head filled title 'Direction'\n";
+        script << "pause 1\n";
+        script << "}\n";
+
+        script.close();
+    }
+
+    void GnuplotExporter::runGnuplot(const std::string& scriptFile)
+    {
+        std::string cmd = "gnuplot " + scriptFile;
+
+        int result = system(cmd.c_str());
+
+        if (result != 0)
+        {
+            cmd = "\"C:\\Program Files\\gnuplot\\bin\\gnuplot.exe\" " + scriptFile;
+            result = system(cmd.c_str());
+        }
+
+        if (result != 0)
+        {
+            std::cerr << "Failed to launch gnuplot\n";
+        }
+    }
+	
+
+
+
+
+
+
 
 void GnuplotExporter::exportMachine(const MachineModel& machine,
     const std::string& filename)
@@ -73,23 +98,4 @@ void GnuplotExporter::exportScene(const PipeAxis2D& pipe,
 {
     exportPipe(pipe);
     exportMachine(machine);
-
-
-}
-void runGnuplot(const std::string& scriptFile)
-{
-    std::string cmd = "gnuplot " + scriptFile;
-
-    int result = system(cmd.c_str());
-
-    if (result != 0)
-    {
-        cmd = "\"C:\\Program Files\\gnuplot\\bin\\gnuplot.exe\" " + scriptFile;
-        result = system(cmd.c_str());
-    }
-
-    if (result != 0)
-    {
-        std::cerr << "Failed to launch gnuplot\n";
-    }
 }

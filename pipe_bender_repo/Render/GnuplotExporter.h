@@ -9,14 +9,23 @@
 
 class GnuplotExporter
 {
-public:
-    // Simple API
-    static void exportPipe(const PipeAxis2D& pipe,
-        const std::string& filename = "pipe.dat");
 
+
+public:
+    static void exportPipe(const PipeAxis2D& pipe);
+
+private:
+    static void exportPipeData(const PipeAxis2D& pipe, const std::string& file);
+    static void createPlotScript(const std::string& dataFile, const std::string& scriptFile);
+    static void runGnuplot(const std::string& scriptFile);
+
+public:
     static void exportMachine(const MachineModel& machine,
         const std::string& filename = "machine.dat");
 
     static void exportScene(const PipeAxis2D& pipe,
         const MachineModel& machine);
+
+
+
 }; 
