@@ -15,31 +15,45 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Core\PipeAxis2D.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Render\GnuplotExporter.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Machine\MachineModel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Core\Operations.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Core\Math\Vec2D.h">
+    <ClInclude Include="Core\Math\Vec3D.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Core\PipeAxis3D.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Render\GnuplotExporter3D.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Render\ShaderGL.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Render\CameraGL.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Render\PipeRenderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <None Include="pipe.dat" />
-    <None Include="plot_pipe.plt" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClCompile Include="App\main.cpp">
+    <ClCompile Include="App\main3D.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\GnuplotExporter.cpp">
+    <ClCompile Include="Source\GnuplotExporter3D.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\ShaderGL.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\CameraGL.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\PipeRenderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
