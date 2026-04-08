@@ -27,16 +27,13 @@
     <ClInclude Include="Core\PipeAxis3D.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Render\GnuplotExporter3D.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Render\ShaderGL.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Render\CameraGL.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Render\PipeRenderer.h">
+    <ClInclude Include="Render\ControlCamera.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Render\TubeMesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -47,13 +44,13 @@
     <ClCompile Include="Source\GnuplotExporter3D.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\ShaderGL.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Source\CameraGL.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Source\PipeRenderer.cpp">
+    <ClCompile Include="Source\ControlCamera.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\TubeMesh.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

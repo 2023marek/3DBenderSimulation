@@ -24,16 +24,15 @@
     <ClInclude Include="Core\PipeAxis3D.h" />
     <ClInclude Include="Machine\MachineModel.h" />
     <ClInclude Include="Render\CameraGL.h" />
-    <ClInclude Include="Render\GnuplotExporter3D.h" />
-    <ClInclude Include="Render\PipeRenderer.h" />
-    <ClInclude Include="Render\ShaderGL.h" />
+    <ClInclude Include="Render\ControlCamera.h" />
+    <ClInclude Include="Render\TubeMesh.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="App\main3D.cpp" />
     <ClCompile Include="Source\CameraGL.cpp" />
+    <ClCompile Include="Source\ControlCamera.cpp" />
     <ClCompile Include="Source\GnuplotExporter3D.cpp" />
-    <ClCompile Include="Source\PipeRenderer.cpp" />
-    <ClCompile Include="Source\ShaderGL.cpp" />
+    <ClCompile Include="Source\TubeMesh.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>
