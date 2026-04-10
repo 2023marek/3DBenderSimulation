@@ -1,16 +1,52 @@
 #pragma once
+
 #include <vector>
-#include "../Core/PipeAxis3D.h"
+
+enum class RenderMode
+{
+    LINE,
+    MESH
+};
 
 class PipeRenderer
 {
 public:
+    // =========================
+    // LIFECYCLE
+    // =========================
     PipeRenderer();
+    ~PipeRenderer();
 
-    void update(const PipeAxis3D& pipe);
+    // =========================
+    // MODE
+    // =========================
+    void setMode(RenderMode m);
+
+    // =========================
+    // UPLOAD DATA
+    // =========================
+    void uploadLine(const std::vector<float>& vertices);
+
+    void uploadMesh(const std::vector<float>& vertices,
+        const std::vector<float>& normals,
+        const std::vector<unsigned int>& indices);
+
+    // =========================
+    // DRAW
+    // =========================
     void draw();
 
 private:
-    unsigned int VAO, VBO;
-    int vertexCount = 0;
+    void setupBuffers();
+
+private:
+    RenderMode mode = RenderMode::LINE;
+
+    unsigned int VAO = 0;
+    unsigned int VBO = 0; // positions
+    unsigned int NBO = 0; // normals
+    unsigned int EBO = 0; // indices
+
+    size_t vertexCount = 0;
+    size_t indexCount = 0;
 };

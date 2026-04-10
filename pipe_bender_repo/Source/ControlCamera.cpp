@@ -63,3 +63,13 @@ void ControlCamera::processPan(float dx, float dy)
     // move target
     target += (-right * dx + up * dy) * panSpeed;
 }
+glm::vec3 ControlCamera::getPosition() const
+{
+    glm::vec3 position;
+
+    position.x = target.x + distance * cos(glm::radians(pitch)) * cos(glm::radians(yaw));
+    position.y = target.y + distance * sin(glm::radians(pitch));
+    position.z = target.z + distance * cos(glm::radians(pitch)) * sin(glm::radians(yaw));
+
+    return position;
+}
