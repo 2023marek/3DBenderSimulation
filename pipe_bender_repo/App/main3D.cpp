@@ -1,88 +1,37 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-#include <vector>
 #include <iostream>
 
+// Core
 #include "../Core/PipeAxis3D.h"
+
+// Rendering
 #include "../Render/PipeRenderer.h"
-#include "../Render/ShaderGL.h"
 #include "../Render/ControlCamera.h"
 #include "../Render/TubeMesh.h"
+#include "../Render/RenderMode.h" // <-- shared enum
 
 // =========================
-// WINDOW
+// WINDOW CONFIG
 // =========================
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
 
 // =========================
-// MOUSE STATE
+// GLOBAL CAMERA (INPUT SYSTEM)
 // =========================
+ControlCamera* gCamera = nullptr;
+
+bool leftMousePressed = false;
+bool rightMousePressed = false;
+bool firstMouse = true;
 double lastX = WIDTH / 2.0;
 double lastY = HEIGHT / 2.0;
 
-bool firstMouse = true;
-bool leftMousePressed = false;
-bool rightMousePressed = false;
-
-ControlCamera* gCamera = nullptr;
-
 // =========================
-// SHADERS
+// INPUT CALLBACKS
 // =========================
-const char* vertexSrc = R"(
-#version 330 core
-
-layout (location = 0) in vec3 aPos;
-layout (location = 1) in vec3 aNormal;
-
-uniform mat4 MVP;
-uniform mat4 model;
-
-out vec3 FragPos;
-out vec3 Normal;
-
-void main()
-{
-    FragPos = vec3(model * vec4(aPos, 1.0));
-    Normal = mat3(model) * aNormal;
-
-    gl_Position = MVP * vec4(aPos, 1.0);
-}
-)";
-
-const char* fragmentSrc = R"(
-#version 330 core
-
-out vec4 FragColor;
-
-in vec3 FragPos;
-in vec3 Normal;
-
-uniform vec3 lightPos;
-uniform vec3 viewPos;
-
-void main()
-{
-    vec3 norm = normalize(Normal);
-    vec3 lightDir = normalize(lightPos - FragPos);
-
-    float diff = max(dot(norm, lightDir), 0.0);
-
-    vec3 color = vec3(0.2, 0.8, 0.3) * diff;
-
-    FragColor = vec4(color, 1.0);
-}
-)";
-
-// =========================
-// CALLBACKS
-// =========================
-void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+void mouse_callback(GLFWwindow*, double xpos, double ypos)
 {
     if (firstMouse)
     {
@@ -100,13 +49,13 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
     if (!gCamera) return;
 
     if (leftMousePressed)
-        gCamera->processMouseMovement(dx, -dy);
+        gCamera->processMouseMovement(dx, -dy); // rotate
 
     if (rightMousePressed)
-        gCamera->processPan(dx, dy);
+        gCamera->processPan(dx, dy); // pan
 }
 
-void mouse_button_callback(GLFWwindow* window, int button, int action, int)
+void mouse_button_callback(GLFWwindow*, int button, int action, int)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT)
         leftMousePressed = (action == GLFW_PRESS);
@@ -122,15 +71,29 @@ void scroll_callback(GLFWwindow*, double, double yoffset)
 }
 
 // =========================
-// MVP
+// HELPER: extract tangents
 // =========================
-glm::mat4 getMVP(ControlCamera& camera)
+void extractPointsAndTangents(
+    const PipeAxis3D& pipe,
+    std::vector<Vec3D>& points,
+    std::vector<Vec3D>& tangents)
 {
-    glm::mat4 model = glm::mat4(1.0f);
-    glm::mat4 view = camera.getViewMatrix();
-    glm::mat4 proj = camera.getProjection(WIDTH, HEIGHT);
+    const auto& nodes = pipe.getNodes();
 
-    return proj * view * model;
+    for (size_t i = 0; i < nodes.size(); i++)
+    {
+        points.push_back(nodes[i].pos);
+
+        if (i < nodes.size() - 1)
+        {
+            Vec3D t = nodes[i + 1].pos - nodes[i].pos;
+            tangents.push_back(normalize(t));
+        }
+        else
+        {
+            tangents.push_back(tangents.back());
+        }
+    }
 }
 
 // =========================
@@ -138,69 +101,47 @@ glm::mat4 getMVP(ControlCamera& camera)
 // =========================
 int main()
 {
+    // =========================================
+    // INIT WINDOW (Platform Layer)
+    // =========================================
     glfwInit();
-
     GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Pipe3D", NULL, NULL);
     glfwMakeContextCurrent(window);
 
     gladLoadGL();
     glEnable(GL_DEPTH_TEST);
 
-    // =========================
-    // SYSTEMS
-    // =========================
-    ShaderGL shader(vertexSrc, fragmentSrc);
-    PipeRenderer renderer;
-    TubeMesh tube(5.0, 16);
+    // =========================================
+    // CREATE SYSTEMS (Engine Initialization)
+    // =========================================
 
+    ControlCamera camera;
+    gCamera = &camera;
+
+    PipeRenderer renderer;     // NOW USED PROPERLY
+    TubeMesh tube(5.0, 16);   // mesh generator
+
+    // Pipe logic (Scene)
     PipeAxis3D pipe(5.0);
-
     pipe.addFeed(10);
     pipe.addBend(50, PI / 3);
     pipe.addRotate(PI / 3);
     pipe.addFeed(80);
     pipe.addBend(40, PI / 1);
 
-    ControlCamera camera;
-    gCamera = &camera;
+    RenderMode mode = RenderMode::MESH;
 
+    // Input hooks
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
-    RenderMode mode = RenderMode::MESH;
+    
 
-    // =========================
-    // LOOP
-    // =========================
     while (!glfwWindowShouldClose(window))
     {
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        pipe.build();
-
         // =========================
-        // BUILD GEOMETRY
-        // =========================
-        std::vector<Vec3D> points;
-        std::vector<Vec3D> tangents;
-
-        for (const auto& n : pipe.getNodes())
-            points.push_back(n.pos);
-
-        for (size_t i = 0; i + 1 < points.size(); i++)
-        {
-            Vec3D t = points[i + 1] - points[i];
-            tangents.push_back(normalize(t));
-        }
-
-        if (!tangents.empty())
-            tangents.push_back(tangents.back());
-
-        tube.build(points, tangents);
-
-        // =========================
-        // INPUT (MODE SWITCH)
+        // INPUT (mode switching)
         // =========================
         static bool keyPressed = false;
 
@@ -208,62 +149,57 @@ int main()
         {
             if (!keyPressed)
             {
-                mode = (mode == RenderMode::LINE) ? RenderMode::MESH : RenderMode::LINE;
-                keyPressed = true;
+                mode = (mode == RenderMode::LINE)
+                    ? RenderMode::MESH
+                    : RenderMode::LINE;
 
-                std::cout << "Mode: "
-                    << (mode == RenderMode::LINE ? "LINE" : "MESH")
-                    << "\n";
+                keyPressed = true;
             }
+        }
+        else keyPressed = false;
+
+        // =========================
+        // UPDATE (Scene logic)
+        // =========================
+        pipe.build();
+
+        // =========================
+        // PREPARE DATA FOR RENDERER
+        // =========================
+        if (mode == RenderMode::LINE)
+        {
+            std::vector<float> vertices;
+
+            for (auto& n : pipe.getNodes())
+            {
+                vertices.push_back((float)n.pos.x);
+                vertices.push_back((float)n.pos.y);
+                vertices.push_back((float)n.pos.z);
+            }
+
+            renderer.uploadLine(vertices);
         }
         else
         {
-            keyPressed = false;
-        }
+            std::vector<Vec3D> points, tangents;
+            extractPointsAndTangents(pipe, points, tangents);
 
-        // =========================
-        // SHADER
-        // =========================
-        shader.use();
+            tube.build(points, tangents);
 
-        glm::mat4 model = glm::mat4(1.0f);
-        glm::mat4 MVP = getMVP(camera);
-
-        shader.setMat4("MVP", MVP);
-        shader.setMat4("model", model);
-
-        shader.setVec3("lightPos", glm::vec3(10, 10, 10));
-        shader.setVec3("viewPos", camera.getPosition());
-
-        // =========================
-        // RENDER
-        // =========================
-        renderer.setMode(mode);
-
-        if (mode == RenderMode::MESH)
-        {
             renderer.uploadMesh(
                 tube.getVertices(),
                 tube.getNormals(),
                 tube.getIndices()
             );
         }
-        else
-        {
-            // build line vertices
-            std::vector<float> lineVertices;
 
-            for (const auto& n : pipe.getNodes())
-            {
-                lineVertices.push_back((float)n.pos.x);
-                lineVertices.push_back((float)n.pos.y);
-                lineVertices.push_back((float)n.pos.z);
-            }
+        // =========================
+        // RENDER
+        // =========================
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            renderer.uploadLine(lineVertices);
-        }
-
-        renderer.draw();
+        renderer.setMode(mode);   // <-- clean API
+        renderer.draw();          // <-- ONLY draw call
 
         glfwSwapBuffers(window);
         glfwPollEvents();

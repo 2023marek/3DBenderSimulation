@@ -1,192 +1,102 @@
 #include "../Render/TubeMesh.h"
 #include <cmath>
+#include <algorithm> // std::clamp
 
 // =========================
-// LOCAL UTILS
+// SAFE M_PI (MSVC FIX)
 // =========================
-static constexpr double PI = 3.14159265358979323846;
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
-static double clamp(double v, double a, double b)
-{
-    return std::max(a, std::min(b, v));
-}
+TubeMesh::TubeMesh() {}
 
-// =========================
-// CONSTRUCTOR
-// =========================
-TubeMesh::TubeMesh(double r, int segments)
-    : radius(r), radialSegments(segments)
-{
-}
-
-// =========================
-// SETTERS
-// =========================
-void TubeMesh::setRadius(double r)
-{
-    radius = r;
-}
-
-void TubeMesh::setRadialSegments(int n)
-{
-    radialSegments = n;
-}
-
-// =========================
-// GETTERS
-// =========================
-const std::vector<float>& TubeMesh::getVertices() const { return vertices; }
-const std::vector<float>& TubeMesh::getNormals() const { return normals; }
-const std::vector<unsigned int>& TubeMesh::getIndices() const { return indices; }
-
-// =========================
-// BUILD
-// =========================
-void TubeMesh::build(const std::vector<Vec3D>& points,
-    const std::vector<Vec3D>& tangents)
+void TubeMesh::clear()
 {
     vertices.clear();
-    normals.clear();
     indices.clear();
+}
+void TubeMesh::computeInitialFrame(const Vec3D& tangent,
+    Vec3D& normal,
+    Vec3D& binormal)
+{
+    // choose stable up vector
+    Vec3D up = (std::fabs(tangent.y) < 0.9)
+        ? Vec3D{ 0, 1, 0 }
+    : Vec3D{ 1, 0, 0 };
 
-    if (points.size() < 2 || tangents.size() < 2)
+    normal = normalize(cross(tangent, up));
+    binormal = cross(tangent, normal);
+}
+void TubeMesh::updateFramePTF(const Vec3D& prevT,
+    const Vec3D& currT,
+    Vec3D& normal,
+    Vec3D& binormal)
+{
+    Vec3D axis = cross(prevT, currT);
+    double axisLen = length(axis);
+
+    // if almost no rotation ? skip
+    if (axisLen < 1e-9)
         return;
 
-    // =========================
-    // FRAME ARRAYS
-    // =========================
-    std::vector<Vec3D> frameN;
-    std::vector<Vec3D> frameB;
+    axis = normalize(axis);
 
-    // --- INITIAL FRAME ---
-    Vec3D t0 = normalize(tangents[0]);
+    double dotVal = std::clamp(dot(prevT, currT), -1.0, 1.0);
+    double angle = std::acos(dotVal);
 
-    Vec3D up = (std::abs(t0.z) < 0.9) ? Vec3D{ 0,0,1 } : Vec3D{ 0,1,0 };
-
-    Vec3D N0 = normalize(cross(t0, up));
-    Vec3D B0 = normalize(cross(t0, N0));
-
-    frameN.push_back(N0);
-    frameB.push_back(B0);
-
-    // =========================
-    // PARALLEL TRANSPORT
-    // =========================
-    for (size_t i = 1; i < points.size(); i++)
-    {
-        Vec3D tPrev = normalize(tangents[i - 1]);
-        Vec3D tCurr = normalize(tangents[i]);
-
-        Vec3D axis = cross(tPrev, tCurr);
-        double len = length(axis);
-
-        if (len < 1e-6)
+    auto rotate = [&](const Vec3D& v)
         {
-            frameN.push_back(frameN.back());
-            frameB.push_back(frameB.back());
-            continue;
-        }
+            // Rodrigues rotation formula
+            Vec3D term1 = v * std::cos(angle);
+            Vec3D term2 = cross(axis, v) * std::sin(angle);
+            Vec3D term3 = axis * (dot(axis, v) * (1.0 - std::cos(angle)));
+            return term1 + term2 + term3;
+        };
 
-        axis = normalize(axis);
-
-        double cosA = clamp(dot(tPrev, tCurr), -1.0, 1.0);
-        double angle = std::acos(cosA);
-
-        Vec3D Nprev = frameN.back();
-        Vec3D Bprev = frameB.back();
-
-        // Rodrigues rotation
-        auto rotate = [&](const Vec3D& v)
-            {
-                return v * std::cos(angle)
-                    + cross(axis, v) * std::sin(angle)
-                    + axis * dot(axis, v) * (1 - std::cos(angle));
-            };
-
-        Vec3D Nnew = normalize(rotate(Nprev));
-        Vec3D Bnew = normalize(rotate(Bprev));
-
-        frameN.push_back(Nnew);
-        frameB.push_back(Bnew);
-    }
-
-    // =========================
-    // BUILD RINGS
-    // =========================
-    std::vector<std::vector<Vec3D>> rings;
-
-    for (size_t i = 0; i < points.size(); i++)
-    {
-        std::vector<Vec3D> ring;
-        buildRing(points[i], frameN[i], frameB[i], ring);
-        rings.push_back(ring);
-    }
-
-    // =========================
-    // BUILD VERTICES + NORMALS
-    // =========================
-    for (size_t i = 0; i < rings.size(); i++)
-    {
-        const auto& ring = rings[i];
-        Vec3D center = points[i];
-
-        for (const auto& p : ring)
-        {
-            Vec3D normal = normalize(p - center);
-
-            vertices.push_back((float)p.x);
-            vertices.push_back((float)p.y);
-            vertices.push_back((float)p.z);
-
-            normals.push_back((float)normal.x);
-            normals.push_back((float)normal.y);
-            normals.push_back((float)normal.z);
-        }
-    }
-
-    // =========================
-    // BUILD INDICES
-    // =========================
-    int ringSize = radialSegments;
-
-    for (size_t i = 0; i < rings.size() - 1; i++)
-    {
-        for (int j = 0; j < ringSize; j++)
-        {
-            int nextJ = (j + 1) % ringSize;
-
-            int a = i * ringSize + j;
-            int b = (i + 1) * ringSize + j;
-            int c = i * ringSize + nextJ;
-            int d = (i + 1) * ringSize + nextJ;
-
-            indices.push_back(a);
-            indices.push_back(b);
-            indices.push_back(c);
-
-            indices.push_back(c);
-            indices.push_back(b);
-            indices.push_back(d);
-        }
-    }
+    normal = normalize(rotate(normal));
+    binormal = normalize(rotate(binormal));
 }
-
-// =========================
-// BUILD SINGLE RING
-// =========================
-void TubeMesh::buildRing(const Vec3D& center,
-    const Vec3D& N,
-    const Vec3D& B,
-    std::vector<Vec3D>& ring)
+void TubeMesh::generate(const std::vector<Vec3D>& C,
+    double radius,
+    int segments)
 {
-    for (int i = 0; i < radialSegments; i++)
+    clear();
+
+    if (C.size() < 2) return;
+
+    Vec3D Tprev = normalize(C[1] - C[0]);
+
+    Vec3D N, B;
+    computeInitialFrame(Tprev, N, B);
+
+    for (size_t i = 0; i < C.size(); i++)
     {
-        double theta = 2.0 * PI * i / radialSegments;
+        Vec3D T;
 
-        Vec3D offset =
-            N * (std::cos(theta) * radius) +
-            B * (std::sin(theta) * radius);
+        if (i < C.size() - 1)
+            T = normalize(C[i + 1] - C[i]);
+        else
+            T = Tprev;
 
-        ring.push_back(center + offset);
+        if (i > 0)
+            updateFramePTF(Tprev, T, N, B);
+
+        for (int s = 0; s < segments; s++)
+        {
+            double theta = 2.0 * M_PI * s / segments;
+
+            Vec3D offset =
+                N * std::cos(theta) * radius +
+                B * std::sin(theta) * radius;
+
+            Vertex v;
+            v.position = C[i] + offset;
+            v.normal = normalize(offset);
+
+            vertices.push_back(v);
+        }
+
+        Tprev = T;
     }
 }

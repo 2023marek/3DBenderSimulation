@@ -1,12 +1,8 @@
 #pragma once
 
 #include <vector>
-
-enum class RenderMode
-{
-    LINE,
-    MESH
-};
+#include "../Core/PipeAxis3D.h"
+#include "RenderMode.h"       
 
 class PipeRenderer
 {

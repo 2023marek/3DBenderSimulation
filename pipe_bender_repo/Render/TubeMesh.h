@@ -1,55 +1,39 @@
 #pragma once
-
 #include <vector>
 #include "../Core/Math/Vec3D.h"
 
 class TubeMesh
 {
 public:
-    // =========================
-    // CONSTRUCTOR
-    // =========================
-    TubeMesh(double radius = 1.0, int radialSegments = 8);
+    struct Vertex
+    {
+        Vec3D position;
+        Vec3D normal;
+    };
 
-    // =========================
-    // BUILD
-    // =========================
-    void build(const std::vector<Vec3D>& points,
-        const std::vector<Vec3D>& tangents);
+    TubeMesh();
 
-    // =========================
-    // GETTERS
-    // =========================
-    const std::vector<float>& getVertices() const;
-    const std::vector<float>& getNormals() const;
-    const std::vector<unsigned int>& getIndices() const;
+    // Generate tube along centerline
+    void generate(const std::vector<Vec3D>& centerline,
+        double radius,
+        int segments);
 
-    // =========================
-    // CONFIG
-    // =========================
-    void setRadius(double r);
-    void setRadialSegments(int n);
+    // Frame construction (stable orientation)
+    void computeInitialFrame(const Vec3D& tangent,
+        Vec3D& normal,
+        Vec3D& binormal);
 
-private:
-    // =========================
-    // PARAMETERS
-    // =========================
-    double radius;
-    int radialSegments;
+    void updateFramePTF(const Vec3D& prevT,
+        const Vec3D& currT,
+        Vec3D& normal,
+        Vec3D& binormal);
 
-    // =========================
-    // GPU DATA
-    // =========================
-    std::vector<float> vertices;
-    std::vector<float> normals;
-    std::vector<unsigned int> indices;
+    const std::vector<Vertex>& getVertices() const { return vertices; }
+    const std::vector<int>& getIndices() const { return indices; }
+
+    void clear(); // reset mesh
 
 private:
-    // =========================
-    // INTERNAL
-    // =========================
-    void buildRing(const Vec3D& center,
-        const Vec3D& N,
-        const Vec3D& B,
-        std::vector<Vec3D>& ring);
+    std::vector<Vertex> vertices;
+    std::vector<int> indices;
 };
