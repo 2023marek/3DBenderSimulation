@@ -9,16 +9,20 @@
 #include "../Render/PipeRenderer.h"
 #include "../Render/ControlCamera.h"
 #include "../Render/TubeMesh.h"
-#include "../Render/RenderMode.h" // <-- shared enum
+#include "../Render/RenderMode.h"
 
 // =========================
-// WINDOW CONFIG
+// CONSTANTS
 // =========================
+#ifndef PI
+#define PI 3.14159265358979323846
+#endif
+
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
 
 // =========================
-// GLOBAL CAMERA (INPUT SYSTEM)
+// GLOBAL CAMERA
 // =========================
 ControlCamera* gCamera = nullptr;
 
@@ -49,10 +53,10 @@ void mouse_callback(GLFWwindow*, double xpos, double ypos)
     if (!gCamera) return;
 
     if (leftMousePressed)
-        gCamera->processMouseMovement(dx, -dy); // rotate
+        gCamera->processMouseMovement(dx, -dy);
 
     if (rightMousePressed)
-        gCamera->processPan(dx, dy); // pan
+        gCamera->processPan(dx, dy);
 }
 
 void mouse_button_callback(GLFWwindow*, int button, int action, int)
@@ -71,29 +75,14 @@ void scroll_callback(GLFWwindow*, double, double yoffset)
 }
 
 // =========================
-// HELPER: extract tangents
+// HELPER
 // =========================
-void extractPointsAndTangents(
+void extractPoints(
     const PipeAxis3D& pipe,
-    std::vector<Vec3D>& points,
-    std::vector<Vec3D>& tangents)
+    std::vector<Vec3D>& points)
 {
-    const auto& nodes = pipe.getNodes();
-
-    for (size_t i = 0; i < nodes.size(); i++)
-    {
-        points.push_back(nodes[i].pos);
-
-        if (i < nodes.size() - 1)
-        {
-            Vec3D t = nodes[i + 1].pos - nodes[i].pos;
-            tangents.push_back(normalize(t));
-        }
-        else
-        {
-            tangents.push_back(tangents.back());
-        }
-    }
+    for (auto& n : pipe.getNodes())
+        points.push_back(n.pos);
 }
 
 // =========================
@@ -101,27 +90,49 @@ void extractPointsAndTangents(
 // =========================
 int main()
 {
-    // =========================================
-    // INIT WINDOW (Platform Layer)
-    // =========================================
-    glfwInit();
+    // =========================
+    // INIT GLFW
+    // =========================
+    if (!glfwInit())
+    {
+        std::cout << "Failed to init GLFW\n";
+        return -1;
+    }
+
     GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Pipe3D", NULL, NULL);
+    if (!window)
+    {
+        std::cout << "Failed to create window\n";
+        glfwTerminate();
+        return -1;
+    }
+
     glfwMakeContextCurrent(window);
 
-    gladLoadGL();
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        std::cout << "Failed to init GLAD\n";
+        return -1;
+    }
+
+    glViewport(0, 0, WIDTH, HEIGHT);
     glEnable(GL_DEPTH_TEST);
 
-    // =========================================
-    // CREATE SYSTEMS (Engine Initialization)
-    // =========================================
-
+    // =========================
+    // SYSTEMS
+    // =========================
     ControlCamera camera;
     gCamera = &camera;
 
-    PipeRenderer renderer;     // NOW USED PROPERLY
-    TubeMesh tube(5.0, 16);   // mesh generator
+    PipeRenderer renderer;
+    TubeMesh mesh;
 
-    // Pipe logic (Scene)
+    double radius = 0.1;
+    int segments = 16;
+
+    // =========================
+    // PIPE SETUP (build ONCE)
+    // =========================
     PipeAxis3D pipe(5.0);
     pipe.addFeed(10);
     pipe.addBend(50, PI / 3);
@@ -129,19 +140,24 @@ int main()
     pipe.addFeed(80);
     pipe.addBend(40, PI / 1);
 
+    pipe.build(); //moved outside loop
+
     RenderMode mode = RenderMode::MESH;
 
-    // Input hooks
+    // =========================
+    // INPUT
+    // =========================
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
-    
-
+    // =========================
+    // MAIN LOOP
+    // =========================
     while (!glfwWindowShouldClose(window))
     {
         // =========================
-        // INPUT (mode switching)
+        // INPUT (mode toggle)
         // =========================
         static bool keyPressed = false;
 
@@ -159,12 +175,7 @@ int main()
         else keyPressed = false;
 
         // =========================
-        // UPDATE (Scene logic)
-        // =========================
-        pipe.build();
-
-        // =========================
-        // PREPARE DATA FOR RENDERER
+        // PREPARE DATA
         // =========================
         if (mode == RenderMode::LINE)
         {
@@ -181,15 +192,15 @@ int main()
         }
         else
         {
-            std::vector<Vec3D> points, tangents;
-            extractPointsAndTangents(pipe, points, tangents);
+            std::vector<Vec3D> points;
+            extractPoints(pipe, points);
 
-            tube.build(points, tangents);
+            // FIX: use pipe data (not hardcoded centerline)
+            mesh.generate(points, radius, segments);
 
             renderer.uploadMesh(
-                tube.getVertices(),
-                tube.getNormals(),
-                tube.getIndices()
+                mesh.getVertices(),
+                mesh.getIndices()
             );
         }
 
@@ -198,12 +209,13 @@ int main()
         // =========================
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        renderer.setMode(mode);   // <-- clean API
-        renderer.draw();          // <-- ONLY draw call
+        renderer.setMode(mode);
+        renderer.draw();
 
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
     glfwTerminate();
+    return 0;
 }

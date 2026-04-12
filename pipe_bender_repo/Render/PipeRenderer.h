@@ -1,35 +1,24 @@
 #pragma once
 
 #include <vector>
-#include "../Core/PipeAxis3D.h"
-#include "RenderMode.h"       
+#include "RenderMode.h"
+#include "TubeMesh.h"
 
 class PipeRenderer
 {
 public:
-    // =========================
-    // LIFECYCLE
-    // =========================
     PipeRenderer();
     ~PipeRenderer();
 
-    // =========================
-    // MODE
-    // =========================
     void setMode(RenderMode m);
 
-    // =========================
-    // UPLOAD DATA
-    // =========================
+    // line rendering (axis)
     void uploadLine(const std::vector<float>& vertices);
 
-    void uploadMesh(const std::vector<float>& vertices,
-        const std::vector<float>& normals,
+    // mesh rendering (tube)
+    void uploadMesh(const std::vector<TubeMesh::Vertex>& vertices,
         const std::vector<unsigned int>& indices);
 
-    // =========================
-    // DRAW
-    // =========================
     void draw();
 
 private:
@@ -39,9 +28,8 @@ private:
     RenderMode mode = RenderMode::LINE;
 
     unsigned int VAO = 0;
-    unsigned int VBO = 0; // positions
-    unsigned int NBO = 0; // normals
-    unsigned int EBO = 0; // indices
+    unsigned int VBO = 0;
+    unsigned int EBO = 0;
 
     size_t vertexCount = 0;
     size_t indexCount = 0;
