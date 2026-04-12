@@ -58,6 +58,7 @@ void TubeMesh::updateFramePTF(const Vec3D& prevT,
     binormal = normalize(rotate(binormal));
 }
 void TubeMesh::generate(const std::vector<Vec3D>& C,
+    const std::vector<Vec3D>& T,
     double radius,
     int segments)
 {
@@ -65,22 +66,24 @@ void TubeMesh::generate(const std::vector<Vec3D>& C,
 
     if (C.size() < 2) return;
 
-    Vec3D Tprev = normalize(C[1] - C[0]);
+    Vec3D Tprev = (T.size() > 0) ? T[0] : normalize(C[1] - C[0]);
 
     Vec3D N, B;
     computeInitialFrame(Tprev, N, B);
 
     for (size_t i = 0; i < C.size(); i++)
     {
-        Vec3D T;
+        Vec3D currT;
 
-        if (i < C.size() - 1)
-            T = normalize(C[i + 1] - C[i]);
+        if (T.size() > i && i < C.size() - 1)
+            currT = T[i];
+        else if (i < C.size() - 1)
+            currT = normalize(C[i + 1] - C[i]);
         else
-            T = Tprev;
+            currT = Tprev;
 
         if (i > 0)
-            updateFramePTF(Tprev, T, N, B);
+            updateFramePTF(Tprev, currT, N, B);
 
         for (int s = 0; s < segments; s++)
         {
@@ -90,14 +93,22 @@ void TubeMesh::generate(const std::vector<Vec3D>& C,
                 N * std::cos(theta) * radius +
                 B * std::sin(theta) * radius;
 
+            Vec3D pos = C[i] + offset;
+
             Vertex v;
-            v.position = C[i] + offset;
-            v.normal = normalize(offset);
+            v.position[0] = (float)pos.x;
+            v.position[1] = (float)pos.y;
+            v.position[2] = (float)pos.z;
+
+            Vec3D norm = normalize(offset);
+            v.normal[0] = (float)norm.x;
+            v.normal[1] = (float)norm.y;
+            v.normal[2] = (float)norm.z;
 
             vertices.push_back(v);
         }
 
-        Tprev = T;
+        Tprev = currT;
     }
     // =========================
     // GENERATE TRIANGLE INDICES
@@ -108,10 +119,10 @@ void TubeMesh::generate(const std::vector<Vec3D>& C,
         {
             int nextS = (s + 1) % segments;
 
-            unsigned int i0 = i * segments + s;
-            unsigned int i1 = i * segments + nextS;
-            unsigned int i2 = (i + 1) * segments + s;
-            unsigned int i3 = (i + 1) * segments + nextS;
+            unsigned int i0 = static_cast<unsigned int>(i * segments + s);
+            unsigned int i1 = static_cast<unsigned int>(i * segments + nextS);
+            unsigned int i2 = static_cast<unsigned int>((i + 1) * segments + s);
+            unsigned int i3 = static_cast<unsigned int>((i + 1) * segments + nextS);
 
             // triangle 1
             indices.push_back(i0);

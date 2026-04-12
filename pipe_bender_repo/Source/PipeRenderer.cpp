@@ -1,5 +1,6 @@
 #include "../Render/PipeRenderer.h"
 #include <glad/glad.h>
+#include <iostream>
 
 // =========================
 // CONSTRUCTOR / DESTRUCTOR
@@ -12,135 +13,118 @@ PipeRenderer::PipeRenderer()
 
 PipeRenderer::~PipeRenderer()
 {
-    glDeleteBuffers(1, &VBO);
-    glDeleteBuffers(1, &EBO);
-    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &lineVBO);
+    glDeleteBuffers(1, &meshVBO);
+    glDeleteBuffers(1, &meshEBO);
+    glDeleteVertexArrays(1, &lineVAO);
+    glDeleteVertexArrays(1, &meshVAO);
 }
 
 // =========================
 // SETUP
 // =========================
 
-void PipeRenderer::setupBuffers()
+void PipeRenderer::setupLineBuffers()
 {
-    glGenVertexArrays(1, &VAO);
-    glGenBuffers(1, &VBO);
-    glGenBuffers(1, &EBO);
+    glGenVertexArrays(1, &lineVAO);
+    glGenBuffers(1, &lineVBO);
 
-    glBindVertexArray(VAO);
+    glBindVertexArray(lineVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
 
-    // =========================
-    // INTERLEAVED VERTEX BUFFER
-    // layout:
-    // [pos.xyz | normal.xyz]
-    // =========================
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
-
-    // position (location = 0)
-    glVertexAttribPointer(
-        0,
-        3,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(TubeMesh::Vertex),
-        (void*)0
-    );
+    // Position only (raw floats)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        3 * sizeof(float),  // stride for positions
+        (void*)0);
     glEnableVertexAttribArray(0);
-
-    // normal (location = 1)
-    glVertexAttribPointer(
-        1,
-        3,
-        GL_FLOAT,
-        GL_FALSE,
-        sizeof(TubeMesh::Vertex),
-        (void*)(sizeof(Vec3D))
-    );
-    glEnableVertexAttribArray(1);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
 
     glBindVertexArray(0);
 }
 
-// =========================
-// MODE
-// =========================
-
-void PipeRenderer::setMode(RenderMode m)
+void PipeRenderer::setupMeshBuffers()
 {
-    mode = m;
+    glGenVertexArrays(1, &meshVAO);
+    glGenBuffers(1, &meshVBO);
+    glGenBuffers(1, &meshEBO);
+
+    glBindVertexArray(meshVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, meshVBO);
+
+    // Position: 3 floats (0-11 bytes)
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+        sizeof(TubeMesh::Vertex),
+        (void*)offsetof(TubeMesh::Vertex, position));
+    glEnableVertexAttribArray(0);
+
+    // Normal: 3 floats (12-23 bytes)
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+        sizeof(TubeMesh::Vertex),
+        (void*)offsetof(TubeMesh::Vertex, normal));
+    glEnableVertexAttribArray(1);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshEBO);
+    glBindVertexArray(0);
 }
 
-// =========================
-// LINE
-// =========================
+void PipeRenderer::setupBuffers()
+{
+    setupLineBuffers();
+    setupMeshBuffers();
+}
 
 void PipeRenderer::uploadLine(const std::vector<float>& vertices)
 {
-    mode = RenderMode::LINE;
-
     vertexCount = vertices.size() / 3;
-
-    glBindVertexArray(VAO);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBindVertexArray(lineVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
     glBufferData(GL_ARRAY_BUFFER,
         vertices.size() * sizeof(float),
-        vertices.data(),
-        GL_DYNAMIC_DRAW);
+        vertices.data(), GL_DYNAMIC_DRAW);
 }
-
-// =========================
-// MESH
-// =========================
 
 void PipeRenderer::uploadMesh(
     const std::vector<TubeMesh::Vertex>& vertices,
     const std::vector<unsigned int>& indices)
 {
-    mode = RenderMode::MESH;
-
     vertexCount = vertices.size();
     indexCount = indices.size();
 
-    glBindVertexArray(VAO);
+    glBindVertexArray(meshVAO);
 
-    // upload interleaved vertex data
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    // Upload interleaved vertex data (position + normal)
+    glBindBuffer(GL_ARRAY_BUFFER, meshVBO);
     glBufferData(GL_ARRAY_BUFFER,
         vertices.size() * sizeof(TubeMesh::Vertex),
         vertices.data(),
         GL_DYNAMIC_DRAW);
 
-    // upload indices
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    // Upload indices
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshEBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER,
         indices.size() * sizeof(unsigned int),
         indices.data(),
         GL_DYNAMIC_DRAW);
-}
 
-// =========================
-// DRAW
-// =========================
+    glBindVertexArray(0);
+}
 
 void PipeRenderer::draw()
 {
-    glBindVertexArray(VAO);
-
     if (mode == RenderMode::LINE)
     {
+        glBindVertexArray(lineVAO);
         glDrawArrays(GL_LINE_STRIP, 0, (GLsizei)vertexCount);
     }
     else
     {
-        glDrawElements(GL_TRIANGLES,
-            (GLsizei)indexCount,
-            GL_UNSIGNED_INT,
-            0);
+        glBindVertexArray(meshVAO);
+        glDrawElements(GL_TRIANGLES, (GLsizei)indexCount,
+            GL_UNSIGNED_INT, 0);
     }
-
     glBindVertexArray(0);
+}
+
+void PipeRenderer::setMode(RenderMode m)
+{
+    mode = m;
 }

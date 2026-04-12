@@ -27,9 +27,19 @@ private:
 private:
     RenderMode mode = RenderMode::LINE;
 
-    unsigned int VAO = 0;
-    unsigned int VBO = 0;
-    unsigned int EBO = 0;
+   
+private:
+    // TWO separate VAOs
+    unsigned int lineVAO = 0;
+    unsigned int meshVAO = 0;
+
+    unsigned int lineVBO = 0;
+    unsigned int meshVBO = 0;
+    unsigned int meshEBO = 0;
+
+    // Setup functions
+    void setupLineBuffers();
+    void setupMeshBuffers();
 
     size_t vertexCount = 0;
     size_t indexCount = 0;

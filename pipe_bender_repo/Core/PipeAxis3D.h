@@ -258,7 +258,7 @@ private:
         for (int i = 0; i < n; i++)
         {
             f.P = f.P + f.T * ds;
-            nodes.push_back({ f.P });
+            nodes.push_back({ f.P,f.T });
         }
     }
 
@@ -285,7 +285,7 @@ private:
             // move along arc
             f.P = f.P + f.T * (R * dAlpha);
 
-            nodes.push_back({ f.P });
+            nodes.push_back({ f.P, f.T });  // ? FIX: Include tangent!
         }
     }
 };

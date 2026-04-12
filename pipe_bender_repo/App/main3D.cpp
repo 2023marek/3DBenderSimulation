@@ -25,7 +25,6 @@
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
 
-
 //=========================
 //==========SHADER BLOCK=================
 //===========================
@@ -105,17 +104,6 @@ void scroll_callback(GLFWwindow*, double, double yoffset)
 }
 
 // =========================
-// HELPER
-// =========================
-void extractPoints(
-    const PipeAxis3D& pipe,
-    std::vector<Vec3D>& points)
-{
-    for (auto& n : pipe.getNodes())
-        points.push_back(n.pos);
-}
-
-// =========================
 // MAIN
 // =========================
 int main()
@@ -153,11 +141,10 @@ int main()
     // =========================
     ControlCamera camera;
     gCamera = &camera;
-    Vec3D center = { 0,0,0 };
     PipeRenderer renderer;
     TubeMesh mesh;
     ShaderGL shader(vertexShaderSrc, fragmentShaderSrc);
-    double radius = 0.1;
+    double radius = 4.0;
     int segments = 16;
 
     // =========================
@@ -170,9 +157,28 @@ int main()
     pipe.addFeed(80);
     pipe.addBend(40, PI / 1);
 
-    pipe.build(); //moved outside loop
+    pipe.build();
 
     RenderMode mode = RenderMode::MESH;
+
+    // =========================
+// GENERATE & UPLOAD MESH ONCE (before loop!)
+// =========================
+    std::vector<Vec3D> points;
+    std::vector<Vec3D> tangents;
+
+    for (const auto& n : pipe.getNodes())
+    {
+        points.push_back(n.pos);
+        tangents.push_back(n.T);
+    }
+
+    mesh.generate(points, tangents, radius, segments);
+    std::cout << "Mesh generated: " << mesh.getVertices().size() << " vertices, "
+        << mesh.getIndices().size() << " indices\n";
+
+    // Upload mesh to GPU once
+    renderer.uploadMesh(mesh.getVertices(), mesh.getIndices());
 
     // =========================
     // INPUT
@@ -200,18 +206,19 @@ int main()
                     : RenderMode::LINE;
 
                 keyPressed = true;
+                std::cout << "Mode: " << (mode == RenderMode::LINE ? "LINE" : "MESH") << "\n";
             }
         }
         else keyPressed = false;
 
         // =========================
-        // PREPARE DATA
+        // PREPARE DATA FOR RENDERING
         // =========================
         if (mode == RenderMode::LINE)
         {
             std::vector<float> vertices;
 
-            for (auto& n : pipe.getNodes())
+            for (const auto& n : pipe.getNodes())
             {
                 vertices.push_back((float)n.pos.x);
                 vertices.push_back((float)n.pos.y);
@@ -220,19 +227,7 @@ int main()
 
             renderer.uploadLine(vertices);
         }
-        else
-        {
-            std::vector<Vec3D> points;
-            extractPoints(pipe, points);
-
-            // FIX: use pipe data (not hardcoded centerline)
-            mesh.generate(points, radius, segments);
-
-            renderer.uploadMesh(
-                mesh.getVertices(),
-                mesh.getIndices()
-            );
-        }
+        // ? NO ELSE HERE - mesh is already uploaded
 
         // =========================
         // RENDER
@@ -242,23 +237,19 @@ int main()
         renderer.setMode(mode);
         shader.use();
 
-        // simple camera (temporary)
+        // simple camera
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 view = camera.getViewMatrix();
-        glm::mat4 projection = camera.getProjection((float)WIDTH,(float)HEIGHT);
+        glm::mat4 projection = camera.getProjection((float)WIDTH, (float)HEIGHT);
 
         glm::mat4 MVP = projection * view * model;
 
         shader.setMat4("MVP", MVP);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        renderer.draw();
-        std::cout << "Vertices: " << mesh.getVertices().size()
-            << " Indices: " << mesh.getIndices().size() << std::endl;
 
-      
+        renderer.draw();
+
         glfwSwapBuffers(window);
         glfwPollEvents();
-
     }
 
     glfwTerminate();
