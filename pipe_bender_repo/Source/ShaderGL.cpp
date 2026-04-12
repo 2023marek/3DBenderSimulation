@@ -2,9 +2,6 @@
 #include <glad/glad.h>
 #include <iostream>
 
-// =========================
-// CONSTRUCTOR
-// =========================
 ShaderGL::ShaderGL(const char* vertexSrc, const char* fragmentSrc)
 {
     unsigned int vs = compileShader(GL_VERTEX_SHADER, vertexSrc);
@@ -21,46 +18,34 @@ ShaderGL::ShaderGL(const char* vertexSrc, const char* fragmentSrc)
     glDeleteShader(fs);
 }
 
-// =========================
-// USE
-// =========================
 void ShaderGL::use() const
 {
     glUseProgram(programID);
 }
 
-// =========================
-// UNIFORMS
-// =========================
 void ShaderGL::setMat4(const std::string& name, const glm::mat4& mat) const
 {
-    glUniformMatrix4fv(
-        glGetUniformLocation(programID, name.c_str()),
-        1,
-        GL_FALSE,
-        &mat[0][0]
-    );
+    int loc = glGetUniformLocation(programID, name.c_str());
+    if (loc != -1)
+        glUniformMatrix4fv(loc, 1, GL_FALSE, &mat[0][0]);
 }
 
 void ShaderGL::setVec3(const std::string& name, const glm::vec3& value) const
 {
-    glUniform3f(
-        glGetUniformLocation(programID, name.c_str()),
-        value.x, value.y, value.z
-    );
+    int loc = glGetUniformLocation(programID, name.c_str());
+    if (loc != -1)
+        glUniform3f(loc, value.x, value.y, value.z);
 }
 
 void ShaderGL::setFloat(const std::string& name, float value) const
 {
-    glUniform1f(
-        glGetUniformLocation(programID, name.c_str()),
-        value
-    );
+    int loc = glGetUniformLocation(programID, name.c_str());
+    if (loc != -1)
+        glUniform1f(loc, value);
 }
 
 // =========================
-// INTERNAL
-// =========================
+
 unsigned int ShaderGL::compileShader(unsigned int type, const char* src)
 {
     unsigned int shader = glCreateShader(type);
@@ -83,8 +68,7 @@ void ShaderGL::checkCompileErrors(unsigned int obj, std::string type)
         if (!success)
         {
             glGetShaderInfoLog(obj, 1024, NULL, infoLog);
-            std::cerr << "Shader compile error (" << type << "):\n"
-                << infoLog << "\n";
+            std::cout << "Shader error (" << type << "):\n" << infoLog << "\n";
         }
     }
     else
@@ -93,8 +77,7 @@ void ShaderGL::checkCompileErrors(unsigned int obj, std::string type)
         if (!success)
         {
             glGetProgramInfoLog(obj, 1024, NULL, infoLog);
-            std::cerr << "Program link error:\n"
-                << infoLog << "\n";
+            std::cout << "Program link error:\n" << infoLog << "\n";
         }
     }
 }

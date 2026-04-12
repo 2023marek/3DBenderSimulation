@@ -99,4 +99,29 @@ void TubeMesh::generate(const std::vector<Vec3D>& C,
 
         Tprev = T;
     }
+    // =========================
+    // GENERATE TRIANGLE INDICES
+    // =========================
+    for (size_t i = 0; i < C.size() - 1; i++)
+    {
+        for (int s = 0; s < segments; s++)
+        {
+            int nextS = (s + 1) % segments;
+
+            unsigned int i0 = i * segments + s;
+            unsigned int i1 = i * segments + nextS;
+            unsigned int i2 = (i + 1) * segments + s;
+            unsigned int i3 = (i + 1) * segments + nextS;
+
+            // triangle 1
+            indices.push_back(i0);
+            indices.push_back(i2);
+            indices.push_back(i1);
+
+            // triangle 2
+            indices.push_back(i1);
+            indices.push_back(i2);
+            indices.push_back(i3);
+        }
+    }
 }

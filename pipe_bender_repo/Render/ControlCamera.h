@@ -15,6 +15,7 @@ public:
     glm::mat4 getViewMatrix();
     glm::mat4 getProjection(float width, float height);
     glm::vec3 getPosition() const;
+    
     void processMouseMovement(float dx, float dy);
     void processScroll(float offset);
     void processPan(float dx, float dy);

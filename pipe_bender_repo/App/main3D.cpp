@@ -1,6 +1,9 @@
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <iostream>
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 // Core
 #include "../Core/PipeAxis3D.h"
@@ -10,6 +13,7 @@
 #include "../Render/ControlCamera.h"
 #include "../Render/TubeMesh.h"
 #include "../Render/RenderMode.h"
+#include "../Render/ShaderGL.h" 
 
 // =========================
 // CONSTANTS
@@ -21,6 +25,32 @@
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
 
+
+//=========================
+//==========SHADER BLOCK=================
+//===========================
+
+const char* vertexShaderSrc = R"(
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+uniform mat4 MVP;
+
+void main()
+{
+    gl_Position = MVP * vec4(aPos, 1.0);
+}
+)";
+
+const char* fragmentShaderSrc = R"(
+#version 330 core
+out vec4 FragColor;
+
+void main()
+{
+    FragColor = vec4(0.2, 0.8, 0.3, 1.0);
+}
+)";
 // =========================
 // GLOBAL CAMERA
 // =========================
@@ -123,10 +153,10 @@ int main()
     // =========================
     ControlCamera camera;
     gCamera = &camera;
-
+    Vec3D center = { 0,0,0 };
     PipeRenderer renderer;
     TubeMesh mesh;
-
+    ShaderGL shader(vertexShaderSrc, fragmentShaderSrc);
     double radius = 0.1;
     int segments = 16;
 
@@ -210,10 +240,25 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         renderer.setMode(mode);
-        renderer.draw();
+        shader.use();
 
+        // simple camera (temporary)
+        glm::mat4 model = glm::mat4(1.0f);
+        glm::mat4 view = camera.getViewMatrix();
+        glm::mat4 projection = camera.getProjection((float)WIDTH,(float)HEIGHT);
+
+        glm::mat4 MVP = projection * view * model;
+
+        shader.setMat4("MVP", MVP);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        renderer.draw();
+        std::cout << "Vertices: " << mesh.getVertices().size()
+            << " Indices: " << mesh.getIndices().size() << std::endl;
+
+      
         glfwSwapBuffers(window);
         glfwPollEvents();
+
     }
 
     glfwTerminate();
