@@ -13,7 +13,7 @@
 #include "../Render/ControlCamera.h"
 #include "../Render/TubeMesh.h"
 #include "../Render/RenderMode.h"
-#include "../Render/ShaderGL.h" 
+#include "../Render/ShaderManager.h"  // ? USE MANAGER INSTEAD
 
 // =========================
 // CONSTANTS
@@ -25,31 +25,6 @@
 const unsigned int WIDTH = 800;
 const unsigned int HEIGHT = 600;
 
-//=========================
-//==========SHADER BLOCK=================
-//===========================
-
-const char* vertexShaderSrc = R"(
-#version 330 core
-layout (location = 0) in vec3 aPos;
-
-uniform mat4 MVP;
-
-void main()
-{
-    gl_Position = MVP * vec4(aPos, 1.0);
-}
-)";
-
-const char* fragmentShaderSrc = R"(
-#version 330 core
-out vec4 FragColor;
-
-void main()
-{
-    FragColor = vec4(0.2, 0.8, 0.3, 1.0);
-}
-)";
 // =========================
 // GLOBAL CAMERA
 // =========================
@@ -143,7 +118,20 @@ int main()
     gCamera = &camera;
     PipeRenderer renderer;
     TubeMesh mesh;
-    ShaderGL shader(vertexShaderSrc, fragmentShaderSrc);
+
+    // ? LOAD SHADERS VIA MANAGER
+    ShaderGL* pipeShader = ShaderManager::instance().load(
+        "pipe",
+        "Source/ShaderFiles/pipe.vert",
+        "Source/ShaderFiles/pipe.frag"
+    );
+
+    if (!pipeShader)
+    {
+        std::cerr << "Failed to load pipe shader\n";
+        return -1;
+    }
+
     double radius = 4.0;
     int segments = 16;
 
@@ -162,8 +150,8 @@ int main()
     RenderMode mode = RenderMode::MESH;
 
     // =========================
-// GENERATE & UPLOAD MESH ONCE (before loop!)
-// =========================
+    // GENERATE & UPLOAD MESH ONCE
+    // =========================
     std::vector<Vec3D> points;
     std::vector<Vec3D> tangents;
 
@@ -177,7 +165,6 @@ int main()
     std::cout << "Mesh generated: " << mesh.getVertices().size() << " vertices, "
         << mesh.getIndices().size() << " indices\n";
 
-    // Upload mesh to GPU once
     renderer.uploadMesh(mesh.getVertices(), mesh.getIndices());
 
     // =========================
@@ -227,7 +214,6 @@ int main()
 
             renderer.uploadLine(vertices);
         }
-        // ? NO ELSE HERE - mesh is already uploaded
 
         // =========================
         // RENDER
@@ -235,16 +221,27 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         renderer.setMode(mode);
-        shader.use();
+        pipeShader->use();  // ? USE SHADER FROM MANAGER
 
-        // simple camera
+        // Camera matrices
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 view = camera.getViewMatrix();
         glm::mat4 projection = camera.getProjection((float)WIDTH, (float)HEIGHT);
 
         glm::mat4 MVP = projection * view * model;
 
-        shader.setMat4("MVP", MVP);
+        // Set uniforms
+        pipeShader->setMat4("MVP", MVP);
+        pipeShader->setMat4("Model", model);
+
+        // Normal matrix
+        glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
+        pipeShader->setMat3("NormalMatrix", normalMatrix);
+
+        // Lighting
+        pipeShader->setVec3("lightPos", glm::vec3(10.0f, 10.0f, 10.0f));
+        pipeShader->setVec3("viewPos", camera.getPosition());
+        pipeShader->setVec3("objectColor", glm::vec3(0.2f, 0.8f, 0.3f));
 
         renderer.draw();
 

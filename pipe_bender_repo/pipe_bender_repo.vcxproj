@@ -28,6 +28,7 @@
     <ClInclude Include="Render\PipeRenderer.h" />
     <ClInclude Include="Render\RenderMode.h" />
     <ClInclude Include="Render\ShaderGL.h" />
+    <ClInclude Include="Render\ShaderManager.h" />
     <ClInclude Include="Render\TubeMesh.h" />
   </ItemGroup>
   <ItemGroup>
@@ -37,7 +38,12 @@
     <ClCompile Include="Source\GnuplotExporter3D.cpp" />
     <ClCompile Include="Source\PipeRenderer.cpp" />
     <ClCompile Include="Source\ShaderGL.cpp" />
+    <ClCompile Include="Source\ShaderManager.cpp" />
     <ClCompile Include="Source\TubeMesh.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Source\ShaderFiles\pipe.frag" />
+    <None Include="Source\ShaderFiles\pipe.vert" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

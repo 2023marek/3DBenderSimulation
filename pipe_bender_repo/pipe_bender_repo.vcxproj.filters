@@ -45,6 +45,9 @@
     <ClInclude Include="Render\RenderMode.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Render\ShaderManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="App\main3D.cpp">
@@ -68,5 +71,12 @@
     <ClCompile Include="Source\ShaderGL.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="Source\ShaderManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Source\ShaderFiles\pipe.vert" />
+    <None Include="Source\ShaderFiles\pipe.frag" />
   </ItemGroup>
 </Project>

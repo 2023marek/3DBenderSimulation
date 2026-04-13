@@ -30,6 +30,13 @@ void ShaderGL::setMat4(const std::string& name, const glm::mat4& mat) const
         glUniformMatrix4fv(loc, 1, GL_FALSE, &mat[0][0]);
 }
 
+void ShaderGL::setMat3(const std::string& name, const glm::mat3& mat) const
+{
+    int loc = glGetUniformLocation(programID, name.c_str());
+    if (loc != -1)
+        glUniformMatrix3fv(loc, 1, GL_FALSE, &mat[0][0]);
+}
+
 void ShaderGL::setVec3(const std::string& name, const glm::vec3& value) const
 {
     int loc = glGetUniformLocation(programID, name.c_str());
@@ -43,8 +50,6 @@ void ShaderGL::setFloat(const std::string& name, float value) const
     if (loc != -1)
         glUniform1f(loc, value);
 }
-
-// =========================
 
 unsigned int ShaderGL::compileShader(unsigned int type, const char* src)
 {
