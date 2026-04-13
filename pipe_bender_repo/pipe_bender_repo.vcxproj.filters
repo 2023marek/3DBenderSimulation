@@ -78,5 +78,6 @@
   <ItemGroup>
     <None Include="Source\ShaderFiles\pipe.vert" />
     <None Include="Source\ShaderFiles\pipe.frag" />
+    <None Include="..\.gitattributes" />
   </ItemGroup>
 </Project>

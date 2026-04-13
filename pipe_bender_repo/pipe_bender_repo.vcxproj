@@ -42,6 +42,7 @@
     <ClCompile Include="Source\TubeMesh.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\.gitattributes" />
     <None Include="Source\ShaderFiles\pipe.frag" />
     <None Include="Source\ShaderFiles\pipe.vert" />
   </ItemGroup>

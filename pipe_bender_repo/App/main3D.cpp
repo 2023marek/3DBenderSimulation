@@ -22,8 +22,8 @@
 #define PI 3.14159265358979323846
 #endif
 
-const unsigned int WIDTH = 800;
-const unsigned int HEIGHT = 600;
+const unsigned int WIDTH = 1100;
+const unsigned int HEIGHT = 700;
 
 // =========================
 // GLOBAL CAMERA
@@ -132,7 +132,7 @@ int main()
         return -1;
     }
 
-    double radius = 4.0;
+    double radius = 8.0;
     int segments = 16;
 
     // =========================

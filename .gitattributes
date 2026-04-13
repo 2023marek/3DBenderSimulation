@@ -1,0 +1,25 @@
+# Auto detect text files and normalize line endings to LF
+* text=auto
+
+# GLSL shaders - always LF
+*.vert text eol=lf
+*.frag text eol=lf
+*.glsl text eol=lf
+
+# C/C++ - always CRLF on Windows (or LF for cross-platform)
+*.cpp text eol=lf
+*.h text eol=lf
+*.hpp text eol=lf
+
+# Batch scripts - CRLF (Windows)
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Shell scripts - LF (Unix)
+*.sh text eol=lf
+
+# Binary files
+*.exe binary
+*.dll binary
+*.lib binary
+*.obj binary
