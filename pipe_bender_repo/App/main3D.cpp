@@ -7,13 +7,18 @@
 
 // Core
 #include "../Core/PipeAxis3D.h"
-
+#include "../Core/ProgramLoader.h"
+#include "../Core/OperationQueue.h"
+#include "../Machine/MachineState.h"
 // Rendering
 #include "../Render/PipeRenderer.h"
 #include "../Render/ControlCamera.h"
 #include "../Render/TubeMesh.h"
 #include "../Render/RenderMode.h"
 #include "../Render/ShaderManager.h"  // ? USE MANAGER INSTEAD
+
+
+
 
 // =========================
 // CONSTANTS
@@ -114,6 +119,12 @@ int main()
     // =========================
     // SYSTEMS
     // =========================
+    // Test 1: FEED operation
+    Operation feed;
+    feed.type = Operation::FEED;
+    feed.length = 100.0;
+    std::cout << "Test 1 - FEED: ";
+    feed.print();
     ControlCamera camera;
     gCamera = &camera;
     PipeRenderer renderer;
