@@ -57,6 +57,9 @@
     <ClInclude Include="Core\ProgramLoader.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Core\SimulationController.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="App\main3D.cpp">
@@ -87,6 +90,12 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="App\test_phase1.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\SimulationController.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="App\Test_phase2.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

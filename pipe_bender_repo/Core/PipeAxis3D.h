@@ -6,7 +6,9 @@
 
 #include "../Core/Math/Vec3D.h"
 
-static constexpr double PI = 3.14159265358979323846;
+#ifndef PI
+#define PI 3.14159265358979323846
+#endif
 
 class PipeAxis3D
 {
