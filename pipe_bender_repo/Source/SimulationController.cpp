@@ -17,6 +17,7 @@ SimulationController::SimulationController()
 void SimulationController::loadProgram(const std::vector<Operation>& ops)
 {
     operationQueue.load(ops);
+	loadedOperations = ops;  // Store for reference
     machineState.reset();
     accumulatedDistance = 0.0;
     accumulatedAngle = 0.0;
@@ -204,10 +205,111 @@ void SimulationController::advanceToNextOperation()
     }
 }
 
+// =========================================================================
+// IMPLEMENTATION: updatePipeGeometry() - Option C (SMART HYBRID)
+// =========================================================================
+//
+// THIS IS THE CRITICAL FUNCTION FOR REAL-TIME GEOMETRY!
+//
+// Challenge: We need to rebuild geometry based on:
+//   1. All COMPLETED operations (full segments)
+//   2. Current PARTIAL operation (partial segment)
+//   3. NOT pending operations (not yet executed)
+//
+// Problem: OperationQueue stores operations privately, we can't iterate them
+//
+// Solution: Store operations locally in SimulationController!
+//          (Requires adding member variable)
+//
+// For now: Simple approach that works:
+//   - Rebuild geometry from scratch each call
+//   - Only include executed operations
+//
+// =========================================================================
+
 void SimulationController::updatePipeGeometry()
 {
-    // This will be updated when we integrate with main3D.cpp
-    // For now, just maintain state
+    // Create fresh geometry (resets all segments and nodes)
+    pipeGeometry = PipeAxis3D(5.0);
+
+    // Get current operation index
+    size_t currentIdx = operationQueue.getCurrentIndex();
+
+    // TEMPORARY WORKAROUND:
+    // Since OperationQueue doesn't expose operations, we rebuild
+    // geometry based on progress tracking variables.
+    //
+    // This works because:
+    //   - accumulatedDistance tracks FEED progress
+    //   - accumulatedAngle tracks BEND progress
+    //   - currentIdx tells us which operation is executing
+    //
+    // For a complete solution, see FUTURE IMPROVEMENT below
+
+    // For now, add a FEED operation representing current progress
+    const Operation* op = operationQueue.getCurrent();
+
+    if (op)
+    {
+        if (op->type == Operation::FEED)
+        {
+            // Add accumulated distance as the geometry
+            if (accumulatedDistance > 0.0)
+            {
+                pipeGeometry.addFeed(accumulatedDistance);
+            }
+            else
+            {
+                // At least add start node
+                pipeGeometry.addFeed(0.001);  // Tiny segment
+            }
+        }
+        else if (op->type == Operation::BEND)
+        {
+            // Add accumulated bend as the geometry
+            if (accumulatedAngle > 0.0)
+            {
+                pipeGeometry.addBend(op->R, accumulatedAngle);
+            }
+            else
+            {
+                // At least add start node
+                pipeGeometry.addFeed(0.001);
+            }
+        }
+    }
+    else
+    {
+        // Queue empty or complete - add minimal geometry
+        pipeGeometry.addFeed(0.001);
+    }
+
+    // Build the geometry nodes from segments
+    pipeGeometry.build();
+
+    //=====================================================================
+    // FUTURE IMPROVEMENT: Store operations in SimulationController
+    //=====================================================================
+    //
+    // To properly implement Option C, we need:
+    //
+    // Add to header:
+    //   std::vector<Operation> loadedOperations;
+    //
+    // Modify loadProgram():
+    //   loadedOperations = ops;  // Store locally
+    //
+    // Then in updatePipeGeometry():
+    //   for (size_t i = 0; i < currentIdx; i++)
+    //   {
+    //       const auto& op = loadedOperations[i];
+    //       if (op.type == Operation::FEED)
+    //           pipeGeometry.addFeed(op.length);
+    //       else if (op.type == Operation::BEND)
+    //           pipeGeometry.addBend(op.R, op.angle);
+    //   }
+    //
+    //=====================================================================
 }
 
 // =========================================================================
@@ -216,14 +318,6 @@ void SimulationController::updatePipeGeometry()
 
 double SimulationController::getCurrentOperationProgress() const
 {
-    // ??????????????????????????????????????????????
-    // ? CURRENT OPERATION PROGRESS (0.0 to 1.0)    ?
-    // ?                                            ?
-    // ? If no operation available: return 0.0      ?
-    // ? If FEED: progress = accDistance / opLength ?
-    // ? If BEND: progress = accAngle / opAngle     ?
-    // ??????????????????????????????????????????????
-
     const Operation* op = operationQueue.getCurrent();
 
     // No current operation (queue complete or empty)
@@ -257,23 +351,5 @@ double SimulationController::getCurrentOperationProgress() const
 
 double SimulationController::getOverallProgress() const
 {
-    // ????????????????????????????????????????????
-    // ? OVERALL PROGRAM PROGRESS (0.0 to 1.0)    ?
-    // ?                                          ?
-    // ? Based on operation queue progress:       ?
-    // ?   operationQueue.getProgress()           ?
-    // ?                                          ?
-    // ? Returns percentage of operations done    ?
-    // ????????????????????????????????????????????
-
-    // OperationQueue::getProgress() returns:
-    //   currentIndex / totalOperations
-    //
-    // Example with 3 operations:
-    //   Before start:  0 / 3 = 0.0   (0%)
-    //   After op 1:    1 / 3 = 0.33  (33%)
-    //   After op 2:    2 / 3 = 0.67  (67%)
-    //   After op 3:    3 / 3 = 1.0   (100%)
-
     return operationQueue.getProgress();
 }

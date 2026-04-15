@@ -140,7 +140,7 @@ private:
     // =========================================
     // INTERNAL STATE
     // =========================================
-
+    std::vector<Operation> loadedOperations;
     // --- Playback State ---
     bool playing;              // Currently executing
     bool paused;               // Paused mid-execution
