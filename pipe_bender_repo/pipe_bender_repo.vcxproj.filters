@@ -104,6 +104,9 @@
     <ClCompile Include="App\NewTest_phase3a.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="App\Test_phase3b_rotation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Source\ShaderFiles\pipe.vert" />
