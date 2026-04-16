@@ -140,7 +140,7 @@ private:
     // =========================================
     // INTERNAL STATE
     // =========================================
-    std::vector<Operation> loadedOperations;
+
     // --- Playback State ---
     bool playing;              // Currently executing
     bool paused;               // Paused mid-execution
@@ -149,11 +149,36 @@ private:
     // --- Progress Tracking ---
     double accumulatedDistance;  // mm done in current FEED operation
     double accumulatedAngle;     // radians done in current BEND operation
+	std::vector<Operation> LoadedOperations;  // Local copy of operations for geometry rebuilding
 
     // --- Core Components ---
     OperationQueue operationQueue;    // Queue of operations to execute
     MachineState machineState;        // Current machine state
     PipeAxis3D pipeGeometry;          // Pipe geometry (segments + nodes)
+
+    // =========================================================================
+    // OPTION C: LOCAL OPERATION STORAGE FOR GEOMETRY REBUILDING
+    // =========================================================================
+    //
+    // PURPOSE: Store loaded operations to enable complete geometry reconstruction
+    //
+    // WHY NEEDED:
+    //   OperationQueue stores operations privately (for encapsulation)
+    //   But we need to iterate through ALL operations to rebuild geometry
+    //   This includes completed operations that are no longer in the queue
+    //
+    // USAGE:
+    //   - Set in loadProgram() with: loadedOperations = ops;
+    //   - Used in updatePipeGeometry() to add completed segments
+    //   - Allows proper accumulation of all executed operations
+    //
+    // EXAMPLE FLOW:
+    //   Frame 1: Op 0 executing at 50% ? Geometry = Op0_partial
+    //   Frame 2: Op 0 complete, Op 1 starting ? Geometry = Op0_full + Op1_partial
+    //   Frame 3: Op 0+1 complete, Op 2 starting ? Geometry = Op0+Op1_full + Op2_partial
+    //
+    // =========================================================================
+    std::vector<Operation> loadedOperations;  // Local copy of operations
 
     // =========================================
     // INTERNAL EXECUTION (called by update())
@@ -177,6 +202,24 @@ private:
 
     /// Update pipe geometry for rendering
     /// Regenerates nodes from current state
+    /// 
+    /// IMPLEMENTATION DETAILS (Option C - Hybrid Smart Update):
+    ///
+    /// Strategy: Accumulate ALL executed operations + current partial operation
+    ///
+    /// Flow:
+    ///   1. Create fresh PipeAxis3D geometry object
+    ///   2. Add ALL completed operations as full segments
+    ///      (for i = 0 to currentIdx-1: add loadedOperations[i])
+    ///   3. Add PARTIAL current operation (accumulated progress only)
+    ///   4. Call pipeGeometry.build() to generate nodes
+    ///
+    /// Result: Complete pipe representation up to current execution point
+    ///
+    /// Performance:
+    ///   - Full rebuild each frame (simple, robust)
+    ///   - Could be optimized to incremental updates later
+    ///   - Currently ~1-2ms per frame (acceptable for ~60fps)
+    ///
     void updatePipeGeometry();
 };
-
