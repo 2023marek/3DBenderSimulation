@@ -37,7 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="App\main3D.cpp" />
-    
+    <ClCompile Include="App\Test_phase3b_rotation.cpp" />
     <ClCompile Include="Source\CameraGL.cpp" />
     <ClCompile Include="Source\ControlCamera.cpp" />
     <ClCompile Include="Source\GnuplotExporter3D.cpp" />
