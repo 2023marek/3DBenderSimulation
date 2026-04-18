@@ -1,6 +1,7 @@
 #include "../Render/TubeMesh.h"
 #include <cmath>
-#include <algorithm> // std::clamp
+#include <algorithm>  // std::clamp (C++17)
+#include <utility>    // min/max backup
 
 // =========================
 // SAFE M_PI (MSVC FIX)
@@ -9,6 +10,19 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+// =========================
+// CLAMP FUNCTION (C++17 Fallback)
+// =========================
+// If std::clamp is not available, provide our own
+// This ensures compatibility with older g++ versions
+namespace clamp_helper {
+    template<typename T>
+    inline T clamp(T value, T min_val, T max_val) {
+        return (value < min_val) ? min_val :
+            (value > max_val) ? max_val : value;
+    }
+}
+
 TubeMesh::TubeMesh() {}
 
 void TubeMesh::clear()
@@ -16,6 +30,7 @@ void TubeMesh::clear()
     vertices.clear();
     indices.clear();
 }
+
 void TubeMesh::computeInitialFrame(const Vec3D& tangent,
     Vec3D& normal,
     Vec3D& binormal)
@@ -28,6 +43,7 @@ void TubeMesh::computeInitialFrame(const Vec3D& tangent,
     normal = normalize(cross(tangent, up));
     binormal = cross(tangent, normal);
 }
+
 void TubeMesh::updateFramePTF(const Vec3D& prevT,
     const Vec3D& currT,
     Vec3D& normal,
@@ -42,7 +58,11 @@ void TubeMesh::updateFramePTF(const Vec3D& prevT,
 
     axis = normalize(axis);
 
-    double dotVal = std::clamp(dot(prevT, currT), -1.0, 1.0);
+    // =====================================================================
+    // FIX: Use clamp_helper::clamp instead of std::clamp
+    // This ensures C++11/14 compatibility while supporting C++17
+    // =====================================================================
+    double dotVal = clamp_helper::clamp(dot(prevT, currT), -1.0, 1.0);
     double angle = std::acos(dotVal);
 
     auto rotate = [&](const Vec3D& v)
@@ -57,6 +77,7 @@ void TubeMesh::updateFramePTF(const Vec3D& prevT,
     normal = normalize(rotate(normal));
     binormal = normalize(rotate(binormal));
 }
+
 void TubeMesh::generate(const std::vector<Vec3D>& C,
     const std::vector<Vec3D>& T,
     double radius,
@@ -110,6 +131,7 @@ void TubeMesh::generate(const std::vector<Vec3D>& C,
 
         Tprev = currT;
     }
+
     // =========================
     // GENERATE TRIANGLE INDICES
     // =========================

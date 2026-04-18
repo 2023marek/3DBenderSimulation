@@ -60,6 +60,9 @@
     <ClInclude Include="Core\SimulationController.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Render\HUDPanel.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\GnuplotExporter3D.cpp">
@@ -89,10 +92,10 @@
     <ClCompile Include="Source\SimulationController.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="App\Test_phase3b_rotation.cpp">
+    <ClCompile Include="App\main3D.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="App\main3D.cpp">
+    <ClCompile Include="Source\HUDPanel.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>

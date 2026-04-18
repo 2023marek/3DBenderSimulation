@@ -4,25 +4,48 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <chrono>
+#include <iomanip>
+
+// =========================================================================
+// PHASE 4B: SIMULATION + RENDERING + ENHANCED HUD
+// =========================================================================
+//
+// PURPOSE: Connect SimulationController to OpenGL rendering loop
+//          with real-time on-screen HUD visualization
+//
+// ARCHITECTURE:
+//   1. Load program into SimulationController
+//   2. Each frame:
+//      - Update simulation (calculate progress)
+//      - Rebuild geometry (PipeAxis3D)
+//      - Generate mesh (TubeMesh)
+//      - Update HUD data
+//      - Render 3D scene
+//      - Render 2D HUD overlay
+//   3. User controls: Play/Pause/Reset via keyboard
+//
+// =========================================================================
 
 // Core
 #include "../Core/PipeAxis3D.h"
 #include "../Core/ProgramLoader.h"
 #include "../Core/OperationQueue.h"
+#include "../Core/SimulationController.h"
 #include "../Machine/MachineState.h"
+
 // Rendering
 #include "../Render/PipeRenderer.h"
 #include "../Render/ControlCamera.h"
 #include "../Render/TubeMesh.h"
 #include "../Render/RenderMode.h"
-#include "../Render/ShaderManager.h"  // ? USE MANAGER INSTEAD
+#include "../Render/ShaderManager.h"
+#include "../Render/HUDPanel.h"  // ? NEW: HUD Panel
 
+// =========================================================================
+// CONSTANTS & GLOBALS
+// =========================================================================
 
-
-
-// =========================
-// CONSTANTS
-// =========================
 #ifndef PI
 #define PI 3.14159265358979323846
 #endif
@@ -30,20 +53,36 @@
 const unsigned int WIDTH = 1100;
 const unsigned int HEIGHT = 700;
 
-// =========================
-// GLOBAL CAMERA
-// =========================
-ControlCamera* gCamera = nullptr;
+// =========================================================================
+// GLOBAL STATE
+// =========================================================================
 
+ControlCamera* gCamera = nullptr;
+SimulationController* gSimulator = nullptr;
+HUDPanel* gHUD = nullptr;  // ? NEW: HUD pointer
+
+// Mouse input
 bool leftMousePressed = false;
 bool rightMousePressed = false;
 bool firstMouse = true;
 double lastX = WIDTH / 2.0;
 double lastY = HEIGHT / 2.0;
 
-// =========================
+// Keyboard debouncing
+bool keyPlayPressed = false;
+bool keyPausePressed = false;
+bool keyResetPressed = false;
+bool keyModePressed = false;
+bool keyHUDToggle = false;  // ? NEW: HUD toggle
+
+// Frame timing
+std::chrono::high_resolution_clock::time_point lastFrameTime;
+double deltaTime = 0.0;
+
+// =========================================================================
 // INPUT CALLBACKS
-// =========================
+// =========================================================================
+
 void mouse_callback(GLFWwindow*, double xpos, double ypos)
 {
     if (firstMouse)
@@ -83,54 +122,206 @@ void scroll_callback(GLFWwindow*, double, double yoffset)
         gCamera->processScroll((float)yoffset);
 }
 
-// =========================
+// =========================================================================
+// KEYBOARD INPUT PROCESSING
+// =========================================================================
+
+void processKeyboardInput(GLFWwindow* window, RenderMode& mode)
+{
+    if (!gSimulator || !gHUD) return;
+
+    // P: PLAY
+    if (glfwGetKey(window, GLFW_KEY_P) == GLFW_PRESS)
+    {
+        if (!keyPlayPressed)
+        {
+            gSimulator->play();
+            keyPlayPressed = true;
+            std::cout << "\n? PLAY\n";
+        }
+    }
+    else
+    {
+        keyPlayPressed = false;
+    }
+
+    // SPACE: PAUSE / RESUME
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+    {
+        if (!keyPausePressed)
+        {
+            if (gSimulator->isPlaying())
+            {
+                gSimulator->pause();
+                std::cout << "\n? PAUSE\n";
+            }
+            else if (!gSimulator->isPaused())
+            {
+                gSimulator->play();
+                std::cout << "\n? RESUME\n";
+            }
+            keyPausePressed = true;
+        }
+    }
+    else
+    {
+        keyPausePressed = false;
+    }
+
+    // R: RESET
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS)
+    {
+        if (!keyResetPressed)
+        {
+            gSimulator->reset();
+            keyResetPressed = true;
+            std::cout << "\n? RESET\n";
+        }
+    }
+    else
+    {
+        keyResetPressed = false;
+    }
+
+    // M: TOGGLE RENDER MODE
+    if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS)
+    {
+        if (!keyModePressed)
+        {
+            mode = (mode == RenderMode::LINE)
+                ? RenderMode::MESH
+                : RenderMode::LINE;
+
+            keyModePressed = true;
+            std::cout << "? Mode: " << (mode == RenderMode::LINE ? "LINE" : "MESH") << "\n";
+        }
+    }
+    else
+    {
+        keyModePressed = false;
+    }
+
+    // H: TOGGLE HUD VISIBILITY (? NEW)
+    if (glfwGetKey(window, GLFW_KEY_H) == GLFW_PRESS)
+    {
+        if (!keyHUDToggle)
+        {
+            gHUD->setVisible(!gHUD->isVisible());
+            keyHUDToggle = true;
+            std::cout << "? HUD: " << (gHUD->isVisible() ? "ON" : "OFF") << "\n";
+        }
+    }
+    else
+    {
+        keyHUDToggle = false;
+    }
+
+    // +/-: ADJUST SPEED
+    if (glfwGetKey(window, GLFW_KEY_EQUAL) == GLFW_PRESS)
+    {
+        gSimulator->setSpeed(gSimulator->getSpeed() * 1.05);
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_MINUS) == GLFW_PRESS)
+    {
+        gSimulator->setSpeed(gSimulator->getSpeed() / 1.05);
+    }
+}
+
+// =========================================================================
 // MAIN
-// =========================
+// =========================================================================
+
 int main()
 {
-    // =========================
-    // INIT GLFW
-    // =========================
+    // =====================================================================
+    // INITIALIZATION PHASE
+    // =====================================================================
+
+    std::cout << "\n";
+    std::cout << "?????????????????????????????????????????????????????????????????\n";
+    std::cout << "?         PHASE 4B: SIMULATION + ENHANCED HUD DISPLAY           ?\n";
+    std::cout << "?                                                               ?\n";
+    std::cout << "?  Controls:                                                    ?\n";
+    std::cout << "?    [P]      = Play                                            ?\n";
+    std::cout << "?    [Space]  = Pause / Resume                                  ?\n";
+    std::cout << "?    [R]      = Reset                                           ?\n";
+    std::cout << "?    [M]      = Toggle render mode (LINE/MESH)                  ?\n";
+    std::cout << "?    [H]      = Toggle HUD visibility                           ?\n";
+    std::cout << "?    [+/-]    = Adjust speed                                    ?\n";
+    std::cout << "?    [LMB]    = Rotate camera                                   ?\n";
+    std::cout << "?    [RMB]    = Pan camera                                      ?\n";
+    std::cout << "?    [Scroll] = Zoom camera                                     ?\n";
+    std::cout << "?????????????????????????????????????????????????????????????????\n\n";
+
+    // =====================================================================
+    // GLFW INITIALIZATION
+    // =====================================================================
+
     if (!glfwInit())
     {
-        std::cout << "Failed to init GLFW\n";
+        std::cerr << "? Failed to initialize GLFW\n";
         return -1;
     }
 
-    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT, "Pipe3D", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(WIDTH, HEIGHT,
+        "Pipe Bender Simulator - Phase 4B", NULL, NULL);
     if (!window)
     {
-        std::cout << "Failed to create window\n";
+        std::cerr << "? Failed to create GLFW window\n";
         glfwTerminate();
         return -1;
     }
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);  // Enable vsync
 
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
-        std::cout << "Failed to init GLAD\n";
+        std::cerr << "? Failed to initialize GLAD\n";
         return -1;
     }
 
     glViewport(0, 0, WIDTH, HEIGHT);
     glEnable(GL_DEPTH_TEST);
+    glClearColor(0.1f, 0.1f, 0.15f, 1.0f);
 
-    // =========================
-    // SYSTEMS
-    // =========================
-    // Test 1: FEED operation
-    Operation feed;
-    feed.type = Operation::FEED;
-    feed.length = 100.0;
-    std::cout << "Test 1 - FEED: ";
-    feed.print();
+    std::cout << "? OpenGL initialized\n";
+
+    // =====================================================================
+    // CAMERA SETUP
+    // =====================================================================
+
     ControlCamera camera;
     gCamera = &camera;
+
+    std::cout << "? Camera created\n";
+
+    // =====================================================================
+    // RENDERER SETUP
+    // =====================================================================
+
     PipeRenderer renderer;
     TubeMesh mesh;
+    double radius = 8.0;
+    int segments = 16;
 
-    // ? LOAD SHADERS VIA MANAGER
+    std::cout << "? Renderer created\n";
+
+    // =====================================================================
+    // HUD PANEL SETUP (? NEW)
+    // =====================================================================
+
+    HUDPanel hudPanel(WIDTH, HEIGHT);
+    gHUD = &hudPanel;
+    hudPanel.setVisible(true);
+
+    std::cout << "? HUD panel created\n";
+
+    // =====================================================================
+    // SHADER LOADING
+    // =====================================================================
+
     ShaderGL* pipeShader = ShaderManager::instance().load(
         "pipe",
         "Source/ShaderFiles/pipe.vert",
@@ -139,126 +330,180 @@ int main()
 
     if (!pipeShader)
     {
-        std::cerr << "Failed to load pipe shader\n";
+        std::cerr << "? Failed to load pipe shader\n";
         return -1;
     }
 
-    double radius = 8.0;
-    int segments = 16;
+    std::cout << "? Shaders loaded\n";
 
-    // =========================
-    // PIPE SETUP (build ONCE)
-    // =========================
-    PipeAxis3D pipe(5.0);
-    pipe.addFeed(10);
-    pipe.addBend(50, PI / 3);
-    pipe.addRotate(PI / 3);
-    pipe.addFeed(80);
-    pipe.addBend(40, PI / 1);
+    // =====================================================================
+    // SIMULATION CONTROLLER SETUP
+    // =====================================================================
 
-    pipe.build();
+    SimulationController simulator;
+    gSimulator = &simulator;
 
-    RenderMode mode = RenderMode::MESH;
+    // =====================================================================
+    // LOAD PROGRAM
+    // =====================================================================
 
-    // =========================
-    // GENERATE & UPLOAD MESH ONCE
-    // =========================
-    std::vector<Vec3D> points;
-    std::vector<Vec3D> tangents;
+    std::vector<Operation> program;
 
-    for (const auto& n : pipe.getNodes())
-    {
-        points.push_back(n.pos);
-        tangents.push_back(n.T);
-    }
+    // Create test program
+    Operation feed1, bend1, feed2;
 
-    mesh.generate(points, tangents, radius, segments);
-    std::cout << "Mesh generated: " << mesh.getVertices().size() << " vertices, "
-        << mesh.getIndices().size() << " indices\n";
+    feed1.type = Operation::FEED;
+    feed1.length = 100.0;
 
-    renderer.uploadMesh(mesh.getVertices(), mesh.getIndices());
+    bend1.type = Operation::BEND;
+    bend1.R = 50.0;
+    bend1.angle = PI / 2.0;
 
-    // =========================
-    // INPUT
-    // =========================
+    feed2.type = Operation::FEED;
+    feed2.length = 100.0;
+
+    program.push_back(feed1);
+    program.push_back(bend1);
+    program.push_back(feed2);
+
+    simulator.loadProgram(program);
+
+    std::cout << "? Program loaded (" << program.size() << " operations)\n";
+    std::cout << "\n";
+
+    // =====================================================================
+    // INPUT CALLBACKS
+    // =====================================================================
+
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetMouseButtonCallback(window, mouse_button_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
-    // =========================
-    // MAIN LOOP
-    // =========================
+    std::cout << "? Input callbacks registered\n";
+
+    // =====================================================================
+    // RENDER MODE
+    // =====================================================================
+
+    RenderMode mode = RenderMode::MESH;
+
+    std::cout << "? Render mode: MESH\n";
+    std::cout << "\n";
+    std::cout << "???????????????????????????????????????????????????????????????\n";
+    std::cout << "SIMULATION READY - Press [P] to start\n";
+    std::cout << "???????????????????????????????????????????????????????????????\n\n";
+
+    // =====================================================================
+    // FRAME TIMING INITIALIZATION
+    // =====================================================================
+
+    lastFrameTime = std::chrono::high_resolution_clock::now();
+
+    // =====================================================================
+    // MAIN RENDER LOOP
+    // =====================================================================
+
     while (!glfwWindowShouldClose(window))
     {
-        // =========================
-        // INPUT (mode toggle)
-        // =========================
-        static bool keyPressed = false;
+        // =================================================================
+        // FRAME TIMING
+        // =================================================================
 
-        if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        auto currentTime = std::chrono::high_resolution_clock::now();
+        deltaTime = std::chrono::duration<double>(
+            currentTime - lastFrameTime).count();
+        lastFrameTime = currentTime;
+
+        if (deltaTime > 0.05) deltaTime = 0.05;
+
+        // =================================================================
+        // PHASE 1: INPUT PROCESSING
+        // =================================================================
+
+        processKeyboardInput(window, mode);
+
+        // =================================================================
+        // PHASE 2: SIMULATION UPDATE
+        // =================================================================
+
+        simulator.update(deltaTime);
+
+        // =================================================================
+        // PHASE 3: GEOMETRY & MESH GENERATION
+        // =================================================================
+
+        const PipeAxis3D& pipeGeometry = simulator.getPipeGeometry();
+        const auto& nodes = pipeGeometry.getNodes();
+
+        std::vector<Vec3D> points;
+        std::vector<Vec3D> tangents;
+
+        for (const auto& node : nodes)
         {
-            if (!keyPressed)
-            {
-                mode = (mode == RenderMode::LINE)
-                    ? RenderMode::MESH
-                    : RenderMode::LINE;
-
-                keyPressed = true;
-                std::cout << "Mode: " << (mode == RenderMode::LINE ? "LINE" : "MESH") << "\n";
-            }
+            points.push_back(node.pos);
+            tangents.push_back(node.T);
         }
-        else keyPressed = false;
 
-        // =========================
-        // PREPARE DATA FOR RENDERING
-        // =========================
-        if (mode == RenderMode::LINE)
+        if (!points.empty())
         {
-            std::vector<float> vertices;
-
-            for (const auto& n : pipe.getNodes())
-            {
-                vertices.push_back((float)n.pos.x);
-                vertices.push_back((float)n.pos.y);
-                vertices.push_back((float)n.pos.z);
-            }
-
-            renderer.uploadLine(vertices);
+            mesh.generate(points, tangents, radius, segments);
+            renderer.uploadMesh(mesh.getVertices(), mesh.getIndices());
         }
 
-        // =========================
-        // RENDER
-        // =========================
+        // =================================================================
+        // PHASE 4: UPDATE HUD DATA (? NEW)
+        // =================================================================
+
+        hudPanel.update(simulator, mode);
+
+        // =================================================================
+        // PHASE 5: RENDERING - 3D SCENE
+        // =================================================================
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         renderer.setMode(mode);
-        pipeShader->use();  // ? USE SHADER FROM MANAGER
+        pipeShader->use();
 
-        // Camera matrices
         glm::mat4 model = glm::mat4(1.0f);
         glm::mat4 view = camera.getViewMatrix();
         glm::mat4 projection = camera.getProjection((float)WIDTH, (float)HEIGHT);
-
         glm::mat4 MVP = projection * view * model;
 
-        // Set uniforms
         pipeShader->setMat4("MVP", MVP);
         pipeShader->setMat4("Model", model);
-
-        // Normal matrix
         glm::mat3 normalMatrix = glm::transpose(glm::inverse(glm::mat3(model)));
         pipeShader->setMat3("NormalMatrix", normalMatrix);
 
-        // Lighting
-        pipeShader->setVec3("lightPos", glm::vec3(10.0f, 10.0f, 10.0f));
+        pipeShader->setVec3("lightPos", glm::vec3(100.0f, 100.0f, 100.0f));
         pipeShader->setVec3("viewPos", camera.getPosition());
         pipeShader->setVec3("objectColor", glm::vec3(0.2f, 0.8f, 0.3f));
 
         renderer.draw();
 
+        // =================================================================
+        // PHASE 6: RENDERING - 2D HUD OVERLAY (? NEW)
+        // =================================================================
+
+        hudPanel.render();
+
+        // =================================================================
+        // PHASE 7: SWAP BUFFERS & POLL EVENTS
+        // =================================================================
+
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+
+    // =====================================================================
+    // CLEANUP
+    // =====================================================================
+
+    std::cout << "\n\n";
+    std::cout << "?????????????????????????????????????????????????????????????????\n";
+    std::cout << "?                     SIMULATION COMPLETE                       ?\n";
+    std::cout << "?               Thank you for using Phase 4B!                   ?\n";
+    std::cout << "?????????????????????????????????????????????????????????????????\n";
 
     glfwTerminate();
     return 0;
