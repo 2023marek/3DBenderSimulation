@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\..\..\Downloads\stb_image.h" />
     <ClInclude Include="Core\Math\Vec3D.h" />
     <ClInclude Include="Core\OperationQueue.h" />
     <ClInclude Include="Core\Operations.h" />
@@ -35,6 +36,7 @@
     <ClInclude Include="Render\ShaderGL.h" />
     <ClInclude Include="Render\ShaderManager.h" />
     <ClInclude Include="Render\TubeMesh.h" />
+    <ClInclude Include="Source\ThirdParty\stb_image.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="App\main3D.cpp" />
@@ -53,6 +55,9 @@
     <None Include="..\.gitattributes" />
     <None Include="Source\ShaderFiles\pipe.frag" />
     <None Include="Source\ShaderFiles\pipe.vert" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Assets\Fonts\8x8text_whiteNoShadow.png" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

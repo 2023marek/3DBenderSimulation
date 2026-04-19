@@ -1,3 +1,5 @@
+#define STB_IMAGE_IMPLEMENTATION
+#include "../Source/ThirdParty/stb_image.h"
 #include "../Render/HUDPanel.h"
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -5,7 +7,15 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+unsigned int loadFontTexture(const std::string& path);
+// ===== ADD THIS NEAR TOP OF HUDPanel.cpp =====
 
+glm::vec2 toNDC(float x, float y, float width, float height)
+{
+    float nx = (x / width) * 2.0f - 1.0f;
+    float ny = 1.0f - (y / height) * 2.0f;
+    return { nx, ny };
+}
 HUDPanel::HUDPanel(unsigned int windowWidth, unsigned int windowHeight)
     : windowWidth(windowWidth), windowHeight(windowHeight)
 {
@@ -108,6 +118,7 @@ void HUDPanel::update(const SimulationController& simulator, const RenderMode& m
 
 void HUDPanel::render()
 {
+    std::cout << "HUD RENDER CALLED\n";
     glUseProgram(0); // force fixed pipeline
     if (!visible)
         return;
@@ -239,14 +250,17 @@ void HUDPanel::drawCharBitmap(float x, float y, float w, float h, char c)
     float u1 = u0 + cell;
     float v1 = v0 + cell;
 
-    float vertices[6][4] = {
-        { x,     y + h,   u0, v1 },
-        { x,     y,     u0, v0 },
-        { x + w,   y,     u1, v0 },
+    glm::vec2 p0 = toNDC(x, y,windowWidth,windowHeight);
+    glm::vec2 p1 = toNDC(x + w, y + h, windowWidth,windowHeight);
 
-        { x,     y + h,   u0, v1 },
-        { x + w,   y,     u1, v0 },
-        { x + w,   y + h,   u1, v1 }
+    float vertices[6][4] = {
+        { p0.x, p1.y, u0, v1 },
+        { p0.x, p0.y, u0, v0 },
+        { p1.x, p0.y, u1, v0 },
+
+        { p0.x, p1.y, u0, v1 },
+        { p1.x, p0.y, u1, v0 },
+        { p1.x, p1.y, u1, v1 }
     };
 
     glBindTexture(GL_TEXTURE_2D, fontTexture);
@@ -274,7 +288,12 @@ void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 col
 void HUDPanel::initFont()
 {
     // load texture (use your stb loader here)
-    fontTexture = loadFontTexture("font.png");
+    fontTexture = loadFontTexture("Assets/Fonts/8x8text_whiteNoShadow.png");
+
+    if (fontTexture == 0)
+    {
+        std::cerr << "ERROR: Font texture failed to load!\n";
+    }
 
     glGenVertexArrays(1, &textVAO);
     glGenBuffers(1, &textVBO);
@@ -289,3 +308,35 @@ void HUDPanel::initFont()
 
     glBindVertexArray(0);
 }
+unsigned int loadFontTexture(const std::string& path)
+{
+    int width, height, channels;
+
+    unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+    if (!data)
+    {
+        std::cerr << "Failed to load font texture: " << path << std::endl;
+        return 0;
+    }
+
+    unsigned int texture;
+    glGenTextures(1, &texture);
+    glBindTexture(GL_TEXTURE_2D, texture);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height,
+        0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+    glGenerateMipmap(GL_TEXTURE_2D);
+
+    // Texture settings (important for fonts)
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    stbi_image_free(data);
+
+    return texture;
+}
+

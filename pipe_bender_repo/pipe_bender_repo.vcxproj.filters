@@ -63,6 +63,12 @@
     <ClInclude Include="Render\HUDPanel.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="..\..\..\..\Downloads\stb_image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\ThirdParty\stb_image.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\GnuplotExporter3D.cpp">
@@ -103,5 +109,10 @@
     <None Include="Source\ShaderFiles\pipe.vert" />
     <None Include="Source\ShaderFiles\pipe.frag" />
     <None Include="..\.gitattributes" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="Assets\Fonts\8x8text_whiteNoShadow.png">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
