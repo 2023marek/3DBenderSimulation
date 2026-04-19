@@ -118,107 +118,40 @@ void HUDPanel::update(const SimulationController& simulator, const RenderMode& m
 
 void HUDPanel::render()
 {
-    std::cout << "HUD RENDER CALLED\n";
-    glUseProgram(0); // force fixed pipeline
-    if (!visible)
-        return;
-
-    GLint oldBlendSrc, oldBlendDst;
-    GLboolean blendEnabled = glIsEnabled(GL_BLEND);
-    glGetIntegerv(GL_BLEND_SRC, &oldBlendSrc);
-    glGetIntegerv(GL_BLEND_DST, &oldBlendDst);
-
-    glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+    glUseProgram(0);
+
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0.0, windowWidth, windowHeight, 0.0, -1.0, 1.0);
 
     glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
     glLoadIdentity();
 
-    // =====================================================================
-    // TOP PANEL
-    // =====================================================================
-    float topY = 20.0f;
-    float topHeight = 100.0f;
+    glColor3f(1.0f, 0.0f, 0.0f);
 
-    drawRect(10.0f, topY, windowWidth - 20.0f, topHeight, bgColor);
-
-    // Status line
-    std::ostringstream statusLine;
-    statusLine << "Status: " << statusStr
-        << "  |  Speed: " << std::fixed << std::setprecision(1)
-        << speed << " mm/s  |  Mode: " << modeStr;
-    drawText(25.0f, topY + 15.0f, statusLine.str(), textColor);
-
-    // Operation info
-    std::ostringstream opLine;
-    opLine << "Op " << (currentOpIndex + 1) << "/" << totalOps << ": " << currentOpName;
-    drawText(25.0f, topY + 40.0f, opLine.str(), textColor);
-
-    // Progress bar
-    drawProgressBar(25.0f, topY + 65.0f, 250.0f, 20.0f,
-        currentProgress, barColor, glm::vec4(0.3f, 0.3f, 0.3f, 1.0f));
-
-    std::ostringstream progLine;
-    progLine << std::setw(3) << (int)(currentProgress * 100) << "%";
-    drawText(285.0f, topY + 67.0f, progLine.str(), textColor);
-
-    // =====================================================================
-    // BOTTOM PANEL
-    // =====================================================================
-    float bottomY = windowHeight - 120.0f;
-    float bottomHeight = 110.0f;
-
-    drawRect(10.0f, bottomY, windowWidth - 20.0f, bottomHeight, bgColor);
-
-    // Position
-    std::ostringstream posLine;
-    posLine << "Position: (" << std::fixed << std::setprecision(1)
-        << position.x << ", " << position.y << ", " << position.z << ") mm";
-    drawText(25.0f, bottomY + 10.0f, posLine.str(), textColor);
-
-    // Rotation and nodes
-    std::ostringstream rotLine;
-    rotLine << "Rotation: " << std::fixed << std::setprecision(1) << rotation << "deg  |  Nodes: " << nodeCount;
-    drawText(25.0f, bottomY + 35.0f, rotLine.str(), textColor);
-
-    // Time
-    std::ostringstream timeLine;
-    timeLine << "Time: " << std::fixed << std::setprecision(2) << currentTime << " sec";
-    drawText(25.0f, bottomY + 60.0f, timeLine.str(), textColor);
-
-    // Overall progress
-    drawProgressBar(25.0f, bottomY + 85.0f, 400.0f, 15.0f,
-        overallProgress, barColor, glm::vec4(0.3f, 0.3f, 0.3f, 1.0f));
-
-    // =====================================================================
-    // HELP TEXT
-    // =====================================================================
-    float helpY = windowHeight - 50.0f;
-    drawText(15.0f, helpY, "[P]lay [Space]Pause [R]eset [M]ode [H]UD [+/-]Speed [ESC]Exit",
-        glm::vec4(0.7f, 0.7f, 0.7f, 1.0f));
-
-    glPopMatrix();
-    glMatrixMode(GL_PROJECTION);
-    glPopMatrix();
-    glMatrixMode(GL_MODELVIEW);
-
-    if (!blendEnabled)
-        glDisable(GL_BLEND);
-    else
-        glBlendFunc(oldBlendSrc, oldBlendDst);
-
-    glEnable(GL_DEPTH_TEST);
-    glDepthMask(GL_TRUE);
-    glEnable(GL_DEPTH_TEST);
+    //drawRect(50, 50, 300, 100, glm::vec4(0, 1, 0, 0.5f));
+    drawRect(100, 200, 200, 80, glm::vec4(1, 0, 0, 1));
+    drawText(100, 100, "HUD OK", glm::vec4(1, 1, 1, 1));
 }
 
 void HUDPanel::drawRect(float x, float y, float width, float height, glm::vec4 color)
 {
-    glDisable(GL_TEXTURE_2D);
+    // ?? Force fixed pipeline
+    glUseProgram(0);
+
+    // ?? Make sure blending works
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // ?? Set color
     glColor4f(color.r, color.g, color.b, color.a);
 
+    // ?? Draw quad
     glBegin(GL_QUADS);
     glVertex2f(x, y);
     glVertex2f(x + width, y);
@@ -271,21 +204,17 @@ void HUDPanel::drawCharBitmap(float x, float y, float w, float h, char c)
 }
 void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 color)
 {
-    glEnable(GL_TEXTURE_2D);
-    glBindVertexArray(textVAO);
-
-    float charW = 12.0f;
-    float charH = 16.0f;
-
-    for (char c : text)
+    for (size_t i = 0; i < text.size(); ++i)
     {
-        drawCharBitmap(x, y, charW, charH, c);
-        x += charW * 0.6f;
+        drawRect(
+            x + i * 12.0f,   // spacing
+            y,
+            8.0f,
+            12.0f,
+            color
+        );
     }
-
-    glBindVertexArray(0);
-}
-void HUDPanel::initFont()
+}void HUDPanel::initFont()
 {
     // load texture (use your stb loader here)
     fontTexture = loadFontTexture("Assets/Fonts/8x8text_whiteNoShadow.png");
