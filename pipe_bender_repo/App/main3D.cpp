@@ -481,11 +481,19 @@ int main()
 
         renderer.draw();
 
+        // ===== HUD PASS (FIXED) =====
+        glDisable(GL_DEPTH_TEST);
+        glDepthMask(GL_FALSE);
+
+        hudPanel.render();
+
+        glDepthMask(GL_TRUE);
+        glEnable(GL_DEPTH_TEST);
         // =================================================================
         // PHASE 6: RENDERING - 2D HUD OVERLAY (? NEW)
         // =================================================================
 
-        hudPanel.render();
+        
 
         // =================================================================
         // PHASE 7: SWAP BUFFERS & POLL EVENTS

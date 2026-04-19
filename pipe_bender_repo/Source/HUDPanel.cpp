@@ -9,6 +9,7 @@
 HUDPanel::HUDPanel(unsigned int windowWidth, unsigned int windowHeight)
     : windowWidth(windowWidth), windowHeight(windowHeight)
 {
+    initFont();
     initQuadMesh();
 }
 
@@ -107,6 +108,7 @@ void HUDPanel::update(const SimulationController& simulator, const RenderMode& m
 
 void HUDPanel::render()
 {
+    glUseProgram(0); // force fixed pipeline
     if (!visible)
         return;
 
@@ -119,10 +121,6 @@ void HUDPanel::render()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0.0, windowWidth, windowHeight, 0.0, -1.0, 1.0);
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
     glLoadIdentity();
@@ -201,6 +199,8 @@ void HUDPanel::render()
         glBlendFunc(oldBlendSrc, oldBlendDst);
 
     glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glEnable(GL_DEPTH_TEST);
 }
 
 void HUDPanel::drawRect(float x, float y, float width, float height, glm::vec4 color)
@@ -224,35 +224,68 @@ void HUDPanel::drawProgressBar(float x, float y, float width, float height,
     drawRect(x, y, filledWidth, height, fillColor);
 }
 
-void HUDPanel::drawCharacter(float x, float y, char c, glm::vec4 color)
+void HUDPanel::drawCharBitmap(float x, float y, float w, float h, char c)
 {
-    // Simple character rendering using rectangles
-    // Each character is approximately 8x12 pixels
+    int index = (unsigned char)c;
 
-    glColor4f(color.r, color.g, color.b, color.a);
+    int cols = 16;
+    float cell = 1.0f / cols;
 
-    // For now, just draw a small rectangle to represent the character
-    glBegin(GL_QUADS);
-    glVertex2f(x, y);
-    glVertex2f(x + 8.0f, y);
-    glVertex2f(x + 8.0f, y + 12.0f);
-    glVertex2f(x, y + 12.0f);
-    glEnd();
+    int row = index / cols;
+    int col = index % cols;
+
+    float u0 = col * cell;
+    float v0 = row * cell;
+    float u1 = u0 + cell;
+    float v1 = v0 + cell;
+
+    float vertices[6][4] = {
+        { x,     y + h,   u0, v1 },
+        { x,     y,     u0, v0 },
+        { x + w,   y,     u1, v0 },
+
+        { x,     y + h,   u0, v1 },
+        { x + w,   y,     u1, v0 },
+        { x + w,   y + h,   u1, v1 }
+    };
+
+    glBindTexture(GL_TEXTURE_2D, fontTexture);
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }
-
 void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 color)
 {
-    // Draw background for readability
-    float textWidth = (float)(text.length() * 8);
-    drawRect(x - 2.0f, y - 2.0f, textWidth + 4.0f, 14.0f,
-        glm::vec4(0.0f, 0.0f, 0.0f, 0.5f));
+    glEnable(GL_TEXTURE_2D);
+    glBindVertexArray(textVAO);
 
-    // Draw text - currently using simple rectangles as placeholders
-    // For production, integrate FreeType or similar library
-    glColor4f(color.r, color.g, color.b, color.a);
+    float charW = 12.0f;
+    float charH = 16.0f;
 
-    for (size_t i = 0; i < text.length(); ++i)
+    for (char c : text)
     {
-        drawCharacter(x + (float)i * 8.0f, y, text[i], color);
+        drawCharBitmap(x, y, charW, charH, c);
+        x += charW * 0.6f;
     }
+
+    glBindVertexArray(0);
+}
+void HUDPanel::initFont()
+{
+    // load texture (use your stb loader here)
+    fontTexture = loadFontTexture("font.png");
+
+    glGenVertexArrays(1, &textVAO);
+    glGenBuffers(1, &textVBO);
+
+    glBindVertexArray(textVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+
+    glBindVertexArray(0);
 }

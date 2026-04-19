@@ -68,4 +68,11 @@ private:
     // Simple character renderer
     void drawCharacter(float x, float y, char c, glm::vec4 color);
     void drawText(float x, float y, const std::string& text, glm::vec4 color);
+
+    unsigned int fontTexture = 0;
+    unsigned int textVAO = 0;
+    unsigned int textVBO = 0;
+
+    void initFont();
+    void drawCharBitmap(float x, float y, float w, float h, char c);
 };
