@@ -1,4 +1,6 @@
+#include <fstream>
 #define STB_IMAGE_IMPLEMENTATION
+#define _CRT_SECURE_NO_WARNINGS
 #include "../Source/ThirdParty/stb_image.h"
 #include "../Render/HUDPanel.h"
 #include <glad/glad.h>
@@ -10,7 +12,7 @@
 unsigned int loadFontTexture(const std::string& path);
 // ===== ADD THIS NEAR TOP OF HUDPanel.cpp =====
 
-glm::vec2 toNDC(float x, float y, float width, float height)
+static glm::vec2 toNDC(float x, float y, float width, float height)
 {
     float nx = (x / width) * 2.0f - 1.0f;
     float ny = 1.0f - (y / height) * 2.0f;
@@ -19,8 +21,11 @@ glm::vec2 toNDC(float x, float y, float width, float height)
 HUDPanel::HUDPanel(unsigned int windowWidth, unsigned int windowHeight)
     : windowWidth(windowWidth), windowHeight(windowHeight)
 {
-    initFont();
+    
     initQuadMesh();
+    loadFont("Assets/Fonts/marek.fnt", "Assets/Fonts/marek_0.png");
+
+
 }
 
 HUDPanel::~HUDPanel()
@@ -132,13 +137,13 @@ void HUDPanel::render()
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 
-    glColor3f(1.0f, 0.0f, 0.0f);
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, fontTexture);
 
-    //drawRect(50, 50, 300, 100, glm::vec4(0, 1, 0, 0.5f));
-    drawRect(100, 200, 200, 80, glm::vec4(1, 0, 0, 1));
-    drawText(100, 100, "HUD OK", glm::vec4(1, 1, 1, 1));
+    drawText(100, 100, "HUD OK 123", glm::vec4(1, 1, 1, 1));
+
+    glDisable(GL_TEXTURE_2D);
 }
-
 void HUDPanel::drawRect(float x, float y, float width, float height, glm::vec4 color)
 {
     // ?? Force fixed pipeline
@@ -168,104 +173,148 @@ void HUDPanel::drawProgressBar(float x, float y, float width, float height,
     drawRect(x, y, filledWidth, height, fillColor);
 }
 
-void HUDPanel::drawCharBitmap(float x, float y, float w, float h, char c)
-{
-    int index = (unsigned char)c;
 
-    int cols = 16;
-    float cell = 1.0f / cols;
-
-    int row = index / cols;
-    int col = index % cols;
-
-    float u0 = col * cell;
-    float v0 = row * cell;
-    float u1 = u0 + cell;
-    float v1 = v0 + cell;
-
-    glm::vec2 p0 = toNDC(x, y,windowWidth,windowHeight);
-    glm::vec2 p1 = toNDC(x + w, y + h, windowWidth,windowHeight);
-
-    float vertices[6][4] = {
-        { p0.x, p1.y, u0, v1 },
-        { p0.x, p0.y, u0, v0 },
-        { p1.x, p0.y, u1, v0 },
-
-        { p0.x, p1.y, u0, v1 },
-        { p1.x, p0.y, u1, v0 },
-        { p1.x, p1.y, u1, v1 }
-    };
-
-    glBindTexture(GL_TEXTURE_2D, fontTexture);
-    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-}
 void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 color)
 {
-    for (size_t i = 0; i < text.size(); ++i)
+    float cursorX = x;
+
+    for (char c : text)
     {
-        drawRect(
-            x + i * 12.0f,   // spacing
-            y,
-            8.0f,
-            12.0f,
-            color
-        );
+        auto it = glyphs.find(c);
+        if (it == glyphs.end())
+        {
+            cursorX += 10.0f; // fallback space for unknown chars
+            continue;
+        }
+
+        Glyph& g = it->second;
+
+        drawGlyph(cursorX, y, c);
+
+        // IMPORTANT: use xAdvance, not width
+        cursorX += g.xAdvance;
     }
-}void HUDPanel::initFont()
-{
-    // load texture (use your stb loader here)
-    fontTexture = loadFontTexture("Assets/Fonts/8x8text_whiteNoShadow.png");
-
-    if (fontTexture == 0)
-    {
-        std::cerr << "ERROR: Font texture failed to load!\n";
-    }
-
-    glGenVertexArrays(1, &textVAO);
-    glGenBuffers(1, &textVBO);
-
-    glBindVertexArray(textVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
-
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
-
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
-
-    glBindVertexArray(0);
 }
+
 unsigned int loadFontTexture(const std::string& path)
 {
-    int width, height, channels;
+    int w, h, channels;
 
-    unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 4);
+    stbi_set_flip_vertically_on_load(true);
+
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, 4);
+
     if (!data)
     {
-        std::cerr << "Failed to load font texture: " << path << std::endl;
+        std::cout << "FONT LOAD FAILED\n";
         return 0;
     }
 
-    unsigned int texture;
-    glGenTextures(1, &texture);
-    glBindTexture(GL_TEXTURE_2D, texture);
+    unsigned int texID;
+    glGenTextures(1, &texID);
+    glBindTexture(GL_TEXTURE_2D, texID);
 
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height,
-        0, GL_RGBA, GL_UNSIGNED_BYTE, data);
-
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    // Texture settings (important for fonts)
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA,
+        w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
     stbi_image_free(data);
+	std::cout << "Texture size: " << w << "x" << h << std::endl;
+    return texID;
+}
+void HUDPanel::drawGlyph(float x, float y, char c)
+{
+    if (glyphs.find(c) == glyphs.end()) return;
 
-    return texture;
+    Glyph& g = glyphs[c];
+
+    float x0 = x + g.xOffset;
+    float y0 = y + g.yOffset;
+
+    float x1 = x0 + g.width;
+    float y1 = y0 + g.height;
+
+    glBegin(GL_QUADS);
+    glTexCoord2f(g.u0, g.v0); glVertex2f(x0, y0);
+    glTexCoord2f(g.u1, g.v0); glVertex2f(x1, y0);
+    glTexCoord2f(g.u1, g.v1); glVertex2f(x1, y1);
+    glTexCoord2f(g.u0, g.v1); glVertex2f(x0, y1);
+    glEnd();
+}
+unsigned int loadTexture(const std::string& path)
+{
+    int w, h, channels;
+    unsigned char* data = stbi_load(path.c_str(), &w, &h, &channels, 4);
+
+    if (!data)
+    {
+        std::cout << "FONT LOAD FAILED\n";
+        return 0;
+    }
+
+    unsigned int tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+    stbi_image_free(data);
+    return tex;
 }
 
+void HUDPanel::loadFont(const std::string& fntPath, const std::string& texturePath)
+{
+    fontTexture = loadTexture(texturePath);
+
+    std::ifstream file(fntPath);
+    std::string line;
+
+    int texW = 0, texH = 0;
+
+    while (std::getline(file, line))
+    {
+        // Get texture size
+        if (line.find("scaleW") != std::string::npos)
+        {
+            sscanf_s(line.c_str(), "common lineHeight=%*d base=%*d scaleW=%d scaleH=%d",
+                &texW, &texH);
+        }
+
+        // Parse glyph
+        if (line.find("char id=") != std::string::npos)
+        {
+            int id = 0, x = 0, y = 0, w = 0, h = 0, xo = 0, yo = 0, xa = 0;
+
+            int parsed = sscanf_s(line.c_str(),
+                "char id=%d x=%d y=%d width=%d height=%d xoffset=%d yoffset=%d xadvance=%d",
+                &id, &x, &y, &w, &h, &xo, &yo, &xa); 
+            if (parsed != 8)
+            {
+                std::cout << "WARNING: Failed to parse glyph line:\n" << line << "\n";
+                continue;
+            }
+
+            Glyph g;
+
+            g.u0 = (float)x / texW;
+            g.v0 = (float)y / texH;
+            g.u1 = (float)(x + w) / texW;
+            g.v1 = (float)(y + h) / texH;
+
+            g.width = (float)w;
+            g.height = (float)h;
+            g.xOffset = (float)xo;
+            g.yOffset = (float)yo;
+            g.xAdvance = (float)xa;
+
+            glyphs[(char)id] = g;
+        }
+    }
+
+    std::cout << "Loaded glyphs: " << glyphs.size() << "\n";
+}

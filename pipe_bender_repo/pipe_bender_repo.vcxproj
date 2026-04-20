@@ -53,11 +53,12 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\.gitattributes" />
+    <None Include="Assets\Fonts\marek.fnt" />
     <None Include="Source\ShaderFiles\pipe.frag" />
     <None Include="Source\ShaderFiles\pipe.vert" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="Assets\Fonts\8x8text_whiteNoShadow.png" />
+    <Image Include="Assets\Fonts\marek_0.png" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>17.0</VCProjectVersion>

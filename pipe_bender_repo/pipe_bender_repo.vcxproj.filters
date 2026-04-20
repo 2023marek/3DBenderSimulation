@@ -109,9 +109,10 @@
     <None Include="Source\ShaderFiles\pipe.vert" />
     <None Include="Source\ShaderFiles\pipe.frag" />
     <None Include="..\.gitattributes" />
+    <None Include="Assets\Fonts\marek.fnt" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="Assets\Fonts\8x8text_whiteNoShadow.png">
+    <Image Include="Assets\Fonts\marek_0.png">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>

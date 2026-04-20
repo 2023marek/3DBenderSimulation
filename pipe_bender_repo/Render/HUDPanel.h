@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <unordered_map>
 #include <string>
 #include <vector>
 #include <map>
@@ -34,14 +35,29 @@ public:
 private:
     unsigned int windowWidth;
     unsigned int windowHeight;
-
+    
     bool visible = true;
 
     glm::vec4 textColor = glm::vec4(0.0f, 1.0f, 0.0f, 1.0f);
     glm::vec4 barColor = glm::vec4(0.2f, 0.8f, 0.3f, 1.0f);
     glm::vec4 bgColor = glm::vec4(0.0f, 0.0f, 0.0f, 0.5f);
     float bgAlpha = 0.5f;
+	// Glyph mapping 
+    struct Glyph
+	{
+        float u0, v0, u1, v1;
+        float width;
+        float height;
+		float xOffset;
+		float yOffset;
+		float xAdvance;
+	};
 
+	std::unordered_map<char, Glyph> glyphs;
+    unsigned int fontTexture = 0;
+
+	void loadFont(const std::string& fntPath, const std::string& texturePath);
+    void drawGlyph(float x, float y, char c);
     // HUD Data
     std::string statusStr;
     double speed = 0.0;
@@ -69,10 +85,9 @@ private:
     void drawCharacter(float x, float y, char c, glm::vec4 color);
     void drawText(float x, float y, const std::string& text, glm::vec4 color);
 
-    unsigned int fontTexture = 0;
-    unsigned int textVAO = 0;
-    unsigned int textVBO = 0;
+   
+   
 
-    void initFont();
-    void drawCharBitmap(float x, float y, float w, float h, char c);
+  
+    
 };
