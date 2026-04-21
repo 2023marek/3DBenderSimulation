@@ -321,7 +321,7 @@ int main()
     // =====================================================================
     // SHADER LOADING
     // =====================================================================
-
+    
     ShaderGL* pipeShader = ShaderManager::instance().load(
         "pipe",
         "Source/ShaderFiles/pipe.vert",
@@ -333,7 +333,30 @@ int main()
         std::cerr << "? Failed to load pipe shader\n";
         return -1;
     }
+    ShaderGL* hudShader = ShaderManager::instance().load(
+        "hud",
+        "Source/ShaderFiles/hud.vert",
+        "Source/ShaderFiles/hud.frag"
+    );
+    hudPanel.setHUDShader(hudShader);
 
+
+ShaderGL* textShader = ShaderManager::instance().load(
+        "text",
+        "Source/ShaderFiles/text.vert",
+        "Source/ShaderFiles/text.frag"
+    );
+
+
+    // ?? CHECK
+    if (!pipeShader || !hudShader || !textShader)
+    {
+        std::cerr << "? Failed to load shaders\n";
+        return -1;
+    }
+
+    hudPanel.setTextShader(textShader);
+   
     std::cout << "? Shaders loaded\n";
 
     // =====================================================================

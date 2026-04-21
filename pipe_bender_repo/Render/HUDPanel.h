@@ -7,6 +7,8 @@
 #include <map>
 #include "../Core/SimulationController.h"
 #include "../Render/RenderMode.h"
+#include "../Render/ShaderManager.h"
+
 
 // =========================================================================
 // PHASE 4B+: HUD PANEL - WITH REAL TEXT RENDERING
@@ -31,7 +33,7 @@ public:
     void setTextColor(glm::vec4 color) { textColor = color; }
     void setBarColor(glm::vec4 color) { barColor = color; }
     void setBackgroundAlpha(float alpha) { bgAlpha = alpha; }
-
+    void setTextShader(ShaderGL* shader) { textShader = shader; }
 private:
     unsigned int windowWidth;
     unsigned int windowHeight;
@@ -72,21 +74,27 @@ private:
     int nodeCount = 0;
     std::string modeStr;
 
+    
+
+    ShaderGL* textShader = nullptr;
     // Rendering
     unsigned int quadVAO = 0;
     unsigned int quadVBO = 0;
 
     void initQuadMesh();
-    void drawRect(float x, float y, float width, float height, glm::vec4 color);
-    void drawProgressBar(float x, float y, float width, float height,
-        double progress, glm::vec4 fillColor, glm::vec4 bgColor);
+    
+    ShaderGL* hudShader = nullptr;
+
+public:
+    void setHUDShader(ShaderGL* shader) { hudShader = shader; }
 
     // Simple character renderer
     void drawCharacter(float x, float y, char c, glm::vec4 color);
     void drawText(float x, float y, const std::string& text, glm::vec4 color);
 
    
-   
+    unsigned int textVAO = 0;
+    unsigned int textVBO = 0;
 
   
     

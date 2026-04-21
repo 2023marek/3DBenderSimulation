@@ -12,12 +12,7 @@
 unsigned int loadFontTexture(const std::string& path);
 // ===== ADD THIS NEAR TOP OF HUDPanel.cpp =====
 
-static glm::vec2 toNDC(float x, float y, float width, float height)
-{
-    float nx = (x / width) * 2.0f - 1.0f;
-    float ny = 1.0f - (y / height) * 2.0f;
-    return { nx, ny };
-}
+
 HUDPanel::HUDPanel(unsigned int windowWidth, unsigned int windowHeight)
     : windowWidth(windowWidth), windowHeight(windowHeight)
 {
@@ -25,7 +20,24 @@ HUDPanel::HUDPanel(unsigned int windowWidth, unsigned int windowHeight)
     initQuadMesh();
     loadFont("Assets/Fonts/marek.fnt", "Assets/Fonts/marek_0.png");
 
+    glGenVertexArrays(1, &textVAO);
+    glGenBuffers(1, &textVBO);
 
+    glBindVertexArray(textVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+
+    // 6 vertices * 4 floats (x,y,u,v)
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+
+    // position
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+
+    // UV
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+    glBindVertexArray(0);
 }
 
 HUDPanel::~HUDPanel()
@@ -39,10 +51,13 @@ HUDPanel::~HUDPanel()
 void HUDPanel::initQuadMesh()
 {
     float quadVertices[] = {
-        0.0f, 0.0f,
-        1.0f, 0.0f,
-        1.0f, 1.0f,
-        0.0f, 1.0f
+    0.0f, 0.0f,
+    1.0f, 0.0f,
+    1.0f, 1.0f,
+
+    0.0f, 0.0f,
+    1.0f, 1.0f,
+    0.0f, 1.0f
     };
 
     glGenVertexArrays(1, &quadVAO);
@@ -121,80 +136,104 @@ void HUDPanel::update(const SimulationController& simulator, const RenderMode& m
     modeStr = (mode == RenderMode::LINE) ? "LINE" : "MESH";
 }
 
+
+
 void HUDPanel::render()
 {
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glUseProgram(0);
+    if (!visible) return;
 
     glDisable(GL_DEPTH_TEST);
-    glDisable(GL_CULL_FACE);
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0.0, windowWidth, windowHeight, 0.0, -1.0, 1.0);
-
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-
-    glEnable(GL_TEXTURE_2D);
-    glBindTexture(GL_TEXTURE_2D, fontTexture);
-
-    drawText(100, 100, "HUD OK 123", glm::vec4(1, 1, 1, 1));
-
-    glDisable(GL_TEXTURE_2D);
-}
-void HUDPanel::drawRect(float x, float y, float width, float height, glm::vec4 color)
-{
-    // ?? Force fixed pipeline
-    glUseProgram(0);
-
-    // ?? Make sure blending works
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // ?? Set color
-    glColor4f(color.r, color.g, color.b, color.a);
+    // ===== DRAW RECTANGLE (already working) =====
+    hudShader->use();
 
-    // ?? Draw quad
-    glBegin(GL_QUADS);
-    glVertex2f(x, y);
-    glVertex2f(x + width, y);
-    glVertex2f(x + width, y + height);
-    glVertex2f(x, y + height);
-    glEnd();
+    hudShader->setVec2("uScreenSize",
+        glm::vec2(windowWidth, windowHeight));
+
+    glBindVertexArray(quadVAO);
+
+    hudShader->setVec4("uRect", glm::vec4(50, 50, 300, 120));
+    hudShader->setVec4("uColor", glm::vec4(0, 0, 0, 0.6f));
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindVertexArray(0);
+
+    // ===== NOW TEXT =====
+    if (!textShader) return;
+
+    textShader->use();
+
+    glm::mat4 projection = glm::ortho(
+        0.0f, (float)windowWidth,
+        (float)windowHeight, 0.0f
+    );
+
+    textShader->setMat4("projection", projection);
+    textShader->setVec4("textColor", glm::vec4(1, 1, 1, 1));
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, fontTexture);
+    textShader->setInt("fontTex", 0);
+
+    glBindVertexArray(textVAO);
+
+    drawText(80, 100, "HUDabc OK 123", glm::vec4(1, 1, 1, 1));
+
+    glBindVertexArray(0);
 }
 
-void HUDPanel::drawProgressBar(float x, float y, float width, float height,
-    double progress, glm::vec4 fillColor, glm::vec4 bgColor)
+
+
+//=========================================================
+void HUDPanel::drawCharacter(float x, float y, char c, glm::vec4 color)
 {
-    drawRect(x, y, width, height, bgColor);
-    float filledWidth = (float)(width * progress);
-    drawRect(x, y, filledWidth, height, fillColor);
+    if (glyphs.find(c) == glyphs.end())
+        return;
+
+    Glyph& g = glyphs[c];
+
+    float x0 = x + g.xOffset;
+    float y0 = y + g.yOffset;
+    float x1 = x0 + g.width;
+    float y1 = y0 + g.height;
+
+    float vertices[6][4] = {
+        {x0,y0, g.u0,g.v0},
+        {x1,y0, g.u1,g.v0},
+        {x1,y1, g.u1,g.v1},
+
+        {x0,y0, g.u0,g.v0},
+        {x1,y1, g.u1,g.v1},
+        {x0,y1, g.u0,g.v1}
+    };
+
+    glBindBuffer(GL_ARRAY_BUFFER, textVBO);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
 }
+
+
+
 
 
 void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 color)
 {
-    float cursorX = x;
+    float cursor = x;
 
     for (char c : text)
     {
-        auto it = glyphs.find(c);
-        if (it == glyphs.end())
-        {
-            cursorX += 10.0f; // fallback space for unknown chars
+        if (glyphs.find(c) == glyphs.end())
             continue;
-        }
 
-        Glyph& g = it->second;
-
-        drawGlyph(cursorX, y, c);
-
-        // IMPORTANT: use xAdvance, not width
-        cursorX += g.xAdvance;
+        drawCharacter(cursor, y, c, color);
+        cursor += glyphs[c].xAdvance;
     }
 }
+
 
 unsigned int loadFontTexture(const std::string& path)
 {
@@ -224,25 +263,7 @@ unsigned int loadFontTexture(const std::string& path)
 	std::cout << "Texture size: " << w << "x" << h << std::endl;
     return texID;
 }
-void HUDPanel::drawGlyph(float x, float y, char c)
-{
-    if (glyphs.find(c) == glyphs.end()) return;
 
-    Glyph& g = glyphs[c];
-
-    float x0 = x + g.xOffset;
-    float y0 = y + g.yOffset;
-
-    float x1 = x0 + g.width;
-    float y1 = y0 + g.height;
-
-    glBegin(GL_QUADS);
-    glTexCoord2f(g.u0, g.v0); glVertex2f(x0, y0);
-    glTexCoord2f(g.u1, g.v0); glVertex2f(x1, y0);
-    glTexCoord2f(g.u1, g.v1); glVertex2f(x1, y1);
-    glTexCoord2f(g.u0, g.v1); glVertex2f(x0, y1);
-    glEnd();
-}
 unsigned int loadTexture(const std::string& path)
 {
     int w, h, channels;
@@ -318,3 +339,4 @@ void HUDPanel::loadFont(const std::string& fntPath, const std::string& texturePa
 
     std::cout << "Loaded glyphs: " << glyphs.size() << "\n";
 }
+

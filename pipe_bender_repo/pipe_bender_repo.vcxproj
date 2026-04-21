@@ -56,6 +56,10 @@
     <None Include="Assets\Fonts\marek.fnt" />
     <None Include="Source\ShaderFiles\pipe.frag" />
     <None Include="Source\ShaderFiles\pipe.vert" />
+    <None Include="Source\ShaderFiles\hud.frag" />
+    <None Include="Source\ShaderFiles\hud.vert" />
+    <None Include="Source\ShaderFiles\text.frag" />
+    <None Include="Source\ShaderFiles\text.vert" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="Assets\Fonts\marek_0.png" />
