@@ -29,7 +29,7 @@ public:
     // Configuration
     void setVisible(bool visible) { this->visible = visible; }
     bool isVisible() const { return visible; }
-
+    void setHUDShader(ShaderGL* shader) { hudShader = shader; }
     void setTextColor(glm::vec4 color) { textColor = color; }
     void setBarColor(glm::vec4 color) { barColor = color; }
     void setBackgroundAlpha(float alpha) { bgAlpha = alpha; }
@@ -59,8 +59,16 @@ private:
     unsigned int fontTexture = 0;
 
 	void loadFont(const std::string& fntPath, const std::string& texturePath);
-    void drawGlyph(float x, float y, char c);
-    // HUD Data
+    //void drawGlyph(float x, float y, char c);
+
+    // ===== DRAWING =====
+    void drawCharacter(float x, float y, char c, glm::vec4 color);
+    void drawProgressBar(float x, float y, float width, float height,
+    double progress, glm::vec4 fillColor, glm::vec4 bgColor);
+    void drawRect(float x, float y, float width, float height, glm::vec4 color);
+    void drawText(float x, float y, const std::string& text, glm::vec4 color);
+    void drawMainPanel();
+    //===== HUD Data ======
     std::string statusStr;
     double speed = 0.0;
     double currentTime = 0.0;
@@ -77,6 +85,7 @@ private:
     
 
     ShaderGL* textShader = nullptr;
+
     // Rendering
     unsigned int quadVAO = 0;
     unsigned int quadVBO = 0;
@@ -84,15 +93,7 @@ private:
     void initQuadMesh();
     
     ShaderGL* hudShader = nullptr;
-
-public:
-    void setHUDShader(ShaderGL* shader) { hudShader = shader; }
-
-    // Simple character renderer
-    void drawCharacter(float x, float y, char c, glm::vec4 color);
-    void drawText(float x, float y, const std::string& text, glm::vec4 color);
-
-   
+     
     unsigned int textVAO = 0;
     unsigned int textVBO = 0;
 

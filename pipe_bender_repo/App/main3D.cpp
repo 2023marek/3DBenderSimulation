@@ -315,7 +315,7 @@ int main()
     HUDPanel hudPanel(WIDTH, HEIGHT);
     gHUD = &hudPanel;
     hudPanel.setVisible(true);
-
+    
     std::cout << "? HUD panel created\n";
 
     // =====================================================================
@@ -339,6 +339,7 @@ int main()
         "Source/ShaderFiles/hud.frag"
     );
     hudPanel.setHUDShader(hudShader);
+
 
 
 ShaderGL* textShader = ShaderManager::instance().load(

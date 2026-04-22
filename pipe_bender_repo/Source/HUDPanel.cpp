@@ -146,22 +146,10 @@ void HUDPanel::render()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    // ===== DRAW RECTANGLE (already working) =====
-    hudShader->use();
+    // ===== 1. RECTANGLES (HUD shader) =====
+    drawMainPanel();
 
-    hudShader->setVec2("uScreenSize",
-        glm::vec2(windowWidth, windowHeight));
-
-    glBindVertexArray(quadVAO);
-
-    hudShader->setVec4("uRect", glm::vec4(50, 50, 300, 120));
-    hudShader->setVec4("uColor", glm::vec4(0, 0, 0, 0.6f));
-
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    glBindVertexArray(0);
-
-    // ===== NOW TEXT =====
+    // ===== 2. TEXT (TEXT shader) =====
     if (!textShader) return;
 
     textShader->use();
@@ -177,14 +165,19 @@ void HUDPanel::render()
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, fontTexture);
     textShader->setInt("fontTex", 0);
-
     glBindVertexArray(textVAO);
 
-    drawText(80, 100, "HUDabc OK 123", glm::vec4(1, 1, 1, 1));
+    float textX = 35.0f;
+    float textY = 50.0f;
+    float lineH = 24.0f;
+
+    drawText(textX, textY + lineH * 0, "STATUS: " + statusStr, textColor);
+    drawText(textX, textY + lineH * 1, "SPEED: " + std::to_string(speed), textColor);
+    drawText(textX, textY + lineH * 2, "TIME: " + std::to_string(currentTime), textColor);
+    drawText(textX, textY + lineH * 4, "OP: " + currentOpName, glm::vec4(1, 1, 0, 1));
 
     glBindVertexArray(0);
 }
-
 
 
 //=========================================================
@@ -232,6 +225,74 @@ void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 col
         drawCharacter(cursor, y, c, color);
         cursor += glyphs[c].xAdvance;
     }
+}
+
+
+void HUDPanel::drawRect(float x, float y, float width, float height, glm::vec4 color)
+{
+    if (!hudShader) return;
+
+    hudShader->use();
+
+    // screen size ? for conversion in shader
+    hudShader->setVec2("uScreenSize", glm::vec2(windowWidth, windowHeight));
+
+    // rectangle: x, y, w, h
+    hudShader->setVec4("uRect", glm::vec4(x, y, width, height));
+
+    // color (RGBA)
+    hudShader->setVec4("uColor", color);
+
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+}
+
+void HUDPanel::drawProgressBar(float x, float y, float width, float height,
+    double progress, glm::vec4 fillColor, glm::vec4 bgColor)
+{
+    // background
+    drawRect(x, y, width, height, bgColor);
+
+    // clamp (important!)
+    float p = (float)std::max(0.0, std::min(1.0, progress));
+
+    float filledWidth = width * p;
+
+    // filled part
+    drawRect(x, y, filledWidth, height, fillColor);
+}
+
+void HUDPanel::drawMainPanel()
+{
+    float x = 20.0f;
+    float y = 20.0f;
+    float w = 350.0f;
+    float h = 180.0f;
+
+    // panel background
+    drawRect(x, y, w, h, glm::vec4(0, 0, 0, 0.65f));
+
+    float textX = x + 15.0f;
+    float textY = y + 30.0f;
+    float lineH = 24.0f;
+
+    // ===== TEXT =====
+    drawText(textX, textY + lineH * 0, "STATUS: " + statusStr, glm::vec4(1, 1, 1, 1));
+    drawText(textX, textY + lineH * 1, "SPEED: " + std::to_string(speed), glm::vec4(1, 1, 1, 1));
+    drawText(textX, textY + lineH * 2, "TIME: " + std::to_string(currentTime), glm::vec4(1, 1, 1, 1));
+    drawText(textX, textY + lineH * 4, "OP: " + currentOpName, glm::vec4(1, 1, 0, 1));
+
+    // ===== PROGRESS =====
+    drawProgressBar(
+        textX,
+        textY + lineH * 6,
+        250.0f,
+        18.0f,
+        currentProgress,
+        glm::vec4(0, 1, 0, 1),
+        glm::vec4(0.2f, 0.2f, 0.2f, 1)
+    );
 }
 
 
