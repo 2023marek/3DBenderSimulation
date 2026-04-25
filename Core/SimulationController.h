@@ -2,7 +2,7 @@
 
 #include "OperationQueue.h"
 #include "PipeAxis3D.h"
-#include "../Machine/MachineState.h"
+#include "Machine/MachineState.h"
 #include <vector>
 
 class SimulationController

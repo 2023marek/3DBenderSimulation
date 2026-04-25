@@ -1,4 +1,4 @@
-#include "../Core/SimulationController.h"
+#include "Core/SimulationController.h"
 #include <iostream>
 #include <cmath>
 

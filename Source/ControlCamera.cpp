@@ -1,4 +1,4 @@
-#include "../Render/ControlCamera.h"
+#include "Render/ControlCamera.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 ControlCamera::ControlCamera()

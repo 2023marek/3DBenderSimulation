@@ -1,13 +1,13 @@
 #pragma once
 
-#include <glm/glm.hpp>
+#include <external/glm/glm/glm.hpp>
 #include <unordered_map>
 #include <string>
 #include <vector>
 #include <map>
-#include "../Core/SimulationController.h"
-#include "../Render/RenderMode.h"
-#include "../Render/ShaderManager.h"
+#include "Core/SimulationController.h"
+#include "Render/RenderMode.h"
+#include "Render/ShaderManager.h"
 
 
 // =========================================================================

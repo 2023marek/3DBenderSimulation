@@ -1,4 +1,4 @@
-#include "../Render/ShaderManager.h"
+#include "Render/ShaderManager.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>

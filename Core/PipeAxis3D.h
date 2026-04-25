@@ -3,7 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <iostream>
-#include "../Core/Math/Vec3D.h"
+#include "Core/Math/Vec3D.h"
 
 #ifndef PI
 #define PI 3.14159265358979323846

@@ -1,8 +1,8 @@
 #include <fstream>
 #define STB_IMAGE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
-#include "../Source/ThirdParty/stb_image.h"
-#include "../Render/HUDPanel.h"
+#include "Source/ThirdParty/stb_image.h"
+#include "Render/HUDPanel.h"
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>

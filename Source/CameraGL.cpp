@@ -1,4 +1,4 @@
-#include "../Render/CameraGL.h"
+#include "Render/CameraGL.h"
 #include <glm/gtc/matrix_transform.hpp>
 
 Camera::Camera()

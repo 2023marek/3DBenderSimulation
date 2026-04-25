@@ -1,6 +1,6 @@
 #pragma once
 #include <vector>
-#include "../Core/Math/Vec3D.h"
+#include "Core/Math/Vec3D.h"
 
 class TubeMesh
 {
