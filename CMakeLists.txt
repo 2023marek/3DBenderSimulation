@@ -2,26 +2,32 @@ cmake_minimum_required(VERSION 3.21)
 
 project(pipe_bender_repo)
 
-# =========================
+# =========================================================
 # C++ STANDARD
-# =========================
+# =========================================================
+# Modern OpenGL + Qt6 requires at least C++17
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# =========================
-# QT
-# =========================
+# =========================================================
+# QT MODULES
+# =========================================================
+# Widgets = UI
+# OpenGLWidgets = QOpenGLWidget support (your GLView)
 find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets)
+
 qt_standard_project_setup()
 
-# =========================
-# OPENGL
-# =========================
+# =========================================================
+# OPENGL (system library)
+# =========================================================
+# Provides opengl32.lib on Windows
 find_package(OpenGL REQUIRED)
 
-# =========================
-# SOURCES
-# =========================
+# =========================================================
+# PROJECT SOURCES
+# =========================================================
+
 set(APP_SOURCES
     App/mainQT.cpp
     App/MainWindow.cpp
@@ -58,7 +64,6 @@ set(RENDER_HEADERS
 set(CORE_SOURCES
     Source/SimulationController.cpp
     Source/ProgramLoader.cpp
-
 )
 
 set(CORE_HEADERS
@@ -78,22 +83,27 @@ set(MACHINE_HEADERS
     Machine/MachineState.h
 )
 
-# =========================
-# GLAD (compiled OpenGL loader)
-# =========================
+# =========================================================
+# GLAD (OpenGL loader - compiled library)
+# =========================================================
+# GLAD is REQUIRED because OpenGL functions are NOT linked directly on Windows
 add_library(glad STATIC
     external/glad/src/glad.c
 )
 
+# Make GLAD headers visible to all users of this library
 target_include_directories(glad PUBLIC
-    ${CMAKE_SOURCE_DIR}/external/glad/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/glad/include
 )
 
-target_link_libraries(glad PUBLIC OpenGL::GL)
+# IMPORTANT:
+# GLAD itself does NOT require linking OpenGL
+# (it only loads function pointers at runtime)
+# So we REMOVE OpenGL dependency from here
 
-# =========================
+# =========================================================
 # EXECUTABLE
-# =========================
+# =========================================================
 qt_add_executable(pipe_bender_repo
     ${APP_SOURCES}
     ${APP_HEADERS}
@@ -104,20 +114,21 @@ qt_add_executable(pipe_bender_repo
     ${MACHINE_HEADERS}
 )
 
-# =========================
+# =========================================================
 # INCLUDE PATHS
-# =========================
+# =========================================================
 target_include_directories(pipe_bender_repo PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}/external/glm
+    ${CMAKE_CURRENT_SOURCE_DIR}          # project root includes
+    ${CMAKE_CURRENT_SOURCE_DIR}/external/glm  # GLM header-only library
 )
 
-# =========================
-# LINK LIBRARIES
-# =========================
+# =========================================================
+# LINK LIBRARIES (FINAL APP ONLY)
+# =========================================================
+# Order matters less in modern CMake, but grouping is clean
 target_link_libraries(pipe_bender_repo PRIVATE
-    glad
-    OpenGL::GL
-    Qt6::Widgets
-    Qt6::OpenGLWidgets
+    glad                     # OpenGL loader
+    OpenGL::GL              # system OpenGL
+    Qt6::Widgets            # UI
+    Qt6::OpenGLWidgets      # QOpenGLWidget
 )

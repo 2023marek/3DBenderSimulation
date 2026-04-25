@@ -1,5 +1,5 @@
 #pragma once
-#include <external/glm/glm/glm.hpp>
+#include <glm/glm.hpp>
 
 class Camera
 {

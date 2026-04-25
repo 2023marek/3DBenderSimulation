@@ -1,5 +1,7 @@
+
 #include "GLView.h"
 #include <QPainter> // uproszczony render (na start)
+#include <QOpenGLContext>
 
 void GLView::setPipe(const PipeAxis3D* p)
 {
@@ -8,28 +10,41 @@ void GLView::setPipe(const PipeAxis3D* p)
 
 void GLView::initializeGL()
 {
-    // tutaj póŸniej: OpenGL init
+    QOpenGLContext* ctx = QOpenGLContext::currentContext();
+
+    if (!ctx)
+    {
+        std::cout << "No OpenGL context!\n";
+        return;
+    }
+
+    auto loader = [](const char* name) -> void*
+    {
+        return reinterpret_cast<void*>(
+            QOpenGLContext::currentContext()->getProcAddress(name)
+        );
+    };
+
+    if (!gladLoadGLLoader((GLADloadproc)loader))
+    {
+        std::cout << "Failed to initialize GLAD\n";
+    }
+
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0, 0, 0, 1);
+
 }
+
+
 
 void GLView::paintGL()
 {
-    QPainter painter(this);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    painter.fillRect(rect(), Qt::black);
-    painter.setPen(Qt::green);
+    // TEMP TEST: change background slightly every frame (proof GPU works)
+    static float t = 0.0f;
+    t += 0.01f;
 
-    if (!pipe) return;
-
-    // ?? NA RAZIE: prosty debug draw (2D projection)
-    const auto& nodes = pipe->getNodes();
-
-    for (size_t i = 1; i < nodes.size(); ++i)
-    {
-        int x1 = int(nodes[i-1].pos.x);
-        int y1 = int(nodes[i-1].pos.y);
-        int x2 = int(nodes[i].pos.x);
-        int y2 = int(nodes[i].pos.y);
-
-        painter.drawLine(x1, y1, x2, y2);
-    }
+    float r = 0.2f + 0.2f * sin(t);
+    glClearColor(r, 0.1f, 0.3f, 1.0f);
 }
