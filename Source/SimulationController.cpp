@@ -555,4 +555,4 @@ void SimulationController::executeRotate(double angleIncrement)
     }
 
     // Done! Frame has been twisted by toRotate radians
-}
+}  

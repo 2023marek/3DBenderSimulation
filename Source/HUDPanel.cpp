@@ -2,6 +2,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
 #include "Source/ThirdParty/stb_image.h"
+#include "Core/SimulationController.h"
 #include "Render/HUDPanel.h"
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -73,69 +74,35 @@ void HUDPanel::initQuadMesh()
     glBindVertexArray(0);
 }
 
-void HUDPanel::update(const SimulationController& simulator, const RenderMode& mode)
+void HUDPanel::update(const HUDData& data, const RenderMode& mode)
 {
     if (!visible)
         return;
 
-    const MachineState& state = simulator.getState();
+    // ===== STATE =====
+    statusStr = data.status;
+    speed = data.speed;
+    currentTime = data.time;
 
-    // Status
-    if (simulator.isPlaying())
-        statusStr = "PLAYING";
-    else if (simulator.isPaused())
-        statusStr = "PAUSED";
-    else
-        statusStr = "IDLE";
+    // ===== PROGRESS =====
+    currentProgress = data.currentOpProgress;
+    overallProgress = data.overallProgress;
 
-    speed = simulator.getSpeed();
-    currentTime = state.currentTime;
+    currentOpIndex = data.currentOpIndex;
+    totalOps = data.totalOperations;
 
-    // Progress
-    currentProgress = simulator.getCurrentOperationProgress();
-    overallProgress = simulator.getOverallProgress();
-    currentOpIndex = simulator.getCurrentOperationIndex();
-    totalOps = simulator.getTotalOperations();
+    // ===== GEOMETRY =====
+    nodeCount = data.nodeCount;
 
-    // Operation names
-    std::ostringstream oss;
-    if (currentOpIndex < totalOps)
-    {
-        const OperationQueue& queue = simulator.getQueue();
-        const Operation* currentOp = queue.getCurrent();
-        if (currentOp)
-        {
-            if (currentOp->type == Operation::FEED)
-            {
-                oss << "FEED " << std::fixed << std::setprecision(0)
-                    << currentOp->length << "mm";
-            }
-            else if (currentOp->type == Operation::BEND)
-            {
-                double angleDeg = currentOp->angle * 180.0 / 3.14159265358979323846;
-                oss << "BEND R=" << std::fixed << std::setprecision(1)
-                    << currentOp->R << "mm, angle=" << angleDeg << "deg";
-            }
-            else if (currentOp->type == Operation::ROTATE)
-            {
-                double angleDeg = currentOp->angle * 180.0 / 3.14159265358979323846;
-                oss << "ROTATE " << std::fixed << std::setprecision(1) << angleDeg << "deg";
-            }
-        }
-    }
-    currentOpName = oss.str();
+    // ===== ROTATION =====
+    rotation = (float)data.rotationDeg;
 
-    // Machine state
-    position = glm::vec3(state.position.x, state.position.y, state.position.z);
-    rotation = (float)(state.rotation * 180.0 / 3.14159265358979323846);
+    // ===== TEMP (until next step) =====
+    currentOpName = data.currentOpName;
 
-    const PipeAxis3D& geom = simulator.getPipeGeometry();
-    nodeCount = geom.getNodes().size();
-
-    // Render mode
+    // ===== RENDER MODE =====
     modeStr = (mode == RenderMode::LINE) ? "LINE" : "MESH";
 }
-
 
 
 void HUDPanel::render()

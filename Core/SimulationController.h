@@ -118,4 +118,4 @@ private:
 
     void advanceToNextOperation();
     void updatePipeGeometry();
-};
+}; 

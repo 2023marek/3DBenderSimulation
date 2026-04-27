@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 #include <map>
-#include "Core/SimulationController.h"
+#include "Render/HUDData.h"
 #include "Render/RenderMode.h"
 #include "Render/ShaderManager.h"
 
@@ -21,7 +21,7 @@ public:
     ~HUDPanel();
 
     // Update HUD data from simulator
-    void update(const SimulationController& simulator, const RenderMode& mode);
+    void update(const HUDData& data, const RenderMode& mode);
 
     // Render HUD to screen
     void render();

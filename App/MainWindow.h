@@ -2,7 +2,7 @@
 #include <QMainWindow>
 #include <QTimer>
 #include "AppController.h"
-#include "Render/GLView.h"
+ #include "Render/GLView.h"
 
 class MainWindow : public QMainWindow
 {
