@@ -1,8 +1,8 @@
+#include <iostream>
 #include <fstream>
 #define STB_IMAGE_IMPLEMENTATION
 #define _CRT_SECURE_NO_WARNINGS
 #include "Source/ThirdParty/stb_image.h"
-#include "Core/SimulationController.h"
 #include "Render/HUDPanel.h"
 #include <glad/glad.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -76,31 +76,19 @@ void HUDPanel::initQuadMesh()
 
 void HUDPanel::update(const HUDData& data, const RenderMode& mode)
 {
-    if (!visible)
-        return;
+    if (!visible) return;
 
-    // ===== STATE =====
     statusStr = data.status;
     speed = data.speed;
     currentTime = data.time;
-
-    // ===== PROGRESS =====
     currentProgress = data.currentOpProgress;
     overallProgress = data.overallProgress;
-
     currentOpIndex = data.currentOpIndex;
     totalOps = data.totalOperations;
-
-    // ===== GEOMETRY =====
     nodeCount = data.nodeCount;
 
-    // ===== ROTATION =====
-    rotation = (float)data.rotationDeg;
-
-    // ===== TEMP (until next step) =====
     currentOpName = data.currentOpName;
 
-    // ===== RENDER MODE =====
     modeStr = (mode == RenderMode::LINE) ? "LINE" : "MESH";
 }
 

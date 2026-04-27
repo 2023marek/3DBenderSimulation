@@ -76,7 +76,7 @@ void GLView::initializeGL()
     // =========================
     float vertices[] = {
          0.0f,  0.5f, 0.0f,
-        -0.5f, -0.5f, 0.0f,
+        -0.5f, -0.2f, 0.0f,
          0.5f, -0.5f, 0.0f
     };
 
@@ -106,18 +106,37 @@ void GLView::initializeGL()
 // =========================
 // RENDER FRAME (RUNS EVERY FRAME)
 // =========================
+
+
+
 void GLView::paintGL()
 {
-    // Clear screen
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Activate shader program
-    if (shader)
-        shader->use();
+    if (!shader || !pipe)
+        return;
 
-    // Bind geometry
+    shader->use();
+
+    const auto& nodes = pipe->getNodes();
+
+    std::vector<float> vertices;
+
+    for (const auto& n : nodes)
+    {
+        auto p = n.getPosition();
+
+        vertices.push_back(p.x);
+        vertices.push_back(p.y);
+        vertices.push_back(p.z);
+    }
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER,
+        vertices.size() * sizeof(float),
+        vertices.data(),
+        GL_DYNAMIC_DRAW);
+
     glBindVertexArray(VAO);
-
-    // Draw triangle
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawArrays(GL_LINE_STRIP, 0, vertices.size() / 3);
 }

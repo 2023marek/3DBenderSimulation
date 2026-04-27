@@ -1,12 +1,33 @@
+#include <sstream>
 #include "AppController.h"
-#include <iostream>
 
+// =====================================
+// CONSTRUCTOR
+// =====================================
 AppController::AppController()
 {
-    std::cout << "AppController constructed\n";
+    // For now empty (later: load program, init state)
 }
 
+// =====================================
+// UPDATE (called every frame)
+// =====================================
+void AppController::update(double dt)
+{
+    sim.update(dt);
+}
 
+// =====================================
+// GEOMETRY ACCESS
+// =====================================
+const PipeAxis3D& AppController::getPipeGeometry() const
+{
+    return sim.getPipeGeometry();
+}
+
+// =====================================
+// HUD DATA BUILDER (translator layer)
+// =====================================
 HUDData AppController::buildHUDData() const
 {
     HUDData data;
@@ -30,14 +51,45 @@ HUDData AppController::buildHUDData() const
 
     // ===== GEOMETRY =====
     data.nodeCount = sim.getPipeGeometry().getNodes().size();
+    //
 
-    // ===== STATUS STRING =====
+    std::ostringstream oss;
+
+    const OperationQueue& queue = sim.getQueue();
+    const Operation* currentOp = queue.getCurrent();
+
+    if (currentOp)
+    {
+        if (currentOp->type == Operation::FEED)
+        {
+            oss << "FEED " << currentOp->length << "mm";
+        }
+        else if (currentOp->type == Operation::BEND)
+        {
+            double angleDeg = currentOp->angle * 180.0 / 3.141592653589793;
+            oss << "BEND R=" << currentOp->R << "mm, angle=" << angleDeg << "deg";
+        }
+        else if (currentOp->type == Operation::ROTATE)
+        {
+            double angleDeg = currentOp->angle * 180.0 / 3.141592653589793;
+            oss << "ROTATE " << angleDeg << "deg";
+        }
+    }
+
+    data.currentOpName = oss.str();
+
+
+
+
+    // ===== STATUS =====
     if (data.isPlaying)
         data.status = "PLAYING";
     else if (data.isPaused)
         data.status = "PAUSED";
     else
         data.status = "IDLE";
+
+   
 
     return data;
 }

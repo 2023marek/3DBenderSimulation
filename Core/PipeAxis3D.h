@@ -1,5 +1,5 @@
 #pragma once
-
+#include <glm/glm.hpp> 
 #include <vector>
 #include <cmath>
 #include <iostream>
@@ -43,10 +43,19 @@ public:
     // =====================================================================
     struct Node
     {
-        Vec3D pos;  // 3D position
-        Vec3D T;    // Tangent at this point
-    };
+        Vec3D pos;
+        Vec3D T;
 
+        glm::vec3 getPosition() const
+        {
+            return glm::vec3(
+                (float)pos.x,
+                (float)pos.y,
+                (float)pos.z
+            );
+        }
+    };
+    
     // =====================================================================
     // SEGMENT (Operation abstraction)
     // =====================================================================
