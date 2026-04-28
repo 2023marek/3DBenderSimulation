@@ -1,3 +1,6 @@
+
+
+#include "Render/ControlCamera.h"
 #include "GLView.h"
 #include "Render/ShaderGL.h"
 #include <QOpenGLContext>
@@ -9,10 +12,11 @@
 static const char* vertexShaderSrc = R"(
 #version 330 core
 layout(location = 0) in vec3 aPos;
+uniform mat4 MVP;
 
 void main()
 {
-    gl_Position = vec4(aPos, 1.0); // pass position directly
+    gl_Position = MVP * vec4(aPos, 1.0);
 }
 )";
 
@@ -113,30 +117,65 @@ void GLView::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (!shader || !pipe)
-        return;
+    if (shader)
+        shader->use();
 
-    shader->use();
+    // upload latest pipe data every frame
+    uploadPipeGeometry();
+    std::cout << "Vertices: " << pipeVertexCount << std::endl;
+    glm::mat4 view = camera.getViewMatrix();
+    glm::mat4 proj = camera.getProjection(width(), height());
+    glm::mat4 model = glm::mat4(1.0f);
+
+    glm::mat4 mvp = proj * view * model;
+
+    shader->setMat4("MVP", mvp);
+    // draw PIPE
+    if (pipeVertexCount > 1)
+    {
+        glBindVertexArray(pipeVAO);
+        glDrawArrays(GL_LINE_STRIP, 0, pipeVertexCount);
+    }
+}
+
+
+void GLView::uploadPipeGeometry()
+{
+    if (!pipe) return;
 
     const auto& nodes = pipe->getNodes();
+    pipeVertexCount = (int)nodes.size();
 
-    std::vector<float> vertices;
+    if (pipeVertexCount == 0) return;
+
+    std::vector<float> data;
+    data.reserve(pipeVertexCount * 3);
 
     for (const auto& n : nodes)
     {
-        auto p = n.getPosition();
+        float scale = 0.01f;   // ?? key
 
-        vertices.push_back(p.x);
-        vertices.push_back(p.y);
-        vertices.push_back(p.z);
+        data.push_back(n.pos.x * scale);
+        data.push_back(n.pos.y * scale);
+        data.push_back(n.pos.z * scale);
     }
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    if (pipeVAO == 0)
+    {
+        glGenVertexArrays(1, &pipeVAO);
+        glGenBuffers(1, &pipeVBO);
+    }
+
+    glBindVertexArray(pipeVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, pipeVBO);
+
     glBufferData(GL_ARRAY_BUFFER,
-        vertices.size() * sizeof(float),
-        vertices.data(),
+        data.size() * sizeof(float),
+        data.data(),
         GL_DYNAMIC_DRAW);
 
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_LINE_STRIP, 0, vertices.size() / 3);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glBindVertexArray(0);
 }

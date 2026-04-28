@@ -11,7 +11,7 @@ public:
     // =========================================
     // PUBLIC INTERFACE (unchanged from Phase 3A)
     // =========================================
-
+    
     SimulationController();
     void loadProgram(const std::vector<Operation>& ops);
     void play();
@@ -23,7 +23,7 @@ public:
     const MachineState& getState() const { return machineState; }
     MachineState& getState() { return machineState; }
     const PipeAxis3D& getPipeGeometry() const { return pipeGeometry; }
-    const OperationQueue& getQueue() const { return operationQueue; }
+    //const OperationQueue& getQueue() const { return operationQueue; }
     bool isPlaying() const { return playing; }
     bool isPaused() const { return paused; }
     double getSpeed() const { return speed; }
@@ -33,7 +33,8 @@ public:
     double getOverallProgress() const;
     size_t getCurrentOperationIndex() const { return operationQueue.getCurrentIndex(); }
     size_t getTotalOperations() const { return operationQueue.getTotalOperations(); }
-
+    OperationQueue& getQueue();              // ? non-const (for writing)
+    const OperationQueue& getQueue() const;  // ? const (for reading)
 private:
     // =========================================================================
     // PLAYBACK STATE
@@ -118,4 +119,5 @@ private:
 
     void advanceToNextOperation();
     void updatePipeGeometry();
+    
 }; 

@@ -103,6 +103,7 @@ void SimulationController::step()
 
 
 
+
 void SimulationController::update(double deltaTime)
 {
     // Exit if not playing or already complete
@@ -556,3 +557,14 @@ void SimulationController::executeRotate(double angleIncrement)
 
     // Done! Frame has been twisted by toRotate radians
 }  
+
+OperationQueue& SimulationController::getQueue()
+{
+    return operationQueue;   // ? correct
+}
+
+const OperationQueue& SimulationController::getQueue() const
+{
+    return operationQueue;   // ? correct
+}
+ 

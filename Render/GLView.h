@@ -3,9 +3,8 @@
 #include <glad/glad.h>
 #include <QOpenGLWidget>
 #include "Core/PipeAxis3D.h"
-#include "Render/ShaderGL.h"   // ? FIX: required for ShaderGL
-
-// Widget renderuj¹cy (nic nie wie o symulacji!)
+#include "Render/ShaderGL.h"
+#include "Render/ControlCamera.h"
 class GLView : public QOpenGLWidget
 {
     Q_OBJECT
@@ -18,18 +17,29 @@ protected:
     void paintGL() override;
 
 private:
+    ControlCamera camera;
     // =========================
-    // DATA SOURCE (from simulation)
+    // DATA SOURCE
     // =========================
     const PipeAxis3D* pipe = nullptr;
 
     // =========================
-    // GPU RESOURCES
+    // SHADER
     // =========================
-    ShaderGL* shader = nullptr;   // shader program (your class)
+    ShaderGL* shader = nullptr;
 
-    unsigned int VAO = 0;         // vertex array object (layout)
-    unsigned int VBO = 0;         // vertex buffer (data)
+    // =========================
+    // OLD TRIANGLE (can remove later)
+    // =========================
+    unsigned int VAO = 0;
+    unsigned int VBO = 0;
 
-   
+    // =========================
+    // PIPE RENDERING (NEW)
+    // =========================
+    GLuint pipeVAO = 0;
+    GLuint pipeVBO = 0;
+    int pipeVertexCount = 0;
+
+    void uploadPipeGeometry();   // ?? REQUIRED
 };

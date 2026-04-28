@@ -6,15 +6,43 @@
 // =====================================
 AppController::AppController()
 {
-    // For now empty (later: load program, init state)
-}
+    std::vector<Operation> ops;
 
+    Operation op1;
+    op1.type = Operation::FEED;
+    op1.length = 100;
+
+    Operation op2;
+    op2.type = Operation::BEND;
+    op2.R = 50;
+    op2.angle = 3.1415 / 2;
+
+    Operation op3;
+    op3.type = Operation::FEED;
+    op3.length = 100;
+
+    ops.push_back(op1);
+    ops.push_back(op2);
+    ops.push_back(op3);
+
+    sim.loadProgram(ops);
+
+    sim.play();   // ?? THIS WAS MISSING
+
+    std::cout << "Playing: " << sim.isPlaying() << std::endl;
+    std::cout << "Progress: " << sim.getOverallProgress() << std::endl;
+    std::cout << "nodes: " << sim.getPipeGeometry().getNodes().size() << std::endl;
+    std::cout << "CurrentIdx: " << sim.getCurrentOperationIndex() << std::endl;
+}
 // =====================================
 // UPDATE (called every frame)
 // =====================================
 void AppController::update(double dt)
 {
     sim.update(dt);
+    std::cout << "Playing: " << sim.isPlaying() << std::endl;
+    std::cout << "Ops: " << sim.getTotalOperations() << std::endl;
+    std::cout << "CurrentIdx: " << sim.getCurrentOperationIndex() << std::endl;
 }
 
 // =====================================
@@ -23,6 +51,8 @@ void AppController::update(double dt)
 const PipeAxis3D& AppController::getPipeGeometry() const
 {
     return sim.getPipeGeometry();
+    
+
 }
 
 // =====================================
@@ -34,6 +64,7 @@ HUDData AppController::buildHUDData() const
 
     // ===== BASIC STATE =====
     data.isPlaying = sim.isPlaying();
+
     data.isPaused = sim.isPaused();
     data.speed = sim.getSpeed();
 
@@ -44,6 +75,7 @@ HUDData AppController::buildHUDData() const
     // ===== OPERATIONS =====
     data.currentOpIndex = sim.getCurrentOperationIndex();
     data.totalOperations = sim.getTotalOperations();
+    
 
     // ===== PROGRESS =====
     data.currentOpProgress = sim.getCurrentOperationProgress();
@@ -51,9 +83,10 @@ HUDData AppController::buildHUDData() const
 
     // ===== GEOMETRY =====
     data.nodeCount = sim.getPipeGeometry().getNodes().size();
+    
     //
 
-    std::ostringstream oss;
+    std::ostringstream oss; 
 
     const OperationQueue& queue = sim.getQueue();
     const Operation* currentOp = queue.getCurrent();
