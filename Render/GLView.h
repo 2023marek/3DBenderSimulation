@@ -10,14 +10,27 @@ class GLView : public QOpenGLWidget
     Q_OBJECT
 
 public:
+    GLView() {
+        camera.distance = 300.0f;
+        camera.pitch = 20.0f;
+        camera.yaw = -45.0f;
+    }
     void setPipe(const PipeAxis3D* pipe);
 
 protected:
     void initializeGL() override;
     void paintGL() override;
+protected:
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void wheelEvent(QWheelEvent* event) override;
 
 private:
     ControlCamera camera;
+    QPoint lastMousePos;
+    bool leftPressed = false;
+    bool rightPressed = false;
     // =========================
     // DATA SOURCE
     // =========================
@@ -42,4 +55,9 @@ private:
     int pipeVertexCount = 0;
 
     void uploadPipeGeometry();   // ?? REQUIRED
+
+
+   
+
+    
 };

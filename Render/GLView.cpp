@@ -1,5 +1,6 @@
 
-
+#include <QMouseEvent>
+#include <QWheelEvent>
 #include "Render/ControlCamera.h"
 #include "GLView.h"
 #include "Render/ShaderGL.h"
@@ -45,6 +46,7 @@ void GLView::setPipe(const PipeAxis3D* p)
 // =========================
 void GLView::initializeGL()
 {
+    
     // Get current OpenGL context from Qt
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
 
@@ -122,6 +124,15 @@ void GLView::paintGL()
 
     // upload latest pipe data every frame
     uploadPipeGeometry();
+    if (pipe)
+    {
+        const auto& nodes = pipe->getNodes();
+        if (!nodes.empty())
+        {
+            const auto& p = nodes.back().pos;
+            camera.target = glm::vec3(p.x, p.y, p.z);
+        }
+    }
     std::cout << "Vertices: " << pipeVertexCount << std::endl;
     glm::mat4 view = camera.getViewMatrix();
     glm::mat4 proj = camera.getProjection(width(), height());
@@ -178,4 +189,49 @@ void GLView::uploadPipeGeometry()
     glEnableVertexAttribArray(0);
 
     glBindVertexArray(0);
+}
+void GLView::mousePressEvent(QMouseEvent* event)
+{
+    lastMousePos = event->pos();
+
+    if (event->button() == Qt::LeftButton)
+        leftPressed = true;
+
+    if (event->button() == Qt::RightButton)
+        rightPressed = true;
+}
+
+void GLView::mouseMoveEvent(QMouseEvent* event)
+{
+    QPoint delta = event->pos() - lastMousePos;
+    lastMousePos = event->pos();
+
+    if (leftPressed)
+    {
+        // ORBIT
+        camera.processMouseMovement(delta.x(), -delta.y());
+    }
+    else if (rightPressed)
+    {
+        // PAN
+        camera.processPan(delta.x(), -delta.y());
+    }
+
+    update(); // trigger repaint
+}
+void GLView::mouseReleaseEvent(QMouseEvent* event)
+{
+    if (event->button() == Qt::LeftButton)
+        leftPressed = false;
+
+    if (event->button() == Qt::RightButton)
+        rightPressed = false;
+}
+
+void GLView::wheelEvent(QWheelEvent* event)
+{
+    float delta = event->angleDelta().y() / 120.0f;
+    camera.processScroll(delta);
+
+    update();
 }
