@@ -10,7 +10,7 @@ class MainWindow : public QMainWindow
 
 public:
     MainWindow();
-
+    
 private slots:
     void onUpdate(); // wywo³ywane co frame
 

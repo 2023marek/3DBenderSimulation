@@ -1,8 +1,9 @@
-
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
 #include "Render/ControlCamera.h"
 #include "GLView.h"
+#include "App/AppController.h"
 #include "Render/ShaderGL.h"
 #include <QOpenGLContext>
 #include <iostream>
@@ -306,4 +307,36 @@ glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
     outSize = glm::length(sizeVec);
 
     return center;
+}
+
+
+
+void GLView::keyPressEvent(QKeyEvent* event)
+{
+    if (!app) return;
+
+    switch (event->key())
+    {
+    case Qt::Key_Space:
+        std::cout << "[KEY] SPACE ? PLAY\n";
+        app->play();
+        break;
+
+    case Qt::Key_P:
+        std::cout << "[KEY] P ? PAUSE\n";
+        app->pause();
+        break;
+
+    case Qt::Key_R:
+        std::cout << "[KEY] R ? RESET\n";
+        app->reset();
+        break;
+
+    case Qt::Key_S:
+        std::cout << "[KEY] S ? STEP\n";
+        app->step();
+        break;
+    }
+
+    update(); // refresh screen
 }

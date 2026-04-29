@@ -14,6 +14,11 @@ public:
 
     // NEW
     HUDData buildHUDData() const;
+public:
+    void play() { sim.play(); }
+    void pause() { sim.pause(); }
+    void reset() { sim.reset(); }
+    void step() { sim.step(); }
 
 private:
     SimulationController sim;
