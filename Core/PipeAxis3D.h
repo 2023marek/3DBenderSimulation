@@ -177,7 +177,7 @@ public:
     void build()
     {
         if (!dirty) return;
-
+        
         // Step 1: Clear previous nodes
         nodes.clear();
 
@@ -207,7 +207,8 @@ public:
                 buildRotate(frame, segment.rotAngle);
             }
         }
-
+       
+            
         dirty = false;
     }
 
@@ -293,6 +294,7 @@ private:
             frame.P = frame.P + frame.T * ds;
             nodes.push_back({ frame.P, frame.T });
         }
+        
     }
 
     /// Build arc (bend) segment
@@ -321,6 +323,7 @@ private:
             frame.P.y = center.y + radius * sin(phi);
 
             nodes.push_back({ frame.P, frame.T });
+            
         }
     }
 
@@ -333,4 +336,5 @@ private:
         frame.B = rotateAroundAxis(frame.B, frame.T, angle);
         // No new nodes added - geometry unchanged
     }
+    
 };

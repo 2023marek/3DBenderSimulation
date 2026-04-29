@@ -11,7 +11,7 @@ class GLView : public QOpenGLWidget
 
 public:
     GLView() {
-        camera.distance = 300.0f;
+        
         camera.pitch = 20.0f;
         camera.yaw = -45.0f;
     }
@@ -31,6 +31,9 @@ private:
     QPoint lastMousePos;
     bool leftPressed = false;
     bool rightPressed = false;
+    bool autoFrame = true;   // run once
+    glm::vec3 computePipeCenterAndSize(float& outSize);
+
     // =========================
     // DATA SOURCE
     // =========================
@@ -41,11 +44,7 @@ private:
     // =========================
     ShaderGL* shader = nullptr;
 
-    // =========================
-    // OLD TRIANGLE (can remove later)
-    // =========================
-    unsigned int VAO = 0;
-    unsigned int VBO = 0;
+  
 
     // =========================
     // PIPE RENDERING (NEW)
@@ -54,7 +53,7 @@ private:
     GLuint pipeVBO = 0;
     int pipeVertexCount = 0;
 
-    void uploadPipeGeometry();   // ?? REQUIRED
+    void uploadPipeGeometry();   // 
 
 
    

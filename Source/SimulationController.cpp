@@ -55,15 +55,21 @@ void SimulationController::reset()
 
 void SimulationController::play()
 {
+    std::cout << "[PLAY CALLED]\n";
+    std::cout << "[PLAY CALLED] this=" << this << "\n";
     if (operationQueue.isComplete())
     {
-        std::cout << "??  Program already complete. Reset to play again.\n";
+        std::cout << "[PLAY BLOCKED] program complete\n";
         return;
     }
+
+    std::cout << "[PLAY ACCEPTED]\n";
 
     playing = true;
     paused = false;
     machineState.setStatus(MachineState::Status::RUNNING);
+
+    std::cout << "[PLAY STATE SET]\n";
     std::cout << "??  Simulation PLAYING (speed: " << speed << " mm/s)\n";
 }
 
@@ -119,7 +125,7 @@ void SimulationController::update(double deltaTime)
 
     // Update simulation time
     machineState.currentTime += deltaTime;
-
+    std::cout << "dt: " << deltaTime << std::endl;
     // =====================================================================
     // CHECK IF CURRENT OPERATION IS COMPLETE
     // =====================================================================
@@ -235,12 +241,13 @@ void SimulationController::executeFeed(double distance)
 
     machineState.feedForward(toMove);
     accumulatedDistance += toMove;
-
+   
     // Update progress (0.0 to 1.0)
     if (op->length > 0.0)
     {
         accumulatedDistance = std::min(accumulatedDistance, op->length);
     }
+  
 }
 
 void SimulationController::executeBend(double angle)
@@ -386,7 +393,8 @@ void SimulationController::updatePipeGeometry()
     // Create fresh geometry object for this frame
     pipeGeometry = PipeAxis3D(5.0);
     size_t currentIdx = operationQueue.getCurrentIndex();
-
+    std::cout << "[STEP] currentIdx: " << currentIdx << std::endl;
+    std::cout << "[STEP] accumulatedDistance: " << accumulatedDistance << std::endl;
     // =====================================================================
     // SAFETY CHECK
     // =====================================================================
@@ -396,7 +404,7 @@ void SimulationController::updatePipeGeometry()
         pipeGeometry.build();
         return;
     }
-
+    
     // =====================================================================
     // ADD ALL COMPLETED OPERATIONS (Full segments)
     // =====================================================================
@@ -464,7 +472,11 @@ void SimulationController::updatePipeGeometry()
     // Convert segments into 3D nodes (coordinates)
     // Ready for rendering!
     //
+
+   
     pipeGeometry.build();
+    std::cout << "[GEOM AFTER] nodes: "
+        << pipeGeometry.getNodes().size() << std::endl;
 }
 // =========================================================================
 // ROTATION EXECUTION - PHASE 3B

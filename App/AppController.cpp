@@ -27,7 +27,7 @@ AppController::AppController()
 
     sim.loadProgram(ops);
 
-    sim.play();   // ?? THIS WAS MISSING
+    
 
     std::cout << "Playing: " << sim.isPlaying() << std::endl;
     std::cout << "Progress: " << sim.getOverallProgress() << std::endl;
