@@ -1,19 +1,50 @@
+#include <QPushButton>
+#include "Common/UserAction.h"
 #include "MainWindow.h"
 #include "Core/SimulationController.h"
 
 MainWindow::MainWindow()
 {
-    // create view
+    // =========================
+    // VIEW
+    // =========================
     view = new GLView();
     setCentralWidget(view);
-
-    // ? CONNECT CONTROLLER ? VIEW
-    view->setAppController(&controller);   // ? ADD THIS LINE
-
-    // ? CONNECT PIPE DATA
+    view->setFocus();
+    view->setAppController(&controller);
     view->setPipe(&controller.getPipeGeometry());
+    view->setFocus(); // important for keyboard
 
-    // timer ~60 FPS
+    // =========================
+    // BUTTONS
+    // =========================
+    QPushButton* btnPlay = new QPushButton("Play", this);
+    btnPlay->setGeometry(10, 220, 60, 30);
+
+    QPushButton* btnPause = new QPushButton("Pause", this);
+    btnPause->setGeometry(80, 220, 60, 30);
+
+    QPushButton* btnReset = new QPushButton("Reset", this);
+    btnReset->setGeometry(150, 220, 60, 30);
+
+    // =========================
+    // CONNECT SIGNALS ? CONTROLLER
+    // =========================
+    connect(btnPlay, &QPushButton::clicked, this, [&]() {
+        controller.handleAction(UserAction::Play);
+        });
+
+    connect(btnPause, &QPushButton::clicked, this, [&]() {
+        controller.handleAction(UserAction::Pause);
+        });
+
+    connect(btnReset, &QPushButton::clicked, this, [&]() {
+        controller.handleAction(UserAction::Reset);
+        });
+
+    // =========================
+    // TIMER
+    // =========================
     connect(&timer, &QTimer::timeout, this, &MainWindow::onUpdate);
     timer.start(16);
 }

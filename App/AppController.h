@@ -1,5 +1,5 @@
 #pragma once
-
+#include "Common/UserAction.h"
 #include "Core/SimulationController.h"
 #include "Render/HUDData.h"   
 
@@ -19,7 +19,10 @@ public:
     void pause() { sim.pause(); }
     void reset() { sim.reset(); }
     void step() { sim.step(); }
+   
+    void handleAction(UserAction action);
 
 private:
     SimulationController sim;
 };
+      

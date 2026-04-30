@@ -126,3 +126,25 @@ HUDData AppController::buildHUDData() const
 
     return data;
 }
+
+void AppController::handleAction(UserAction action)
+{
+    switch (action)
+    {
+    case UserAction::Play:
+        sim.play();
+        break;
+
+    case UserAction::Pause:
+        sim.pause();
+        break;
+
+    case UserAction::Reset:
+        sim.reset();
+        break;
+
+    case UserAction::Step:
+        sim.step();
+        break;
+    }
+}

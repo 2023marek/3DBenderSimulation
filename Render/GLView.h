@@ -6,6 +6,7 @@ class AppController;
 #include "Core/PipeAxis3D.h"
 #include "Render/ShaderGL.h"
 #include "Render/ControlCamera.h"
+
 class GLView : public QOpenGLWidget
 {
     Q_OBJECT
@@ -15,6 +16,7 @@ public:
         setFocusPolicy(Qt::StrongFocus);
         camera.pitch = 20.0f;
         camera.yaw = -45.0f;
+        setFocusPolicy(Qt::StrongFocus);
     }
     void setPipe(const PipeAxis3D* pipe);
 

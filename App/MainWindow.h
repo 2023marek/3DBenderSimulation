@@ -1,6 +1,7 @@
 #pragma once
 #include <QMainWindow>
 #include <QTimer>
+#include "Common/UserAction.h"
 #include "AppController.h"
  #include "Render/GLView.h"
 
@@ -19,3 +20,4 @@ private:
     GLView* view;
     QTimer timer;
 };
+  

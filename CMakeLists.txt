@@ -120,6 +120,7 @@ qt_add_executable(pipe_bender_repo
 target_include_directories(pipe_bender_repo PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}          # project root includes
     ${CMAKE_CURRENT_SOURCE_DIR}/external/glm  # GLM header-only library
+    ${CMAKE_SOURCE_DIR}/Common
 )
 
 # =========================================================
