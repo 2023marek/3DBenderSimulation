@@ -19,7 +19,11 @@ HUDPanel::HUDPanel(unsigned int windowWidth, unsigned int windowHeight)
 {
     
     initQuadMesh();
-    loadFont("Assets/Fonts/marek.fnt", "Assets/Fonts/marek_0.png");
+    //loadFont("Assets/Fonts/marek.fnt", "Assets/Fonts/marek_0.png");
+    loadFont(
+        "C:/Users/marek/source/repos/pipe_bender_repo/Assets/Fonts/marek.fnt",
+        "C:/Users/marek/source/repos/pipe_bender_repo/Assets/Fonts/marek_0.png"
+    );
 
     glGenVertexArrays(1, &textVAO);
     glGenBuffers(1, &textVBO);
@@ -100,7 +104,8 @@ void HUDPanel::render()
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
+    std::cout << "[HUD] textShader: " << textShader << std::endl;
+    std::cout << "[HUD] hudShader: " << hudShader << std::endl;
     // ===== 1. RECTANGLES (HUD shader) =====
     drawMainPanel();
 
@@ -309,6 +314,10 @@ void HUDPanel::loadFont(const std::string& fntPath, const std::string& texturePa
     fontTexture = loadTexture(texturePath);
 
     std::ifstream file(fntPath);
+    if (!file.is_open())
+    {
+        std::cout << "[HUD ERROR] Cannot open font file: " << fntPath << std::endl;
+    }
     std::string line;
 
     int texW = 0, texH = 0;

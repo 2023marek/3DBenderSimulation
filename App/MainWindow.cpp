@@ -9,6 +9,7 @@ MainWindow::MainWindow()
     // VIEW
     // =========================
     view = new GLView();
+    
     setCentralWidget(view);
     view->setFocus();
     view->setAppController(&controller);
@@ -50,9 +51,13 @@ MainWindow::MainWindow()
 }
 void MainWindow::onUpdate()
 {
-    // 1. update symulacji
     controller.update(0.016);
 
-    // 2.  render
+    HUDData data = controller.buildHUDData();
+
+    // ONLY pass data
+    view->setHUDData(data);
+
+    // trigger rendering
     view->update();
 }

@@ -51,7 +51,7 @@ void GLView::initializeGL()
     
     // Get current OpenGL context from Qt
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
-
+    std::cout << "[HUD] created\n";
     if (!ctx)
     {
         std::cout << "No OpenGL context!\n";
@@ -79,7 +79,82 @@ void GLView::initializeGL()
     // =========================
     shader = new ShaderGL(vertexShaderSrc, fragmentShaderSrc);
 
-   
+    hud = new HUDPanel(width(), height());
+    // =========================
+// HUD SHADERS (ADD THIS BLOCK)
+// =========================
+
+// ---- RECT / PANEL SHADER ----
+    const char* hudVertex = R"(
+#version 330 core
+layout(location = 0) in vec2 aPos;
+
+uniform vec2 uScreenSize;
+uniform vec4 uRect;
+
+void main()
+{
+    vec2 pos = uRect.xy + aPos * uRect.zw;
+
+    vec2 ndc = vec2(
+        (pos.x / uScreenSize.x) * 2.0 - 1.0,
+        1.0 - (pos.y / uScreenSize.y) * 2.0
+    );
+
+    gl_Position = vec4(ndc, 0.0, 1.0);
+}
+)";
+
+    const char* hudFrag = R"(
+#version 330 core
+out vec4 FragColor;
+uniform vec4 uColor;
+
+void main()
+{
+    FragColor = uColor;
+}
+)";
+
+    // ---- TEXT SHADER ----
+    const char* textVertex = R"(
+#version 330 core
+layout(location = 0) in vec2 aPos;
+layout(location = 1) in vec2 aUV;
+
+out vec2 TexCoord;
+
+uniform mat4 projection;
+
+void main()
+{
+    TexCoord = aUV;
+    gl_Position = projection * vec4(aPos, 0.0, 1.0);
+}
+)";
+
+    const char* textFrag = R"(
+#version 330 core
+in vec2 TexCoord;
+out vec4 FragColor;
+
+uniform sampler2D fontTex;
+uniform vec4 textColor;
+
+void main()
+{
+    float alpha = texture(fontTex, TexCoord).r;
+    FragColor = vec4(textColor.rgb, alpha);
+}
+)";
+    // 1. CREATE SHADERS FIRST
+    ShaderGL* hudShader = new ShaderGL(hudVertex, hudFrag);
+    ShaderGL* textShader = new ShaderGL(textVertex, textFrag);
+
+    // 2. THEN CONNECT THEM TO HUD
+    hud->setHUDShader(hudShader);
+    hud->setTextShader(textShader);
+
     glGenVertexArrays(1, &pipeVAO);
     glGenBuffers(1, &pipeVBO);
 
@@ -93,6 +168,8 @@ void GLView::initializeGL()
     glEnableVertexAttribArray(0);
 
     glBindVertexArray(0);
+
+
     // =========================
     // BASIC SETTINGS
     // =========================
@@ -110,7 +187,7 @@ void GLView::initializeGL()
 void GLView::paintGL()
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+    std::cout << "[HUD] render call\n";
     if (!shader) return;
     shader->use();
 
@@ -142,6 +219,12 @@ void GLView::paintGL()
         glLineWidth(2.0f);
         glBindVertexArray(pipeVAO);
         glDrawArrays(GL_LINE_STRIP, 0, pipeVertexCount);
+    }
+    // ===== DRAW HUD LAST =====
+    if (hud)
+    {
+        hud->update(hudData, RenderMode::LINE);
+        hud->render();
     }
 }
 

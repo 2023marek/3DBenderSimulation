@@ -3,6 +3,7 @@
 #include <glad/glad.h>
 #include <QOpenGLWidget>
 class AppController;
+#include "Render/HUDPanel.h"  
 #include "Core/PipeAxis3D.h"
 #include "Render/ShaderGL.h"
 #include "Render/ControlCamera.h"
@@ -57,7 +58,12 @@ private:
     int pipeVertexCount = 0;
 
     void uploadPipeGeometry();   // 
-
+public:
+    
+    void setHUDData(const HUDData& data)
+    {
+        hudData = data;
+    }
 
 public:
     void setAppController(AppController* a)
@@ -70,6 +76,9 @@ protected:
 
 private:
     AppController* app = nullptr;
+    HUDPanel* hud = nullptr;
+    HUDData hudData;
+
    
 
     

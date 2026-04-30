@@ -3,7 +3,8 @@
 #include <QTimer>
 #include "Common/UserAction.h"
 #include "AppController.h"
- #include "Render/GLView.h"
+#include "Render/GLView.h"
+#include "Render/HUDPanel.h"    
 
 class MainWindow : public QMainWindow
 {
@@ -17,6 +18,7 @@ private slots:
 
 private:
     AppController controller;
+    HUDPanel* hud;
     GLView* view;
     QTimer timer;
 };
