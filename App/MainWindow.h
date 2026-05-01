@@ -4,7 +4,8 @@
 #include "Common/UserAction.h"
 #include "AppController.h"
 #include "Render/GLView.h"
-#include "Render/HUDPanel.h"    
+#include "Render/HUDPanel.h" 
+         
 
 class MainWindow : public QMainWindow
 {
@@ -12,7 +13,8 @@ class MainWindow : public QMainWindow
 
 public:
     MainWindow();
-    
+protected:
+    void keyPressEvent(QKeyEvent* event) override;
 private slots:
     void onUpdate(); // wywo³ywane co frame
 

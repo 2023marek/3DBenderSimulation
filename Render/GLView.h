@@ -74,8 +74,8 @@ public:
         app = a;
     }
 
-protected:
-    void keyPressEvent(QKeyEvent* event) override;
+//protected:
+    //void keyPressEvent(QKeyEvent* event) override;
 
 private:
     AppController* app = nullptr;
