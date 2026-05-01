@@ -2,6 +2,7 @@
 #include "Common/UserAction.h"
 #include "MainWindow.h"
 #include "Core/SimulationController.h"
+#include "Render/RenderMode.h"
 
 MainWindow::MainWindow()
 {
@@ -57,6 +58,7 @@ void MainWindow::onUpdate()
 
     // ONLY pass data
     view->setHUDData(data);
+    view->setRenderMode(controller.getRenderMode());
 
     // trigger rendering
     view->update();

@@ -73,7 +73,7 @@ void GLView::initializeGL()
         std::cout << "Failed to initialize GLAD\n";
         return;
     }
-
+    pipeRenderer.init();
     // =========================
     // CREATE SHADER (YOUR CLASS)
     // =========================
@@ -155,11 +155,11 @@ void main()
     hud->setHUDShader(hudShader);
     hud->setTextShader(textShader);
 
-    glGenVertexArrays(1, &pipeVAO);
-    glGenBuffers(1, &pipeVBO);
+    //glGenVertexArrays(1, &pipeVAO);
+    //glGenBuffers(1, &pipeVBO);
 
-    glBindVertexArray(pipeVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, pipeVBO);
+    //glBindVertexArray(pipeVAO);
+    //glBindBuffer(GL_ARRAY_BUFFER, pipeVBO);
 
     // no data yet!
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
@@ -189,10 +189,11 @@ void GLView::paintGL()
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     std::cout << "[HUD] render call\n";
     if (!shader) return;
+
     shader->use();
-
     uploadPipeGeometry();
-
+    pipeRenderer.setMode(renderMode);
+    pipeRenderer.draw();
     if (pipe && autoFrame)
     {
         float size = 100.0f;
@@ -217,8 +218,8 @@ void GLView::paintGL()
     if (pipeVertexCount > 1)
     {
         glLineWidth(2.0f);
-        glBindVertexArray(pipeVAO);
-        glDrawArrays(GL_LINE_STRIP, 0, pipeVertexCount);
+       // glBindVertexArray(pipeVAO);
+        //glDrawArrays(GL_LINE_STRIP, 0, pipeVertexCount);
     }
     // ===== DRAW HUD LAST =====
     if (hud)
@@ -231,90 +232,47 @@ void GLView::paintGL()
 
 void GLView::uploadPipeGeometry()
 {
-    // ============================================================
-    // 1. VALIDATION: no pipe ? nothing to send to GPU
-    // ============================================================
-    if (!pipe)
-        return;
+    if (!pipe) return;
 
     const auto& nodes = pipe->getNodes();
-    pipeVertexCount = static_cast<int>(nodes.size());
+    if (nodes.empty()) return;
 
-    // No geometry ? skip rendering this frame
-    if (pipeVertexCount == 0)
-        return;
-
-    // ============================================================
-    // 2. CPU ? BUILD CONTIGUOUS VERTEX ARRAY
-    //    Convert PipeAxis3D nodes into flat float buffer
-    //
-    //    Layout: [x0 y0 z0 | x1 y1 z1 | x2 y2 z2 ...]
-    //
-    //    IMPORTANT:
-    //    - No scaling here ? keep consistent world units (mm)
-    //    - Camera will handle framing instead
-    // ============================================================
-    std::vector<float> data;
-    data.reserve(pipeVertexCount * 3); // 3 floats per vertex
+    // =====================================
+    // LINE MODE DATA
+    // =====================================
+    std::vector<float> lineData;
+    lineData.reserve(nodes.size() * 3);
 
     for (const auto& n : nodes)
     {
-        data.push_back(static_cast<float>(n.pos.x));
-        data.push_back(static_cast<float>(n.pos.y));
-        data.push_back(static_cast<float>(n.pos.z));
+        lineData.push_back(n.pos.x);
+        lineData.push_back(n.pos.y);
+        lineData.push_back(n.pos.z);
     }
 
-    // ============================================================
-    // 3. GPU OBJECT CREATION (RUN ONLY ONCE)
-    //
-    //    VAO = describes how vertex data is interpreted
-    //    VBO = actual GPU memory buffer
-    //
-    //    This block should NOT run every frame
-    // ============================================================
-    if (pipeVAO == 0)
+    pipeRenderer.uploadLine(lineData);
+
+    // =====================================
+    // MESH MODE DATA
+    // =====================================
+    if (renderMode == RenderMode::MESH)
     {
-        glGenVertexArrays(1, &pipeVAO);
-        glGenBuffers(1, &pipeVBO);
+        std::vector<Vec3D> C;
+        std::vector<Vec3D> T;
 
-        glBindVertexArray(pipeVAO);
-        glBindBuffer(GL_ARRAY_BUFFER, pipeVBO);
+        for (const auto& n : nodes)
+        {
+            C.push_back(n.pos);
+            T.push_back(n.T);
+        }
 
-        // Define vertex layout:
-        // attribute 0 ? vec3 position
-        glVertexAttribPointer(
-            0,                      // location in shader
-            3,                      // vec3
-            GL_FLOAT,
-            GL_FALSE,
-            3 * sizeof(float),      // stride
-            (void*)0                // offset
+        tubeMesh.generate(C, T, 5.0, 12); // radius, segments
+
+        pipeRenderer.uploadMesh(
+            tubeMesh.getVertices(),
+            tubeMesh.getIndices()
         );
-
-        glEnableVertexAttribArray(0);
-
-        // Unbind VAO (good practice)
-        glBindVertexArray(0);
     }
-
-    // ============================================================
-    // 4. UPLOAD DATA TO GPU (EVERY FRAME)
-    //
-    //    We use GL_DYNAMIC_DRAW because:
-    //    - geometry changes every frame (simulation)
-    // ============================================================
-    glBindBuffer(GL_ARRAY_BUFFER, pipeVBO);
-
-    glBufferData(
-        GL_ARRAY_BUFFER,
-        data.size() * sizeof(float),
-        data.data(),
-        GL_DYNAMIC_DRAW
-    );
-
-    // NOTE:
-    // No need to re-bind VAO or redefine attributes here
-    // VAO already "remembers" layout from step 3
 }
 
 void GLView::mousePressEvent(QMouseEvent* event)
@@ -362,6 +320,7 @@ void GLView::wheelEvent(QWheelEvent* event)
 
     update();
 }
+
 
 
 glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
@@ -421,6 +380,13 @@ void GLView::keyPressEvent(QKeyEvent* event)
     case Qt::Key_S:
         std::cout << "[KEY] S ? STEP\n";
         app->handleAction(UserAction::Step);
+        break;
+
+    case Qt::Key_M:   
+        app->handleAction(UserAction::ToggleRenderMode);
+        std::cout << "[MODE SWITCH] "
+            << (app->getRenderMode() == RenderMode::LINE ? "LINE" : "MESH")
+            << std::endl;
         break;
     }
 

@@ -1,6 +1,7 @@
 #include <sstream>
 #include "AppController.h"
 
+
 // =====================================
 // CONSTRUCTOR
 // =====================================
@@ -145,6 +146,9 @@ void AppController::handleAction(UserAction action)
 
     case UserAction::Step:
         sim.step();
+        break;
+    case UserAction::ToggleRenderMode:
+        toggleRenderMode();
         break;
     }
 }

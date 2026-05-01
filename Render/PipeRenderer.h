@@ -20,15 +20,17 @@ public:
         const std::vector<unsigned int>& indices);
 
     void draw();
-
+    void init(); 
 private:
     void setupBuffers();
+      
 
 private:
     RenderMode mode = RenderMode::LINE;
 
    
 private:
+
     // TWO separate VAOs
     unsigned int lineVAO = 0;
     unsigned int meshVAO = 0;

@@ -7,6 +7,10 @@ class AppController;
 #include "Core/PipeAxis3D.h"
 #include "Render/ShaderGL.h"
 #include "Render/ControlCamera.h"
+#include "Render/TubeMesh.h"
+#include "Render/PipeRenderer.h"
+
+
 
 class GLView : public QOpenGLWidget
 {
@@ -53,8 +57,7 @@ private:
     // =========================
     // PIPE RENDERING (NEW)
     // =========================
-    GLuint pipeVAO = 0;
-    GLuint pipeVBO = 0;
+   
     int pipeVertexCount = 0;
 
     void uploadPipeGeometry();   // 
@@ -78,8 +81,23 @@ private:
     AppController* app = nullptr;
     HUDPanel* hud = nullptr;
     HUDData hudData;
+    RenderMode renderMode = RenderMode::LINE;
 
-   
+public:
+    void setRenderMode(RenderMode mode)
+    {
+        renderMode = mode;
+    }
+private:
+    PipeRenderer pipeRenderer;
+
+    TubeMesh tubeMesh;
+
+    GLuint meshVAO = 0;
+    GLuint meshVBO = 0;
+    GLuint meshEBO = 0;
+
+    int meshIndexCount = 0;
 
     
 };

@@ -8,16 +8,24 @@
 
 PipeRenderer::PipeRenderer()
 {
-    setupBuffers();
+    
 }
+
 
 PipeRenderer::~PipeRenderer()
 {
-    glDeleteBuffers(1, &lineVBO);
-    glDeleteBuffers(1, &meshVBO);
-    glDeleteBuffers(1, &meshEBO);
-    glDeleteVertexArrays(1, &lineVAO);
-    glDeleteVertexArrays(1, &meshVAO);
+    if (lineVBO) glDeleteBuffers(1, &lineVBO);
+    if (meshVBO) glDeleteBuffers(1, &meshVBO);
+    if (meshEBO) glDeleteBuffers(1, &meshEBO);
+
+    if (lineVAO) glDeleteVertexArrays(1, &lineVAO);
+    if (meshVAO) glDeleteVertexArrays(1, &meshVAO);
+}
+
+void PipeRenderer::init()
+{
+    setupBuffers();  // now safe
+    std::cout << "[GL] init PipeRenderer\n";
 }
 
 // =========================

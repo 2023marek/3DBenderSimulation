@@ -5,5 +5,6 @@ enum class UserAction
     Play,
     Pause,
     Reset,
-    Step
+    Step,
+    ToggleRenderMode
 };

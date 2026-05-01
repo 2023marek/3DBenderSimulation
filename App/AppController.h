@@ -1,5 +1,6 @@
 #pragma once
 #include "Common/UserAction.h"
+#include "Render/RenderMode.h"
 #include "Core/SimulationController.h"
 #include "Render/HUDData.h"   
 
@@ -9,6 +10,19 @@ public:
     AppController();
 
     void update(double dt);
+    // ===== RENDER MODE API =====
+    RenderMode getRenderMode() const { return renderMode; }
+
+    void toggleRenderMode()
+    {
+        renderMode = (renderMode == RenderMode::LINE)
+            ? RenderMode::MESH
+            : RenderMode::LINE;
+
+        std::cout << "[MODE] "
+            << (renderMode == RenderMode::LINE ? "LINE" : "MESH")
+            << std::endl;
+    }
 
     const PipeAxis3D& getPipeGeometry() const;
 
@@ -23,6 +37,11 @@ public:
     void handleAction(UserAction action);
 
 private:
+	RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;
+
+
+
 };
+
       
