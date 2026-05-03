@@ -5,7 +5,7 @@
 #include "Render/ControlCamera.h"
 #include "GLView.h"
 #include "App/AppController.h"
-#include "Render/ShaderGL.h"
+//#include "Render/ShaderGL.h"
 #include <QOpenGLContext>
 #include <iostream>
 

@@ -11,11 +11,11 @@ AppController::AppController()
 
     Operation op1;
     op1.type = Operation::FEED;
-    op1.length = 100;
+    op1.length = 200;
 
     Operation op2;
     op2.type = Operation::BEND;
-    op2.R = 50;
+    op2.R = 75;
     op2.angle = 3.1415 / 2;
 
     Operation op3;

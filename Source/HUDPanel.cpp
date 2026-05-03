@@ -183,7 +183,8 @@ void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 col
             continue;
 
         drawCharacter(cursor, y, c, color);
-        cursor += glyphs[c].xAdvance;
+        float scale = 0.1f;
+        cursor += glyphs[c].xAdvance*scale;
     }
 }
 
@@ -227,11 +228,11 @@ void HUDPanel::drawMainPanel()
 {
     float x = 20.0f;
     float y = 20.0f;
-    float w = 350.0f;
-    float h = 180.0f;
+    float w = 70.0f;
+    float h = 50.0f;
 
     // panel background
-    drawRect(x, y, w, h, glm::vec4(0, 0, 0, 0.65f));
+    drawRect(x, y, w, h, glm::vec4(0.2f, 0.3f, 0.0f, 0.3f));
 
     float textX = x + 15.0f;
     float textY = y + 30.0f;
@@ -242,7 +243,7 @@ void HUDPanel::drawMainPanel()
     drawText(textX, textY + lineH * 1, "SPEED: " + std::to_string(speed), glm::vec4(1, 1, 1, 1));
     drawText(textX, textY + lineH * 2, "TIME: " + std::to_string(currentTime), glm::vec4(1, 1, 1, 1));
     drawText(textX, textY + lineH * 4, "OP: " + currentOpName, glm::vec4(1, 1, 0, 1));
-
+    std::cout << "[HUD TEXT] " << currentOpName << std::endl;
     // ===== PROGRESS =====
     drawProgressBar(
         textX,

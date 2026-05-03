@@ -1,5 +1,5 @@
 # Pipe Bending Program
-FEED 100
+FEED 1000
 BEND 50 60 CCW
 FEED 80
 BEND 40 90

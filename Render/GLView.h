@@ -93,9 +93,9 @@ private:
 
     TubeMesh tubeMesh;
 
-    GLuint meshVAO = 0;
-    GLuint meshVBO = 0;
-    GLuint meshEBO = 0;
+    //GLuint meshVAO = 0;
+   // GLuint meshVBO = 0;
+    //GLuint meshEBO = 0;
 
     int meshIndexCount = 0;
 
