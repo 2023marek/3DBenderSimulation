@@ -1,57 +1,44 @@
-# -------------------------
-# Visual Studio (legacy)
-# -------------------------
+# Visual Studio
 .vs/
 *.user
 *.suo
-
-# jeœli NIE u¿ywasz vcxproj ? zostaw
 *.sln
 *.vcxproj*
-*.filters
 
-# -------------------------
 # CMake
-# -------------------------
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 build.ninja
+compile_commands.json
+.ninja_deps
+.ninja_log
 
-# build directories
 /out/
 /build/
 
-# VS / CMake outputs
+# Build outputs
 /x64/
 /Debug/
 /Release/
 
-# -------------------------
 # Binaries
-# -------------------------
 *.exe
 *.dll
 *.pdb
 *.ilk
 
-# -------------------------
-# Compilation artifacts
-# -------------------------
+# Compilation
 *.obj
 *.log
 *.tlog
 *.recipe
 
-# -------------------------
 # Qt
-# -------------------------
 *.qmlc
 *.jsc
 *.rcc
 
-# -------------------------
 # OS
-# -------------------------
 .DS_Store
 Thumbs.db
