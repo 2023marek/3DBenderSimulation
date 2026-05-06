@@ -240,14 +240,16 @@ void GLView::uploadPipeGeometry()
     // ===== LINE =====
     std::vector<float> lineData;
     lineData.reserve(clippedNodes.size() * 3);
-
+    std::cout << "[DEBUG] using clipping pipeline\n";
     for (const auto& n : clippedNodes)
     {
         lineData.push_back(n.pos.x);
         lineData.push_back(n.pos.y);
         lineData.push_back(n.pos.z);
     }
-
+    std::cout << "[CLIP] visibleLength: " << visibleLength << "\n";
+    std::cout << "[CLIP] nodes full: " << nodes.size()
+        << " clipped: " << clippedNodes.size() << "\n";
     pipeRenderer.uploadLine(lineData);
 
     // ===== MESH =====

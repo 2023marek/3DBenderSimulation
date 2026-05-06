@@ -42,6 +42,7 @@ AppController::AppController()
 void AppController::update(double dt)
 {
     sim.update(dt);
+    std::cout << "[SIM UPDATE] dt=" << dt << std::endl;
     std::cout << "Playing: " << sim.isPlaying() << std::endl;
     std::cout << "Ops: " << sim.getTotalOperations() << std::endl;
     std::cout << "CurrentIdx: " << sim.getCurrentOperationIndex() << std::endl;

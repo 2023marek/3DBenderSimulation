@@ -30,8 +30,11 @@ public:
     double getSpeed() const { return speed; }
     void setSpeed(double speedMmPerSec) { speed = speedMmPerSec; }
     double getTotalFedLength() const;
+    
+    
     double getCurrentOperationProgress() const;
     double getOverallProgress() const;
+    double getCurrentProgress() const;
     size_t getCurrentOperationIndex() const { return operationQueue.getCurrentIndex(); }
     size_t getTotalOperations() const { return operationQueue.getTotalOperations(); }
     OperationQueue& getQueue();              // ? non-const (for writing)
@@ -51,9 +54,10 @@ private:
     // These variables track progress within the CURRENT operation
     // They are reset to 0 when moving to the next operation
     //
-
+    double totalVisibleLength = 0.0;
     double accumulatedDistance;  // mm done in current FEED
     double accumulatedAngle;     // radians done in current BEND
+
 
     // =========================================================================
     // ROTATION TRACKING (NEW FOR PHASE 3B)

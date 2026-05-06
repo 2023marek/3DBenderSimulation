@@ -251,7 +251,8 @@ void SimulationController::executeFeed(double distance)
     accumulatedDistance += toMove;
 
     // Update global pipe growth (ALL operations)
-    totalFedLength += toMove;
+    
+    totalVisibleLength += toMove;
 }
 void SimulationController::executeBend(double angle)
 {
@@ -263,6 +264,9 @@ void SimulationController::executeBend(double angle)
 
     machineState.bendAngle(toRotate);
     accumulatedAngle += toRotate;
+
+    double arcLength = accumulatedAngle * op->R;
+    totalVisibleLength += arcLength;
 
     // Update progress (0.0 to 1.0)
     if (op->angle > 0.0)
@@ -674,9 +678,35 @@ double SimulationController::getTotalFedLength() const
         else if (currentOp->type == Operation::BEND)
         {
             total += currentOp->R * accumulatedAngle;
+            std::cout
+                << "[VISIBLE BEND] "
+                << "angle=" << accumulatedAngle
+                << " R=" << currentOp->R
+                << " arc=" << currentOp->R * accumulatedAngle
+                << std::endl;
+
         }
         // ROTATE ? no length
     }
+        return total;
+}
+double SimulationController::getCurrentProgress() const
+{
+    const Operation* op = operationQueue.getCurrent();
+    if (!op) return 0.0;
 
-    return total;
+    switch (op->type)
+    {
+    case Operation::FEED:
+        return accumulatedDistance;
+
+    case Operation::BEND:
+    {
+        double totalArc = op->angle * op->R;
+        return op->progress * totalArc;
+    }
+
+    default:
+        return 0.0;
+    }
 }
