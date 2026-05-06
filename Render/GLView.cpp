@@ -4,8 +4,9 @@
 #include "Common/UserAction.h"
 #include "Render/ControlCamera.h"
 #include "GLView.h"
-#include "App/AppController.h"
+#include "Core/SimulationController.h"
 #include "Render/ShaderGL.h"
+#include "Core/PipeUtils.h"
 #include <QOpenGLContext>
 #include <iostream>
 
@@ -34,14 +35,7 @@ void main()
 )";
 
 
-// =========================
-// CONNECT PIPE DATA
-// =========================
-void GLView::setPipe(const PipeAxis3D* p)
-{
-    pipe = p;
-}
-
+//
 
 // =========================
 // INITIALIZE OPENGL (RUNS ONCE)
@@ -194,7 +188,7 @@ void GLView::paintGL()
     uploadPipeGeometry();
     pipeRenderer.setMode(renderMode);
     pipeRenderer.draw();
-    if (pipe && autoFrame)
+    if (controller && autoFrame)
     {
         float size = 100.0f;
         glm::vec3 center = computePipeCenterAndSize(size);
@@ -232,18 +226,22 @@ void GLView::paintGL()
 
 void GLView::uploadPipeGeometry()
 {
-    if (!pipe) return;
+    if (!controller) return;
 
-    const auto& nodes = pipe->getNodes();
+    const auto& nodes =
+        controller->getPipeGeometry().getNodes();
+
     if (nodes.empty()) return;
 
-    // =====================================
-    // LINE MODE DATA
-    // =====================================
-    std::vector<float> lineData;
-    lineData.reserve(nodes.size() * 3);
+    // ?? CLIP HERE (KEY!)
+    double visibleLength = controller->getTotalFedLength();
+    auto clippedNodes = clipByLength(nodes, visibleLength);
 
-    for (const auto& n : nodes)
+    // ===== LINE =====
+    std::vector<float> lineData;
+    lineData.reserve(clippedNodes.size() * 3);
+
+    for (const auto& n : clippedNodes)
     {
         lineData.push_back(n.pos.x);
         lineData.push_back(n.pos.y);
@@ -252,21 +250,19 @@ void GLView::uploadPipeGeometry()
 
     pipeRenderer.uploadLine(lineData);
 
-    // =====================================
-    // MESH MODE DATA
-    // =====================================
+    // ===== MESH =====
     if (renderMode == RenderMode::MESH)
     {
         std::vector<Vec3D> C;
         std::vector<Vec3D> T;
 
-        for (const auto& n : nodes)
+        for (const auto& n : clippedNodes)
         {
             C.push_back(n.pos);
             T.push_back(n.T);
         }
 
-        tubeMesh.generate(C, T, 5.0, 12); // radius, segments
+        tubeMesh.generate(C, T, 5.0, 12);
 
         pipeRenderer.uploadMesh(
             tubeMesh.getVertices(),
@@ -325,7 +321,8 @@ void GLView::wheelEvent(QWheelEvent* event)
 
 glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
 {
-    const auto& nodes = pipe->getNodes();
+    const auto& nodes = controller->getPipeGeometry().getNodes();
+    ;
 
     if (nodes.empty())
     {

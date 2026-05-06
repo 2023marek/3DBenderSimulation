@@ -35,13 +35,13 @@ struct Operation
     //
     //   FEED    - Linear motion forward
     //   BEND    - Arc motion (with radius and angle)
-    //   ROTATE  - Twist around pipe axis (NEW!)
+    //   ROTATE  - Twist around pipe axis 
     //
     enum Type
     {
         FEED,      // ? Move straight
         BEND,      // ? Curve in 3D space
-        ROTATE     // ? Twist (NEW)
+        ROTATE     // ? Twist 
     };
 
     // =====================================================================

@@ -2,7 +2,7 @@
 
 #include <glad/glad.h>
 #include <QOpenGLWidget>
-class AppController;
+#include "App/AppController.h" 
 #include "Render/HUDPanel.h"  
 #include "Core/PipeAxis3D.h"
 #include "Render/ShaderGL.h"
@@ -23,8 +23,8 @@ public:
         camera.yaw = -45.0f;
         setFocusPolicy(Qt::StrongFocus);
     }
-    void setPipe(const PipeAxis3D* pipe);
-
+    
+    void setController(AppController* c) { controller = c; }
 protected:
     void initializeGL() override;
     void paintGL() override;
@@ -45,7 +45,7 @@ private:
     // =========================
     // DATA SOURCE
     // =========================
-    const PipeAxis3D* pipe = nullptr;
+    AppController* controller = nullptr;
 
     // =========================
     // SHADER

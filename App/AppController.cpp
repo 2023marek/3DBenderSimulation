@@ -1,5 +1,6 @@
 #include <sstream>
 #include "AppController.h"
+#include "Core/PipeUtils.h"
 
 
 // =====================================
@@ -151,4 +152,32 @@ void AppController::handleAction(UserAction action)
         toggleRenderMode();
         break;
     }
+}
+
+void AppController::buildRenderData(
+    std::vector<Vec3D>& points,
+    std::vector<Vec3D>& tangents
+) const
+{
+    points.clear();
+    tangents.clear();
+
+    // 1. Get full nodes
+    const auto& nodes = sim.getPipeGeometry().getNodes();
+
+    if (nodes.empty()) return;
+
+    // 2. Clip by current feed length ??
+    auto clippedNodes = clipByLength(nodes, sim.getTotalFedLength());
+
+    // 3. Convert to rendering format
+    for (const auto& n : clippedNodes)
+    {
+        points.push_back(n.pos);
+        tangents.push_back(n.T);
+    }
+}
+double AppController::getTotalFedLength() const
+{
+    return sim.getTotalFedLength();
 }

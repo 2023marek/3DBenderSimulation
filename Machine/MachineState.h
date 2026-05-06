@@ -1,5 +1,5 @@
 #pragma once
-#include "../Core/Math/Vec3D.h"
+#include "Core/Math/Vec3D.h"
 
 // =========================================================================
 // MACHINE STATE - Current 3D configuration of pipe bender
@@ -57,7 +57,7 @@ struct MachineState
     // =====================================================================
 
     double currentTime = 0.0;         // Elapsed time in seconds
-
+    double feedPosition = 0.0; // how much pipe passed through machine 
     // =====================================================================
     // STATUS & CONTROL
     // =====================================================================

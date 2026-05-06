@@ -5,6 +5,7 @@
 #include <iostream>
 #include "Core/Math/Vec3D.h"
 
+
 #ifndef PI
 #define PI 3.14159265358979323846
 #endif
@@ -37,7 +38,27 @@ public:
         Vec3D N;  // Normal (perpendicular to tangent)
         Vec3D B;  // Binormal (perpendicular to both)
     };
+    //======================================================================
+	// OPERATION (User input for pipe construction)
+    // INPUT LAYER 
+	// =======================================================================
+    // 
+     struct Operation
+    {
+        enum Type
+        {
+            FEED,
+            BEND,
+            ROTATE
+        };
 
+        Type type = FEED;
+
+        double length = 0.0;
+        double R = 0.0;
+        double angle = 0.0;
+        double rotAngle = 0.0;
+    };
     // =====================================================================
     // NODE (Point on pipe centerline)
     // =====================================================================
@@ -56,33 +77,31 @@ public:
         }
     };
     
-    // =====================================================================
-    // SEGMENT (Operation abstraction)
-    // =====================================================================
-    enum class SegmentType
+   
+struct Segment
+{
+    enum Type
     {
-        LINE,    // Straight feed
-        ARC,     // Curved bend
-        ROTATE   // Twist around axis
+        LINE,
+        ARC,
+        ROTATE
     };
 
-    struct Segment
+    Type type = LINE;
+
+    double length = 0.0;   // used for LINE
+    double curvature = 0.0; // ? = 1/R (ARC)
+    double angle = 0.0;     // ARC bending angle
+    double rotAngle = 0.0;  // twist
+
+    double arcLength() const
     {
-        SegmentType type = SegmentType::LINE;
+        if (curvature == 0.0) return 0.0;
+        return angle / curvature; // R * angle
+    }
+};
 
-        // LINE parameters
-        double length = 0.0;
 
-        // ARC parameters
-        double R = 0.0;           // Radius
-        double angle = 0.0;       // Total angle
-
-        // ROTATE parameters
-        double rotAngle = 0.0;    // Twist angle
-
-        // Computed
-        double arcLength() const { return R * angle; }
-    };
 
 public:
     // =====================================================================
@@ -100,31 +119,31 @@ public:
     /// Add straight feed
     void addFeed(double length)
     {
-        Segment s;
-        s.type = SegmentType::LINE;
-        s.length = length;
-        segments.push_back(s);
+        Operation op;
+        op.type = Operation::FEED;
+        op.length = length;
+        ops.push_back(op);
         markDirty();
     }
 
     /// Add arc bend
     void addBend(double radius, double angle)
     {
-        Segment s;
-        s.type = SegmentType::ARC;
-        s.R = radius;
-        s.angle = angle;
-        segments.push_back(s);
+        Operation op;
+        op.type = Operation::BEND;
+        op.R = radius;
+        op.angle = angle;
+        ops.push_back(op);
         markDirty();
     }
 
-    /// Add rotation (twist)
+    // Add rotation (twist)
     void addRotate(double angle)
     {
-        Segment s;
-        s.type = SegmentType::ROTATE;
-        s.rotAngle = angle;
-        segments.push_back(s);
+        Operation op;
+        op.type = Operation::ROTATE;
+        op.rotAngle = angle;
+        ops.push_back(op);
         markDirty();
     }
 
@@ -132,37 +151,38 @@ public:
     // EDITING API (Modify operations)
     // =====================================================================
 
-    /// Change feed length
+    // ================================
+// EDITING ? ALWAYS MODIFY ops!
+// ================================
+
     void setFeedLength(size_t index, double length)
     {
-        if (index < segments.size() && segments[index].type == SegmentType::LINE)
+        if (index < ops.size() && ops[index].type == Operation::FEED)
         {
-            segments[index].length = length;
+            ops[index].length = length;
             markDirty();
         }
     }
 
-    /// Change bend radius
     void setBendRadius(size_t index, double radius)
     {
-        if (index < segments.size() && segments[index].type == SegmentType::ARC)
+        if (index < ops.size() && ops[index].type == Operation::BEND)
         {
-            segments[index].R = radius;
+            ops[index].R = radius;
             markDirty();
         }
     }
 
-    /// Change bend angle
     void setBendAngle(size_t index, double angle)
     {
-        if (index < segments.size() && segments[index].type == SegmentType::ARC)
+        if (index < ops.size() && ops[index].type == Operation::BEND)
         {
-            segments[index].angle = angle;
+            ops[index].angle = angle;
             markDirty();
         }
     }
 
-    /// Clear all operations and rebuild
+    // Clear all operations and rebuild
     void clear()
     {
         segments.clear();
@@ -177,38 +197,13 @@ public:
     void build()
     {
         if (!dirty) return;
-        
-        // Step 1: Clear previous nodes
-        nodes.clear();
 
-        // Step 2: Initialize starting frame (origin, pointing +X)
-        Frame frame;
-        frame.P = Vec3D{ 0, 0, 0 };
-        frame.T = Vec3D{ 1, 0, 0 };  // Pointing forward
-        frame.N = Vec3D{ 0, 1, 0 };  // Up
-        frame.B = Vec3D{ 0, 0, 1 };  // Right
+        // 1. SIMULATION
+        buildSegments();
 
-        // Step 3: Add initial node
-        nodes.push_back({ frame.P, frame.T });
+        // 2. RENDER
+        buildNodes();
 
-        // Step 4: Process each segment
-        for (const auto& segment : segments)
-        {
-            if (segment.type == SegmentType::LINE)
-            {
-                buildLine(frame, segment.length);
-            }
-            else if (segment.type == SegmentType::ARC)
-            {
-                buildArc(frame, segment.R, segment.angle);
-            }
-            else if (segment.type == SegmentType::ROTATE)
-            {
-                buildRotate(frame, segment.rotAngle);
-            }
-        }
-       
-            
         dirty = false;
     }
 
@@ -226,12 +221,13 @@ public:
 
     double getTotalLength() const
     {
+		Segment seg;
         double total = 0.0;
         for (const auto& seg : segments)
         {
-            if (seg.type == SegmentType::LINE)
+            if (seg.type ==Segment:: LINE)
                 total += seg.length;
-            else if (seg.type == SegmentType::ARC)
+            else if (seg.type == Segment::ARC)
                 total += seg.arcLength();
         }
         return total;
@@ -243,16 +239,16 @@ public:
         for (size_t i = 0; i < segments.size(); ++i)
         {
             const auto& seg = segments[i];
-            if (seg.type == SegmentType::LINE)
+            if (seg.type == Segment::LINE)
             {
                 std::cout << i << ": FEED " << seg.length << " mm\n";
             }
-            else if (seg.type == SegmentType::ARC)
+            else if (seg.type == Segment::ARC)
             {
-                std::cout << i << ": BEND R=" << seg.R << " mm, angle="
+                std::cout << i << ": BEND R=" << seg.curvature << " mm, angle="
                     << (seg.angle * 180.0 / PI) << " deg\n";
             }
-            else if (seg.type == SegmentType::ROTATE)
+            else if (seg.type == Segment::ROTATE)
             {
                 std::cout << i << ": ROTATE " << (seg.rotAngle * 180.0 / PI) << " deg\n";
             }
@@ -264,14 +260,18 @@ private:
     // =====================================================================
     // DATA
     // =====================================================================
-    std::vector<Segment> segments;  // Operations to execute
-    std::vector<Node> nodes;        // Resulting geometry
+    std::vector<Operation> ops;     // INPUT
+    std::vector<Segment> segments;  // SIMULATION Operations to execute
+    std::vector<Node> nodes;        // RENDER Resulting geometry  
     double ds;                      // Segment step size (mm)
     bool dirty;                     // Rebuild needed?
-
+    
+    
     // =====================================================================
     // IMPLEMENTATION
     // =====================================================================
+
+     
 
     void markDirty() { dirty = true; }
 
@@ -282,8 +282,66 @@ private:
             + cross(a, v) * sin(angle)
             + a * dot(a, v) * (1.0 - cos(angle));
     }
+   // ========================================================================
+  //Build SEGMENTS
+	//========================================================================
 
-    /// Build straight line segment
+    void buildSegments()
+    {
+        segments.clear();
+
+        for (const auto& op : ops)
+        {
+            Segment s;
+
+            if (op.type == Operation::FEED)
+            {
+                s.type = Segment::LINE;
+                s.length = op.length;
+            }
+            else if (op.type == Operation::BEND)
+            {
+                s.type = Segment::ARC;
+                s.curvature = 1.0 / op.R;   // ? key idea
+                s.angle = op.angle;
+            }
+            else if (op.type == Operation::ROTATE)
+            {
+                s.type = Segment::ROTATE;
+                s.rotAngle = op.rotAngle;
+            }
+
+            segments.push_back(s);
+        }
+    }
+
+    void buildNodes()
+    {
+        nodes.clear();
+
+        Frame frame;
+        frame.P = { 0,0,0 };
+        frame.T = { 1,0,0 };
+        frame.N = { 0,1,0 };
+        frame.B = { 0,0,1 };
+
+        nodes.push_back({ frame.P, frame.T });
+
+        for (const auto& seg : segments)
+        {
+            if (seg.type == Segment::LINE)
+                buildLine(frame, seg.length);
+
+            else if (seg.type == Segment::ARC)
+                buildArc(frame, seg.curvature, seg.angle);
+
+            else if (seg.type == Segment::ROTATE)
+                buildRotate(frame, seg.rotAngle);
+        }
+    }
+
+
+    //======================================================================
     void buildLine(Frame& frame, double length)
     {
         int stepCount = std::max(1, (int)(length / ds));
@@ -297,33 +355,29 @@ private:
         
     }
 
-    /// Build arc (bend) segment
-    void buildArc(Frame& frame, double radius, double angle)
+    void buildArc(Frame& frame, double curvature, double angle)
     {
-        double arcLength = radius * angle;
-        int stepCount = std::max(1, (int)(arcLength / ds));
-        double angleStep = angle / stepCount;
+        double R = 1.0 / curvature;
 
-        // Circle center: perpendicular to tangent at distance radius
-        Vec3D center = frame.P + frame.N * radius;
+        double arcLength = R * angle;
+        int steps = std::max(1, (int)(arcLength / ds));
+        double dA = angle / steps;
 
-        // Initial angle on circle
+        Vec3D center = frame.P + frame.N * R;
+
         double phi = atan2(frame.P.y - center.y, frame.P.x - center.x);
 
-        for (int i = 0; i < stepCount; ++i)
+        for (int i = 0; i < steps; ++i)
         {
-            // Rotate frame around binormal (creates bend)
-            frame.T = rotateAroundAxis(frame.T, frame.B, angleStep);
-            frame.N = rotateAroundAxis(frame.N, frame.B, angleStep);
-            // B stays same (rotation axis)
+            frame.T = rotateAroundAxis(frame.T, frame.B, dA);
+            frame.N = rotateAroundAxis(frame.N, frame.B, dA);
 
-            // Move along arc
-            phi += angleStep;
-            frame.P.x = center.x + radius * cos(phi);
-            frame.P.y = center.y + radius * sin(phi);
+            phi += dA;
+
+            frame.P.x = center.x + R * cos(phi);
+            frame.P.y = center.y + R * sin(phi);
 
             nodes.push_back({ frame.P, frame.T });
-            
         }
     }
 
@@ -336,5 +390,10 @@ private:
         frame.B = rotateAroundAxis(frame.B, frame.T, angle);
         // No new nodes added - geometry unchanged
     }
+
+    // ============================================
+
+
+
     
 };

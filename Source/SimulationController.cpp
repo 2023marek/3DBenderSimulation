@@ -44,6 +44,7 @@ void SimulationController::reset()
     playing = false;
     paused = false;
     pipeGeometry = PipeAxis3D(5.0);
+    totalFedLength = 0.0;
 
     // ===================================================================
     // IMPORTANT: Do NOT clear loadedOperations on reset!
@@ -234,22 +235,24 @@ void SimulationController::executeOperation(double distance)
 void SimulationController::executeFeed(double distance)
 {
     const Operation* op = operationQueue.getCurrent();
-    if (!op || op->type != Operation::FEED) return;
+    if (!op || op->type != Operation::FEED)
+        return;
 
+    // How much is left in this operation
     double remaining = op->length - accumulatedDistance;
+
+    // Move only what we can this frame
     double toMove = std::min(distance, remaining);
 
+    // Apply movement to machine state
     machineState.feedForward(toMove);
-    accumulatedDistance += toMove;
-   
-    // Update progress (0.0 to 1.0)
-    if (op->length > 0.0)
-    {
-        accumulatedDistance = std::min(accumulatedDistance, op->length);
-    }
-  
-}
 
+    // Update local progress (this operation)
+    accumulatedDistance += toMove;
+
+    // Update global pipe growth (ALL operations)
+    totalFedLength += toMove;
+}
 void SimulationController::executeBend(double angle)
 {
     const Operation* op = operationQueue.getCurrent();
@@ -472,11 +475,14 @@ void SimulationController::updatePipeGeometry()
     // Convert segments into 3D nodes (coordinates)
     // Ready for rendering!
     //
-
+    
    
     pipeGeometry.build();
     std::cout << "[GEOM AFTER] nodes: "
         << pipeGeometry.getNodes().size() << std::endl;
+
+   
+   
 }
 // =========================================================================
 // ROTATION EXECUTION - PHASE 3B
@@ -579,4 +585,98 @@ const OperationQueue& SimulationController::getQueue() const
 {
     return operationQueue;   // ? correct
 }
- 
+
+// ============================================
+// CLIP PIPE BY LENGTH (CORE FUNCTION)
+// ============================================
+static std::vector<PipeAxis3D::Node> clipByLength(
+    const std::vector<PipeAxis3D::Node>& nodes,
+    double maxLength)
+{
+    std::vector<PipeAxis3D::Node> result;
+
+    if (nodes.empty())
+        return result;
+
+    double accumulated = 0.0;
+
+    result.push_back(nodes[0]);
+
+    for (size_t i = 1; i < nodes.size(); ++i)
+    {
+        Vec3D p0 = nodes[i - 1].pos;
+        Vec3D p1 = nodes[i].pos;
+
+        double segmentLength = length(p1 - p0);
+
+        // Case 1: fully inside visible range
+        if (accumulated + segmentLength <= maxLength)
+        {
+            result.push_back(nodes[i]);
+            accumulated += segmentLength;
+        }
+        else
+        {
+            // Case 2: partially inside ? interpolate
+            double remaining = maxLength - accumulated;
+
+            if (remaining > 0.0 && segmentLength > 0.0)
+            {
+                double t = remaining / segmentLength;
+
+                Vec3D newPos = lerp(p0, p1, t);
+
+                PipeAxis3D::Node newNode;
+                newNode.pos = newPos;
+                newNode.T = normalize(p1 - p0);
+
+                result.push_back(newNode);
+            }
+
+            break;
+        }
+    }
+
+    return result;
+}
+
+double SimulationController::getTotalFedLength() const
+{
+    double total = 0.0;
+
+    // 1. Add all COMPLETED operations
+    size_t currentIdx = operationQueue.getCurrentIndex();
+
+    for (size_t i = 0; i < currentIdx && i < loadedOperations.size(); i++)
+    {
+        const Operation& op = loadedOperations[i];
+
+        if (op.type == Operation::FEED)
+        {
+            total += op.length;
+        }
+        else if (op.type == Operation::BEND)
+        {
+            total += op.R * op.angle; // arc length
+        }
+        // ROTATE ? no length
+    }
+
+    // 2. Add CURRENT partial operation
+    const Operation* currentOp = operationQueue.getCurrent();
+
+    if (currentOp)
+    {
+        if (currentOp->type == Operation::FEED)
+        {
+            total += accumulatedDistance;
+        }
+        else if (currentOp->type == Operation::BEND)
+        {
+            total += currentOp->R * accumulatedAngle;
+        }
+        // ROTATE ? no length
+    }
+
+    return total;
+}

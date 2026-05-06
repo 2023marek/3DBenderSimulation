@@ -1,5 +1,6 @@
 #pragma once
 #include <cmath>
+#include <vector>
 
 struct Vec3D
 {
@@ -19,11 +20,18 @@ struct Vec3D
         x += v.x; y += v.y; z += v.z;
         return *this;
     }
+    
 };
 
 // =========================
 // MATH FUNCTIONS
 // =========================
+inline Vec3D lerp(const Vec3D& a, const Vec3D& b, double t)
+{
+    return a + (b - a) * t;
+}
+
+
 inline double dot(const Vec3D& a, const Vec3D& b)
 {
     return a.x * b.x + a.y * b.y + a.z * b.z;

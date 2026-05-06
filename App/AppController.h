@@ -13,6 +13,7 @@ public:
     // ===== RENDER MODE API =====
     RenderMode getRenderMode() const { return renderMode; }
 
+    double getTotalFedLength() const;
     void toggleRenderMode()
     {
         renderMode = (renderMode == RenderMode::LINE)
@@ -39,6 +40,10 @@ public:
 private:
 	RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;
+    void buildRenderData(
+        std::vector<Vec3D>& points,
+        std::vector<Vec3D>& tangents
+    ) const;
 
 
 

@@ -15,7 +15,7 @@ MainWindow::MainWindow()
     setCentralWidget(view);
     view->setFocus();
     view->setAppController(&controller);
-    view->setPipe(&controller.getPipeGeometry());
+    view->setController(&controller);
     view->setFocus(); // important for keyboard
 
     // =========================

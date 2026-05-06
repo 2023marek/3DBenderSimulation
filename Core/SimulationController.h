@@ -3,6 +3,7 @@
 #include "OperationQueue.h"
 #include "PipeAxis3D.h"
 #include "Machine/MachineState.h"
+#include "Math/Vec3D.h"
 #include <vector>
 
 class SimulationController
@@ -28,7 +29,7 @@ public:
     bool isPaused() const { return paused; }
     double getSpeed() const { return speed; }
     void setSpeed(double speedMmPerSec) { speed = speedMmPerSec; }
-
+    double getTotalFedLength() const;
     double getCurrentOperationProgress() const;
     double getOverallProgress() const;
     size_t getCurrentOperationIndex() const { return operationQueue.getCurrentIndex(); }
@@ -74,13 +75,15 @@ private:
     //   Frame 3: accumulatedRotation = 1.57 rad (100% - DONE!)
     //
     double accumulatedRotation = 0.0;  // ? NEW: radians
-
+    double totalFedLength = 0.0;
     // =========================================================================
     // CORE COMPONENTS
     // =========================================================================
     OperationQueue operationQueue;    // Queue of operations to execute
     MachineState machineState;        // Current machine state
     PipeAxis3D pipeGeometry;          // Pipe geometry (segments + nodes)
+    PipeAxis3D fullPipe;      // final result (already have logic)
+    PipeAxis3D livePipe;      // ONLY what has exited machine
 
     // =========================================================================
     // LOCAL OPERATION STORAGE (for geometry accumulation)
@@ -119,5 +122,8 @@ private:
 
     void advanceToNextOperation();
     void updatePipeGeometry();
+   
+
+    
     
 }; 
