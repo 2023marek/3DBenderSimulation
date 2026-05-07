@@ -107,7 +107,7 @@ public:
     // =====================================================================
     // CONSTRUCTOR
     // =====================================================================
-    explicit PipeAxis3D(double stepSize = 5.0)
+    explicit PipeAxis3D(double stepSize = 1.0)
         : ds(stepSize), dirty(true)
     {
     }

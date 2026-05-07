@@ -17,7 +17,7 @@ AppController::AppController()
     Operation op2;
     op2.type = Operation::BEND;
     op2.R = 50;
-    op2.angle = 3.1415 / 2;
+    op2.angle = 3.1415 / 1;
 
     Operation op3;
     op3.type = Operation::FEED;
@@ -168,15 +168,9 @@ void AppController::buildRenderData(
 
     if (nodes.empty()) return;
 
-    // 2. Clip by current feed length ??
-    auto clippedNodes = clipByLength(nodes, sim.getTotalFedLength());
+   
 
-    // 3. Convert to rendering format
-    for (const auto& n : clippedNodes)
-    {
-        points.push_back(n.pos);
-        tangents.push_back(n.T);
-    }
+  
 }
 double AppController::getTotalFedLength() const
 {

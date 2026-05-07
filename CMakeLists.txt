@@ -65,7 +65,7 @@ set(RENDER_HEADERS
 set(CORE_SOURCES
     Source/SimulationController.cpp
     Source/ProgramLoader.cpp
-    Source/PipeUtils.cpp
+    
 )
 
 set(CORE_HEADERS
@@ -78,7 +78,7 @@ set(CORE_HEADERS
     Core/ProgramLoader.h
     Core/Math/Vec2D.h
     Core/Math/Vec3D.h
-    Core/PipeUtils.h
+    
 )
 
 set(MACHINE_HEADERS

@@ -9,7 +9,7 @@
 SimulationController::SimulationController()
     : playing(false), paused(false), speed(100.0),
     accumulatedDistance(0.0), accumulatedAngle(0.0),
-    pipeGeometry(5.0)  // 5mm segment size
+    pipeGeometry(1.0)  // 1mm segment size
 {
     std::cout << "? SimulationController initialized\n";
 }
@@ -43,7 +43,7 @@ void SimulationController::reset()
     accumulatedAngle = 0.0;
     playing = false;
     paused = false;
-    pipeGeometry = PipeAxis3D(5.0);
+    pipeGeometry = PipeAxis3D(1.0);
     totalFedLength = 0.0;
 
     // ===================================================================
@@ -96,7 +96,7 @@ void SimulationController::step()
 
     if (op->type == Operation::FEED)
     {
-        executeFeed(5.0);  // 5mm step
+        executeFeed(1.0);  // 5mm step
     }
     else if (op->type == Operation::BEND)
     {
@@ -398,7 +398,7 @@ double SimulationController::getOverallProgress() const
 void SimulationController::updatePipeGeometry()
 {
     // Create fresh geometry object for this frame
-    pipeGeometry = PipeAxis3D(5.0);
+    pipeGeometry = PipeAxis3D(1.0);
     size_t currentIdx = operationQueue.getCurrentIndex();
     std::cout << "[STEP] currentIdx: " << currentIdx << std::endl;
     std::cout << "[STEP] accumulatedDistance: " << accumulatedDistance << std::endl;
@@ -590,59 +590,7 @@ const OperationQueue& SimulationController::getQueue() const
     return operationQueue;   // ? correct
 }
 
-// ============================================
-// CLIP PIPE BY LENGTH (CORE FUNCTION)
-// ============================================
-static std::vector<PipeAxis3D::Node> clipByLength(
-    const std::vector<PipeAxis3D::Node>& nodes,
-    double maxLength)
-{
-    std::vector<PipeAxis3D::Node> result;
 
-    if (nodes.empty())
-        return result;
-
-    double accumulated = 0.0;
-
-    result.push_back(nodes[0]);
-
-    for (size_t i = 1; i < nodes.size(); ++i)
-    {
-        Vec3D p0 = nodes[i - 1].pos;
-        Vec3D p1 = nodes[i].pos;
-
-        double segmentLength = length(p1 - p0);
-
-        // Case 1: fully inside visible range
-        if (accumulated + segmentLength <= maxLength)
-        {
-            result.push_back(nodes[i]);
-            accumulated += segmentLength;
-        }
-        else
-        {
-            // Case 2: partially inside ? interpolate
-            double remaining = maxLength - accumulated;
-
-            if (remaining > 0.0 && segmentLength > 0.0)
-            {
-                double t = remaining / segmentLength;
-
-                Vec3D newPos = lerp(p0, p1, t);
-
-                PipeAxis3D::Node newNode;
-                newNode.pos = newPos;
-                newNode.T = normalize(p1 - p0);
-
-                result.push_back(newNode);
-            }
-
-            break;
-        }
-    }
-
-    return result;
-}
 
 double SimulationController::getTotalFedLength() const
 {
