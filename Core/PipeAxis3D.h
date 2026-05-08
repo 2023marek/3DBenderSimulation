@@ -368,7 +368,7 @@ private:
         double phi = atan2(frame.P.y - center.y, frame.P.x - center.x);
 
         for (int i = 0; i < steps; ++i)
-        {
+         {
             frame.T = rotateAroundAxis(frame.T, frame.B, dA);
             frame.N = rotateAroundAxis(frame.N, frame.B, dA);
 

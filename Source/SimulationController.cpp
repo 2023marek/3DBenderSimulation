@@ -585,10 +585,6 @@ OperationQueue& SimulationController::getQueue()
     return operationQueue;   // ? correct
 }
 
-const OperationQueue& SimulationController::getQueue() const
-{
-    return operationQueue;   // ? correct
-}
 
 
 
