@@ -50,7 +50,7 @@ void TubeMesh::updateFramePTF(const Vec3D& prevT,
     Vec3D& binormal)
 {
     Vec3D axis = cross(prevT, currT);
-    double axisLen = length(axis);
+    double axisLen = axis.length();
 
     // if almost no rotation ? skip
     if (axisLen < 1e-9)
