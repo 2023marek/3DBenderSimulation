@@ -21,13 +21,13 @@ public:
         int segments);
 
     // Frame construction (stable orientation)
-    void computeInitialFrame(const Vec3D& tangent,
-        Vec3D& normal,
-        Vec3D& binormal);
+   void computeInitialFrame(const Vec3D& tangent,
+       Vec3D& normal,
+       Vec3D& binormal);
 
     void updateFramePTF(const Vec3D& prevT,
-        const Vec3D& currT,
-        Vec3D& normal,
+       const Vec3D& currT,
+       Vec3D& normal,
         Vec3D& binormal);
 
 

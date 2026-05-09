@@ -3,6 +3,7 @@
 #include <vector>
 #include <cmath>
 #include <iostream>
+#include <algorithm>
 #include "Core/Math/Vec3D.h"
 
 
@@ -65,7 +66,10 @@ public:
     struct Node
     {
         Vec3D pos;
+
         Vec3D T;
+        Vec3D N;
+        Vec3D B;
 
         glm::vec3 getPosition() const
         {
@@ -311,6 +315,44 @@ private:
         f.N = cross(f.B, f.T).normalized();
     }
 
+
+    void transportFrame(
+        const Vec3D& prevT,
+        const Vec3D& currT,
+        Frame& frame)
+    {
+        Vec3D axis = cross(prevT, currT);
+
+        double axisLenSq = axis.lengthSquared();
+
+        // =====================================================
+        // Nearly identical tangents
+        // =====================================================
+
+        if (axisLenSq < 1e-12)
+            return;
+
+        axis = axis.normalized();
+
+        double d = dot(prevT, currT);
+
+        d = std::clamp(d, -1.0, 1.0);
+
+        double angle = std::acos(d);
+
+        // =====================================================
+        // Minimal transport
+        // =====================================================
+
+        frame.N = rotateAroundAxis(frame.N, axis, angle);
+
+        frame.B = rotateAroundAxis(frame.B, axis, angle);
+
+        orthonormalizeFrame(frame);
+    }
+
+
+
     // ========================================================================
    //Build SEGMENTS
      //========================================================================
@@ -354,7 +396,13 @@ private:
         frame.N = { 0,1,0 };
         frame.B = { 0,0,1 };
 
-        nodes.push_back({ frame.P, frame.T });
+        //nodes.push_back({ frame.P, frame.T });
+        nodes.push_back({
+    frame.P,
+    frame.T,
+    frame.N,
+    frame.B
+            });
 
         for (const auto& seg : segments)
         {
@@ -379,10 +427,18 @@ private:
         {
             // Move along current tangent
             frame.P = frame.P + frame.T * ds;
-            nodes.push_back({ frame.P, frame.T });
+            //nodes.push_back({ frame.P, frame.T });
+            nodes.push_back({
+    frame.P,
+    frame.T,
+    frame.N,
+    frame.B
+                });
         }
 
     }
+
+    
 
     void buildArc(Frame& frame, double curvature, double angle)
     {
@@ -399,16 +455,26 @@ private:
 
         for (int i = 0; i < steps; ++i)
         {
-            frame.T = rotateAroundAxis(frame.T, frame.B, dA);
-            frame.N = rotateAroundAxis(frame.N, frame.B, dA);
-            orthonormalizeFrame(frame);
+            Vec3D prevT = frame.T;
 
-            //phi += dA;
+            // curvature propagation
+            frame.T =
+                rotateAroundAxis(frame.T, frame.B, dA);
+
+            // minimal frame transport
+            transportFrame(prevT, frame.T, frame);
+
+            // integrate position
             frame.P = frame.P + frame.T * ds;
-            //frame.P.x = center.x + R * cos(phi);
-            //frame.P.y = center.y + R * sin(phi);
 
-            nodes.push_back({ frame.P, frame.T });
+            // append geometry node
+            //nodes.push_back({ frame.P, frame.T });
+            nodes.push_back({
+    frame.P,
+    frame.T,
+    frame.N,
+    frame.B
+                });
         }
     }
 
