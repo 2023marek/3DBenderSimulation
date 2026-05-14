@@ -9,7 +9,7 @@
 SimulationController::SimulationController()
     : playing(false), paused(false), speed(100.0),
     accumulatedDistance(0.0), accumulatedAngle(0.0),
-    pipeGeometry(5.0)  // 5mm segment size
+    pipeGeometry(0.5)  // 0.5mm segment size
 {
     std::cout << "? SimulationController initialized\n";
 }
@@ -43,7 +43,7 @@ void SimulationController::reset()
     accumulatedAngle = 0.0;
     playing = false;
     paused = false;
-    pipeGeometry = PipeAxis3D(5.0);
+    pipeGeometry = PipeAxis3D(0.5);
 
     // ===================================================================
     // IMPORTANT: Do NOT clear loadedOperations on reset!
@@ -95,7 +95,7 @@ void SimulationController::step()
 
     if (op->type == Operation::FEED)
     {
-        executeFeed(5.0);  // 5mm step
+        executeFeed(0.5);  // 0.5mm step
     }
     else if (op->type == Operation::BEND)
     {
@@ -238,8 +238,8 @@ void SimulationController::executeFeed(double distance)
 
     double remaining = op->length - accumulatedDistance;
     double toMove = std::min(distance, remaining);
-
-    machineState.feedForward(toMove);
+    pipeGeometry.processFeed(toMove);
+    //machineState.feedForward(toMove);
     accumulatedDistance += toMove;
    
     // Update progress (0.0 to 1.0)
@@ -252,19 +252,39 @@ void SimulationController::executeFeed(double distance)
 
 void SimulationController::executeBend(double angle)
 {
-    const Operation* op = operationQueue.getCurrent();
-    if (!op || op->type != Operation::BEND) return;
+    const Operation* op =
+        operationQueue.getCurrent();
 
-    double remaining = op->angle - accumulatedAngle;
-    double toRotate = std::min(angle, remaining);
+    if (!op)
+        return;
 
-    machineState.bendAngle(toRotate);
-    accumulatedAngle += toRotate;
+    // =====================================================
+    // BEGIN BEND ONCE
+    // =====================================================
 
-    // Update progress (0.0 to 1.0)
-    if (op->angle > 0.0)
+    if (!pipeGeometry.isBendActive())
     {
-        accumulatedAngle = std::min(accumulatedAngle, op->angle);
+        pipeGeometry.beginBend(
+            op->R,
+            op->angle
+        );
+    }
+
+    // =====================================================
+    // ADVANCE ACTIVE DEFORMATION
+    // =====================================================
+
+   
+
+    // =====================================================
+    // TRACK CNC EXECUTION PROGRESS
+    // =====================================================
+
+    accumulatedAngle += angle;
+
+    if (accumulatedAngle > op->angle)
+    {
+        accumulatedAngle = op->angle;
     }
 }
 
@@ -391,7 +411,7 @@ double SimulationController::getOverallProgress() const
 void SimulationController::updatePipeGeometry()
 {
     // Create fresh geometry object for this frame
-    pipeGeometry = PipeAxis3D(5.0);
+    pipeGeometry = PipeAxis3D(0.5);
     size_t currentIdx = operationQueue.getCurrentIndex();
     std::cout << "[STEP] currentIdx: " << currentIdx << std::endl;
     std::cout << "[STEP] accumulatedDistance: " << accumulatedDistance << std::endl;
