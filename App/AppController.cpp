@@ -15,7 +15,7 @@ AppController::AppController()
 
     Operation op2;
     op2.type = Operation::BEND;
-    op2.R = 5;
+    op2.R = 10;
     op2.angle = 3.1415 / 2;
 
     Operation op3;
@@ -24,11 +24,11 @@ AppController::AppController()
 
     Operation op4;
     op4.type = Operation::FEED;
-    op4.length = 50;
+    op4.length = 150;
 
     Operation op5;
     op5.type = Operation::BEND;
-    op5.R = 1500;
+    op5.R = 30;
     op5.angle = 3.1415 /1;
 
     ops.push_back(op1);
@@ -38,6 +38,15 @@ AppController::AppController()
 	ops.push_back(op5);
 
     sim.loadProgram(ops);
+    //sim.setMode(
+       // SimulationController::SimulationMode::ManufacturingPlayback
+    //);
+
+    // Or for CAD preview:
+    //
+    // sim.setMode(
+    //    SimulationController::SimulationMode::CADPreview
+    // );
 
     
 

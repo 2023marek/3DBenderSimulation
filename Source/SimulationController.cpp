@@ -9,7 +9,10 @@
 SimulationController::SimulationController()
     : playing(false), paused(false), speed(100.0),
     accumulatedDistance(0.0), accumulatedAngle(0.0),
-    pipeGeometry(0.5)  // 0.5mm segment size
+    pipeGeometry(0.5)
+   
+
+
 {
     std::cout << "? SimulationController initialized\n";
 }
@@ -21,7 +24,9 @@ void SimulationController::loadProgram(const std::vector<Operation>& ops)
     // KEY: Store operations BEFORE resetting anything
     // ===================================================================
     loadedOperations = ops;  // Store the COMPLETE program
-    
+    // Choose ONE mode here:
+
+  
     operationQueue.load(ops);
     machineState.reset();
     accumulatedDistance = 0.0;
@@ -166,7 +171,14 @@ void SimulationController::update(double deltaTime)
     }
 
     // Update visualization geometry
-    updatePipeGeometry();
+    if (mode == SimulationMode::CADPreview)
+    {
+        updatePipeGeometryCAD();
+    }
+    else if (mode == SimulationMode::ManufacturingPlayback)
+    {
+        updatePipeGeometryManufacturing();
+    }
 }
 
 
@@ -252,42 +264,27 @@ void SimulationController::executeFeed(double distance)
 
 void SimulationController::executeBend(double angle)
 {
-    const Operation* op =
-        operationQueue.getCurrent();
+    const Operation* op = operationQueue.getCurrent();
 
-    if (!op)
+    if (!op || op->type != Operation::BEND)
         return;
 
-    // =====================================================
-    // BEGIN BEND ONCE
-    // =====================================================
+    double remaining = op->angle - accumulatedAngle;
+    double toBend = std::min(angle, remaining);
 
-    if (!pipeGeometry.isBendActive())
-    {
-        pipeGeometry.beginBend(
-            op->R,
-            op->angle
-        );
-    }
+    pipeGeometry.processBend(
+        op->R,
+        op->angle,
+        toBend
+    );
 
-    // =====================================================
-    // ADVANCE ACTIVE DEFORMATION
-    // =====================================================
-
-   
-
-    // =====================================================
-    // TRACK CNC EXECUTION PROGRESS
-    // =====================================================
-
-    accumulatedAngle += angle;
+    accumulatedAngle += toBend;
 
     if (accumulatedAngle > op->angle)
     {
         accumulatedAngle = op->angle;
     }
 }
-
 void SimulationController::advanceToNextOperation()
 {
     const Operation* currentOp = operationQueue.getCurrent();
@@ -408,59 +405,51 @@ double SimulationController::getOverallProgress() const
     return operationQueue.getProgress();
 }
 
-void SimulationController::updatePipeGeometry()
+void SimulationController::updatePipeGeometryCAD()
 {
-    // Create fresh geometry object for this frame
+    // Create fresh geometry object for CAD preview mode
     pipeGeometry = PipeAxis3D(0.5);
+
     size_t currentIdx = operationQueue.getCurrentIndex();
-    std::cout << "[STEP] currentIdx: " << currentIdx << std::endl;
-    std::cout << "[STEP] accumulatedDistance: " << accumulatedDistance << std::endl;
-    // =====================================================================
-    // SAFETY CHECK
-    // =====================================================================
+
+    std::cout << "[CAD STEP] currentIdx: " << currentIdx << std::endl;
+    std::cout << "[CAD STEP] accumulatedDistance: " << accumulatedDistance << std::endl;
+
     if (loadedOperations.empty())
     {
-        std::cerr << "  [ERROR] loadedOperations is empty!\n";
+        std::cerr << "[CAD ERROR] loadedOperations is empty!\n";
         pipeGeometry.build();
         return;
     }
-    
-    // =====================================================================
-    // ADD ALL COMPLETED OPERATIONS (Full segments)
-    // =====================================================================
-    //
-    // Operations 0 to (currentIdx-1) are fully done
-    // Add them completely to the geometry
-    //
+
+    // =====================================================
+    // ADD ALL COMPLETED OPERATIONS
+    // =====================================================
+
     for (size_t i = 0; i < currentIdx && i < loadedOperations.size(); i++)
     {
         const Operation& op = loadedOperations[i];
 
         if (op.type == Operation::FEED)
         {
-            // Add straight line segment
             pipeGeometry.addFeed(op.length);
         }
         else if (op.type == Operation::BEND)
         {
-            // Add curved segment
             pipeGeometry.addBend(op.R, op.angle);
         }
-        else if (op.type == Operation::ROTATE)  // ? NEW
+        else if (op.type == Operation::ROTATE)
         {
-            // Add rotation (twists frame)
             pipeGeometry.addRotate(op.angle);
         }
     }
 
-    // =====================================================================
+    // =====================================================
     // ADD PARTIAL CURRENT OPERATION
-    // =====================================================================
-    //
-    // Current operation (at currentIdx) is being executed
-    // Add only the accumulated progress so far
-    //
+    // =====================================================
+
     const Operation* currentOp = operationQueue.getCurrent();
+
     if (currentOp)
     {
         if (currentOp->type == Operation::FEED)
@@ -477,7 +466,7 @@ void SimulationController::updatePipeGeometry()
                 pipeGeometry.addBend(currentOp->R, accumulatedAngle);
             }
         }
-        else if (currentOp->type == Operation::ROTATE)  // ? NEW
+        else if (currentOp->type == Operation::ROTATE)
         {
             if (accumulatedRotation > 0.0)
             {
@@ -486,17 +475,39 @@ void SimulationController::updatePipeGeometry()
         }
     }
 
-    // =====================================================================
-    // BUILD THE GEOMETRY
-    // =====================================================================
-    // Convert segments into 3D nodes (coordinates)
-    // Ready for rendering!
-    //
-
-   
     pipeGeometry.build();
-    std::cout << "[GEOM AFTER] nodes: "
-        << pipeGeometry.getNodes().size() << std::endl;
+
+    std::cout << "[CAD GEOM AFTER] nodes: "
+        << pipeGeometry.getNodes().size()
+        << std::endl;
+}
+
+//===========================================
+// UPDATE PIPE GEOMETRY - MANUFACTURING 
+// ===========================================
+
+void SimulationController::updatePipeGeometryManufacturing()
+{
+    // =====================================================
+    // MANUFACTURING MODE
+    //
+    // Do NOT recreate PipeAxis3D here.
+    // Do NOT addFeed/addBend/addRotate here.
+    // Do NOT rebuild CAD history here.
+    //
+    // PipeAxis3D already owns:
+    // - incoming stock
+    // - active zone
+    // - frozen geometry
+    //
+    // We only ask it to assemble visible render nodes.
+    // =====================================================
+
+    pipeGeometry.reconstructVisiblePipe();
+
+    std::cout << "[MFG GEOM AFTER] nodes: "
+        << pipeGeometry.getNodes().size()
+        << std::endl;
 }
 // =========================================================================
 // ROTATION EXECUTION - PHASE 3B
@@ -565,11 +576,18 @@ void SimulationController::executeRotate(double angleIncrement)
     //
     double toRotate = std::min(angleIncrement, remaining);
 
-    // Step 4: Apply rotation to machine state
+   
+	// Step3a Inform PipeGeometry of rotation (for visual twist)
+    // =====================================================
+    // Apply rotation to geometric pipe model
+    // =====================================================
+
+    pipeGeometry.processRotate(toRotate);
+
+ // Step 4: Apply rotation to machine state
     //
     // This tracks the total rotation of the entire pipe assembly
     // Used later for G-Code generation and visualization
-    //
     machineState.rotation += toRotate;
 
     // Step 5: Accumulate progress in this ROTATE operation
@@ -586,7 +604,7 @@ void SimulationController::executeRotate(double angleIncrement)
     {
         accumulatedRotation = op->angle;
     }
-
+     
     // Done! Frame has been twisted by toRotate radians
 }  
 

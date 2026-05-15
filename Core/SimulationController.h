@@ -8,6 +8,12 @@
 class SimulationController
 {
 public:
+
+    enum class SimulationMode
+    {
+        CADPreview,
+        ManufacturingPlayback
+    };
     // =========================================
     // PUBLIC INTERFACE (unchanged from Phase 3A)
     // =========================================
@@ -19,7 +25,14 @@ public:
     void step();
     void reset();
     void update(double deltaTime);
-
+    void setMode(SimulationMode newMode) 
+    {
+        mode = newMode;
+    }
+    SimulationMode getMode() const
+    {
+        return mode;
+    }
     const MachineState& getState() const { return machineState; }
     MachineState& getState() { return machineState; }
     const PipeAxis3D& getPipeGeometry() const { return pipeGeometry; }
@@ -36,6 +49,7 @@ public:
     OperationQueue& getQueue();              // ? non-const (for writing)
     const OperationQueue& getQueue() const;  // ? const (for reading)
 private:
+	SimulationMode mode =SimulationMode::ManufacturingPlayback;                  
     // =========================================================================
     // PLAYBACK STATE
     // =========================================================================
@@ -53,7 +67,7 @@ private:
 
     double accumulatedDistance;  // mm done in current FEED
     double accumulatedAngle;     // radians done in current BEND
-
+    double accumulatedRotation = 0.0;  // radians
     // =========================================================================
     // ROTATION TRACKING (NEW FOR PHASE 3B)
     // =========================================================================
@@ -73,7 +87,7 @@ private:
     //   Frame 2: accumulatedRotation = 1.0 rad (64%)
     //   Frame 3: accumulatedRotation = 1.57 rad (100% - DONE!)
     //
-    double accumulatedRotation = 0.0;  // ? NEW: radians
+   
 
     // =========================================================================
     // CORE COMPONENTS
@@ -93,8 +107,10 @@ private:
 
     void executeOperation(double distance);
     void executeFeed(double distance);
-    void executeBend(double angle);
+    void executeBend(double angleIncrement);
+    void executeRotate(double angleIncrement);
 
+    void advanceToNextOperation();
     // =========================================================================
     // ROTATION EXECUTION (NEW FOR PHASE 3B)
     // =========================================================================
@@ -115,9 +131,10 @@ private:
     //   • Normal and Binormal vectors rotate
     //   • Tangent stays the same
     //
-    void executeRotate(double angleIncrement);
+    
 
-    void advanceToNextOperation();
-    void updatePipeGeometry();
+    
+    void updatePipeGeometryCAD();
+	void updatePipeGeometryManufacturing();
     
 }; 

@@ -110,7 +110,35 @@ public:
     };
 
 
+ struct GeometricSegment
+    {
+        enum Type
+        {
+            LINE,
+            ARC
+        };
 
+        Type type;
+
+        Frame startFrame;
+        Frame endFrame;
+
+        double length;
+
+        double radius;
+        double bendAngle;
+
+        double rotationBefore;
+    };
+
+ struct FrozenSegment
+    {
+        GeometricSegment geometry;
+    };
+
+
+
+private:
     struct ActiveZone
     {
         // =====================================================
@@ -150,58 +178,7 @@ public:
         bool active = false;
     };
 
-
-
-
-
-
-    struct GeometricSegment
-    {
-        enum Type
-        {
-            LINE,
-            ARC
-        };
-
-        Type type;
-
-        Frame startFrame;
-        Frame endFrame;
-
-        double length;
-
-        double radius;
-        double bendAngle;
-
-        double rotationBefore;
-    };
-
-    struct LocalFrame
-    {
-        Vec3D origin;
-
-        Vec3D tangent;
-        Vec3D normal;
-        Vec3D binormal;
-         
-       
-    };
-
-
-    struct FrozenSegment
-    {
-        GeometricSegment geometry;
-    };
-
-      
-
-    bool isBendActive() const
-    {
-        return activeZone.active;
-    }
-	private:
-
-    struct IncomingStock
+  struct IncomingStock
     {
         // =====================================================
         // OWNER:
@@ -220,51 +197,35 @@ public:
 
         bool visible = true;
     };
-	IncomingStock incomingStock;
+	
+
+     struct LocalFrame
+    {
+        Vec3D origin;
+
+        Vec3D tangent;
+        Vec3D normal;
+        Vec3D binormal;
+         
+       
+    };
+
+
+   
+
+      
+
+    bool isBendActive() const
+    {
+        return activeZone.active;
+    }
+	
+
+  
 	public:
 
 
-    void beginBend(
-        double radius,
-        double targetAngle)
-    {
-        // =====================================================
-        // INITIALIZE ACTIVE BEND STATE
-        // =====================================================
-
-        activeZone.curvature = 1.0 / radius;
-
-        activeZone.targetAngle = targetAngle;
-
-        activeZone.accumulatedAngle = 0.0;
-
-        activeZone.localNodes.clear();
-
-        activeZone.active = true;
-
-        // =====================================================
-        // START FROM CURRENT PIPE END FRAME
-        // =====================================================
-
-        if (!nodes.empty())
-        {
-            const Node& last = nodes.back();
-
-            activeZone.frame.P = last.pos;
-
-            activeZone.frame.T = last.T;
-            activeZone.frame.N = last.N;
-            activeZone.frame.B = last.B;
-        }
-        else
-        {
-            activeZone.frame.P = { 0,0,0 };
-
-            activeZone.frame.T = { 1,0,0 };
-            activeZone.frame.N = { 0,1,0 };
-            activeZone.frame.B = { 0,0,1 };
-        }
-    }
+    
 
 
     // ======================================
@@ -301,8 +262,9 @@ public:
         incomingStock.entryFrame = currentFrame;
     }
 
+   
     // =====================================================================
-    // OPERATION INTERFACE (Store operations)
+    // CAD OPERATION INTERFACE (Store operations)-history API
     // =====================================================================
 
     /// Add straight feed
@@ -423,7 +385,47 @@ public:
 
         markDirty();
     }
+    // ====================================================
+    // FUNCTION MANUFACTURING
+    // 
+     void updatePipeGeometryManufacturing()
+    {
+        // =====================================================
+        // MANUFACTURING MODE
+        //
+        // Do NOT recreate PipeAxis3D.
+        // Do NOT addFeed/addBend/addRotate here.
+        // Do NOT call CAD build().
+        //
+        // PipeAxis3D already owns:
+        // - incomingStock
+        // - activeZone
+        // - frozenNodes
+        //
+        // This function only asks it to rebuild visible nodes
+        // from current manufacturing state.
+        // =====================================================
 
+        reconstructVisiblePipe();
+    }
+
+     void reconstructVisiblePipe()
+     {
+         // =====================================================
+         // MANUFACTURING RENDER RECONSTRUCTION
+         //
+         // This does NOT execute the program.
+         // This does NOT rebuild from operation history.
+         //
+         // It only assembles:
+         //
+         // Incoming Stock
+         // Active Bend Zone
+         // Frozen Geometry
+         // =====================================================
+
+         buildNodes();
+     }
     // =====================================================================
     // BUILD (Reconstruct geometry from operations)
     // =====================================================================
@@ -461,17 +463,105 @@ public:
 
         dirty = false;
     }
+    // MANUFACTURING API
+	//=====================================================================
+    void processFeed(double distance)
+    {
+        // =====================================================
+        // OWNER:
+        // SimulationController decides WHEN feed happens.
+        // PipeAxis3D decides WHAT geometric state changes.
+        //
+        // PIPEFLOW:
+        //
+        // Incoming Stock  --->  Active Zone  --->  Frozen Geometry
+        //
+        // FEED:
+        // - does NOT create curvature
+        // - does NOT create bend geometry
+        // - only consumes/translates incoming stock
+        // =====================================================
+
+        if (distance <= 0.0)
+            return;
+
+        incomingStock.remainingLength -= distance;
+
+        if (incomingStock.remainingLength < 0.0)
+            incomingStock.remainingLength = 0.0;
+
+        markDirty();
+    }
+
+
+
+    void processBend(double radius, double targetAngle, double angleIncrement)
+    {
+        // =====================================================
+        // OWNER:
+        // SimulationController decides WHEN and HOW MUCH.
+        // PipeAxis3D owns HOW geometry changes.
+        // =====================================================
+
+        if (!activeZone.active)
+        {
+            beginBend(radius, targetAngle);
+        }
+
+        updateActiveZone(angleIncrement);
+
+        if (activeZone.accumulatedAngle >= activeZone.targetAngle)
+        {
+            freezeActiveZone();
+        }
+
+        markDirty();
+    }
+	
+    void processRotate(double angleIncrement)
+    {
+        // =====================================================
+        // OWNER:
+        // SimulationController decides WHEN rotation happens.
+        // PipeAxis3D owns HOW geometric frames are rotated.
+        //
+        // ROTATE:
+        // - does NOT move pipe position
+        // - does NOT add nodes
+        // - rotates local frame around pipe tangent
+        // - changes orientation of the NEXT bend plane
+        // =====================================================
+
+        if (std::abs(angleIncrement) < 1e-12)
+            return;
+
+        // Rotate manufacturing current frame.
+        // This affects the orientation of the next bend.
+        buildRotate(currentFrame, angleIncrement);
+
+        // Incoming stock frame should stay consistent with machine entry.
+        incomingStock.entryFrame = currentFrame;
+
+        markDirty();
+    }
+
+
+
+
+
+	
+    
+
+
+
+
 
     // =====================================================================
     // QUERY
     // =====================================================================
 
     const std::vector<Node>& getNodes() const { return nodes; }
-	//====================================================================
-    // Future_5 A10
-    // rename segments -> frozenSegments 
-	//=====================================================================
-    const std::vector<Segment>& getSegments() const { return segments; }
+	const std::vector<Segment>& getSegments() const { return segments; }
     size_t getSegmentCount() const { return segments.size(); }
 
     // =====================================================================
@@ -519,53 +609,36 @@ private:
     // =====================================================================
     // DATA
     // =====================================================================
+    //CAD /History data
     std::vector<Operation> ops;     // INPUT
     std::vector<Segment> segments;  // SIMULATION Operations to execute
+    //Render output
     std::vector<Node> nodes;        // RENDER Resulting geometry 
-    std::vector<Node> frozenNodes;  // Temporary later FrozenSegment will reaplace this
+
+	//Manufacturing-state data
+    std::vector<Node> frozenNodes; 
+    ActiveZone activeZone;
+    IncomingStock incomingStock;
+    Frame currentFrame;
+
+    //General
     double ds;                      // Segment step size (mm)
     bool dirty;                     // Rebuild needed?
-    ActiveZone activeZone;
-    Frame currentFrame;
-	 
+    
+    //Future/CAD derived data -optional for now
+	//std::vector<Operation> operationHistory;  // Copy of all operations (for potential future use)
+	//std::vector<GeometricSegment> generatedSegments; // Detailed geometric segments (for potential future use)
+	//std::vector<Node> sampledNodes; // Sampled nodes along pipe (for potential future use)
 
     // =====================================================================
-    // IMPLEMENTATION
+     //Private Functions
     // =====================================================================
-  
-    void freezeActiveZone()
-    {
-        // =====================================================
-        // MOVE ACTIVE GEOMETRY INTO FROZEN HISTORY
-        // =====================================================
+       //Internal state
 
-        for (const auto& node : activeZone.localNodes)
-        {
-             frozenNodes.push_back(node);
-        }
+     void markDirty() { dirty = true; }
 
-        // =====================================================
-        // CLEAR ACTIVE GEOMETRY
-        // =====================================================
-
-        activeZone.localNodes.clear();
-
-        // =====================================================
-        // DEACTIVATE
-        // =====================================================
-
-        activeZone.active = false;
-
-        // =====================================================
-        // COMMIT FINAL FRAME
-        //
-        // Future geometry starts from here
-        // =====================================================
-
-        currentFrame = activeZone.frame;
-    }
-
-    void markDirty() { dirty = true; }
+     //MATH/FRAME helpers
+     //==================================================
 
     Vec3D rotateAroundAxis(const Vec3D& v, const Vec3D& axis, double angle) const
     {
@@ -574,10 +647,6 @@ private:
             + cross(a, v) * sin(angle)
             + a * dot(a, v) * (1.0 - cos(angle));
     }
-	
-    
-
-   
 
     void orthonormalizeFrame(Frame& f)
     {
@@ -602,7 +671,6 @@ private:
 
         f.N = cross(f.B, f.T).normalized();
     }
-
 
     void transportFrame(
         const Vec3D& prevT,
@@ -639,11 +707,7 @@ private:
         orthonormalizeFrame(frame);
     }
 
-
-
-    // ========================================================================
-   //Build SEGMENTS
-     //========================================================================
+    //CAD Rebuild Path
 
     void buildSegments()
     {
@@ -674,61 +738,110 @@ private:
         }
     }
 
-    void buildNodes()
+void executeSegments()
     {
-        // =====================================================
-        // VISIBLE PIPE RECONSTRUCTION
-        //
-        // OWNER:
-        // PipeAxis3D owns final render geometry assembly.
-        //
-        // Pipe is reconstructed from:
-        //
-        // 1. Incoming Stock
-        // 2. Active Bend Zone
-        // 3. Frozen Geometry
-        //
-        // =====================================================
+        // ============================================
+        // RESET SIMULATION STATE
+        // ============================================
 
         nodes.clear();
 
-        // =====================================================
-        // ZONE 1 — INCOMING STOCK
-        //
-        // Straight only.
-        // Translation/feed only.
-        // No curvature.
-        // =====================================================
+        frozenNodes.clear();
 
-        buildIncomingStock();
+        activeZone.localNodes.clear();
 
-        // =====================================================
-        // ZONE 2 — ACTIVE BEND WINDOW
-        //
-        // Local temporary deformation.
-        // This is the only deforming area.
-        // =====================================================
+        activeZone.active = false;
 
-        for (const auto& node : activeZone.localNodes)
+        // ============================================
+        // RESET FRAME
+        // ============================================
+
+        Frame frame;
+
+        frame.P = { 0,0,0 };
+
+        frame.T = { 1,0,0 };
+        frame.N = { 0,1,0 };
+        frame.B = { 0,0,1 };
+
+        // ============================================
+        // INITIAL NODE
+        // ============================================
+
+        frozenNodes.push_back({
+            frame.P,
+            frame.T,
+            frame.N,
+            frame.B
+            });
+
+        // ============================================
+        // EXECUTE SEGMENTS
+        // ============================================
+
+        for (const auto& seg : segments)
         {
-            nodes.push_back(node);
+            // ========================================
+            // FEED
+            // ========================================
+
+            if (seg.type == Segment::LINE)
+            {
+                buildLine(frame, seg.length);
+            }
+
+            // ========================================
+            // BEND
+            // ========================================
+
+            else if (seg.type == Segment::ARC)
+            {
+                beginBend(
+                    1.0 / seg.curvature,
+                    seg.angle
+                );
+
+                double stepAngle =
+                    seg.curvature * ds;
+
+                while (activeZone.active)
+                {
+                    updateActiveZone(stepAngle);
+
+                    if (activeZone.accumulatedAngle
+                        >= activeZone.targetAngle)
+                    {
+                        freezeActiveZone();
+                    }
+                }
+
+                frame = currentFrame;
+            }
+
+            // ========================================
+            // ROTATE
+            // ========================================
+
+            else if (seg.type == Segment::ROTATE)
+            {
+                buildRotate(frame, seg.rotAngle);
+            }
         }
 
-        // =====================================================
-        // ZONE 3 — FROZEN GEOMETRY
-        //
-        // Immutable manufactured pipe.
-        // No deformation.
-        // =====================================================
+        // ============================================
+        // FINAL VISIBLE GEOMETRY
+        // ============================================
 
-        for (const auto& node : frozenNodes)
+        nodes = frozenNodes;
+
+        for (const auto& n : activeZone.localNodes)
         {
-            nodes.push_back(node);
+            nodes.push_back(n);
         }
     }
 
 
-    //======================================================================
+
     void buildLine(Frame& frame, double length)
     {
         int stepCount = std::max(1, (int)(length / ds));
@@ -748,12 +861,7 @@ private:
 
     }
 
-    
-
-    // ARC generation now handled
-// by active zone evolution
-
-    /// Build rotation (twist) segment
+   
     void buildRotate(Frame& frame, double angle)
     {
         // Twist frame around tangent
@@ -763,9 +871,53 @@ private:
         // No new nodes added - geometry unchanged
     }
 
-    // ============================================
+    //MANUFACTURING PATH
+    //=========================================
 
-    // MATH
+void beginBend(
+        double radius,
+        double targetAngle)
+    {
+        // =====================================================
+        // INITIALIZE ACTIVE BEND STATE
+        // =====================================================
+
+        activeZone.curvature = 1.0 / radius;
+
+        activeZone.targetAngle = targetAngle;
+
+        activeZone.accumulatedAngle = 0.0;
+
+        activeZone.localNodes.clear();
+
+        activeZone.active = true;
+
+        // =====================================================
+        // START FROM CURRENT PIPE END FRAME
+        // =====================================================
+
+        if (!nodes.empty())
+        {
+            const Node& last = nodes.back();
+
+            activeZone.frame.P = last.pos;
+
+            activeZone.frame.T = last.T;
+            activeZone.frame.N = last.N;
+            activeZone.frame.B = last.B;
+        }
+        else
+        {
+            activeZone.frame.P = { 0,0,0 };
+
+            activeZone.frame.T = { 1,0,0 };
+            activeZone.frame.N = { 0,1,0 };
+            activeZone.frame.B = { 0,0,1 };
+        }
+    }
+
+
+
     void updateActiveZone(double stepAngle)
     {
         // ==========================================================
@@ -945,140 +1097,43 @@ private:
         }
     }
 
-    void executeSegments()
+    
+
+
+
+    void freezeActiveZone()
     {
-        // ============================================
-        // RESET SIMULATION STATE
-        // ============================================
+        // =====================================================
+        // MOVE ACTIVE GEOMETRY INTO FROZEN HISTORY
+        // =====================================================
 
-        nodes.clear();
+        for (const auto& node : activeZone.localNodes)
+        {
+             frozenNodes.push_back(node);
+        }
 
-        frozenNodes.clear();
+        // =====================================================
+        // CLEAR ACTIVE GEOMETRY
+        // =====================================================
 
         activeZone.localNodes.clear();
 
+        // =====================================================
+        // DEACTIVATE
+        // =====================================================
+
         activeZone.active = false;
 
-        // ============================================
-        // RESET FRAME
-        // ============================================
-
-        Frame frame;
-
-        frame.P = { 0,0,0 };
-
-        frame.T = { 1,0,0 };
-        frame.N = { 0,1,0 };
-        frame.B = { 0,0,1 };
-
-        // ============================================
-        // INITIAL NODE
-        // ============================================
-
-        frozenNodes.push_back({
-            frame.P,
-            frame.T,
-            frame.N,
-            frame.B
-            });
-
-        // ============================================
-        // EXECUTE SEGMENTS
-        // ============================================
-
-        for (const auto& seg : segments)
-        {
-            // ========================================
-            // FEED
-            // ========================================
-
-            if (seg.type == Segment::LINE)
-            {
-                buildLine(frame, seg.length);
-            }
-
-            // ========================================
-            // BEND
-            // ========================================
-
-            else if (seg.type == Segment::ARC)
-            {
-                beginBend(
-                    1.0 / seg.curvature,
-                    seg.angle
-                );
-
-                double stepAngle =
-                    seg.curvature * ds;
-
-                while (activeZone.active)
-                {
-                    updateActiveZone(stepAngle);
-
-                    if (activeZone.accumulatedAngle
-                        >= activeZone.targetAngle)
-                    {
-                        freezeActiveZone();
-                    }
-                }
-
-                frame = currentFrame;
-            }
-
-            // ========================================
-            // ROTATE
-            // ========================================
-
-            else if (seg.type == Segment::ROTATE)
-            {
-                buildRotate(frame, seg.rotAngle);
-            }
-        }
-
-        // ============================================
-        // FINAL VISIBLE GEOMETRY
-        // ============================================
-
-        nodes = frozenNodes;
-
-        for (const auto& n : activeZone.localNodes)
-        {
-            nodes.push_back(n);
-        }
-    }
-
-
-public:
-    void processFeed(double distance)
-    {
         // =====================================================
-        // OWNER:
-        // SimulationController decides WHEN feed happens.
-        // PipeAxis3D decides WHAT geometric state changes.
+        // COMMIT FINAL FRAME
         //
-        // PIPEFLOW:
-        //
-        // Incoming Stock  --->  Active Zone  --->  Frozen Geometry
-        //
-        // FEED:
-        // - does NOT create curvature
-        // - does NOT create bend geometry
-        // - only consumes/translates incoming stock
+        // Future geometry starts from here
         // =====================================================
 
-        if (distance <= 0.0)
-            return;
-
-        incomingStock.remainingLength -= distance;
-
-        if (incomingStock.remainingLength < 0.0)
-            incomingStock.remainingLength = 0.0;
-
-        markDirty();
+        currentFrame = activeZone.frame;
     }
 
- private:
-     void buildIncomingStock()
+    void buildIncomingStock()
      {
          // =====================================================
          // OWNER:
@@ -1145,4 +1200,60 @@ public:
                  });
          }
      }
+    
+   
+
+    void buildNodes()
+    {
+        // =====================================================
+        // VISIBLE PIPE RECONSTRUCTION
+        //
+        // OWNER:
+        // PipeAxis3D owns final render geometry assembly.
+        //
+        // Pipe is reconstructed from:
+        //
+        // 1. Incoming Stock
+        // 2. Active Bend Zone
+        // 3. Frozen Geometry
+        //
+        // =====================================================
+
+        nodes.clear();
+
+        // =====================================================
+        // ZONE 1 — INCOMING STOCK
+        //
+        // Straight only.
+        // Translation/feed only.
+        // No curvature.
+        // =====================================================
+
+        buildIncomingStock();
+
+        // =====================================================
+        // ZONE 2 — ACTIVE BEND WINDOW
+        //
+        // Local temporary deformation.
+        // This is the only deforming area.
+        // =====================================================
+
+        for (const auto& node : activeZone.localNodes)
+        {
+            nodes.push_back(node);
+        }
+
+        // =====================================================
+        // ZONE 3 — FROZEN GEOMETRY
+        //
+        // Immutable manufactured pipe.
+        // No deformation.
+        // =====================================================
+
+        for (const auto& node : frozenNodes)
+        {
+            nodes.push_back(node);
+        }
+    }
+    
 };
