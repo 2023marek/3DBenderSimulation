@@ -495,22 +495,88 @@ public:
 
 
 
-    void processBend(double radius, double targetAngle, double angleIncrement)
+    void processBend(
+        double radius,
+        double targetAngle,
+        double angleIncrement)
     {
         // =====================================================
-        // OWNER:
-        // SimulationController decides WHEN and HOW MUCH.
-        // PipeAxis3D owns HOW geometry changes.
+        // OWNER SPLIT:
+        //
+        // SimulationController:
+        //   decides WHEN bending happens
+        //   decides HOW MUCH angle this frame
+        //
+        // PipeAxis3D:
+        //   owns active zone
+        //   owns frame evolution
+        //   owns frozen geometry
+        // =====================================================
+
+        if (radius <= 1e-9)
+        {
+            std::cerr << "[processBend ERROR] radius <= 0\n";
+            return;
+        }
+
+        if (targetAngle <= 0.0)
+            return;
+
+        if (angleIncrement <= 0.0)
+            return;
+
+        // =====================================================
+        // PIPEFLOW:
+        //
+        // currentFrame
+        //      ?
+        // active bend zone starts here
+        //      ?
+        // local curvature evolves
+        //      ?
+        // completed material freezes
         // =====================================================
 
         if (!activeZone.active)
         {
-            beginBend(radius, targetAngle);
+            beginBendFromFrame(
+                currentFrame,
+                radius,
+                targetAngle
+            );
         }
 
-        updateActiveZone(angleIncrement);
+        // =====================================================
+        // Clamp increment to remaining bend angle.
+        // Prevent overshoot.
+        // =====================================================
 
-        if (activeZone.accumulatedAngle >= activeZone.targetAngle)
+        double remaining =
+            activeZone.targetAngle
+            - activeZone.accumulatedAngle;
+
+        if (remaining <= 0.0)
+        {
+            freezeActiveZone();
+            markDirty();
+            return;
+        }
+
+        double stepAngle =
+            std::min(angleIncrement, remaining);
+
+        // =====================================================
+        // Advance local active deformation.
+        // =====================================================
+
+        updateActiveZone(stepAngle);
+
+        // =====================================================
+        // If bend finished, freeze remaining active geometry.
+        // =====================================================
+
+        if (activeZone.accumulatedAngle
+            >= activeZone.targetAngle)
         {
             freezeActiveZone();
         }
@@ -614,7 +680,7 @@ private:
     std::vector<Segment> segments;  // SIMULATION Operations to execute
     //Render output
     std::vector<Node> nodes;        // RENDER Resulting geometry 
-
+    std::vector<Node> cadNodes;     // CAD Preview geometry
 	//Manufacturing-state data
     std::vector<Node> frozenNodes; 
     ActiveZone activeZone;
@@ -738,128 +804,102 @@ private:
         }
     }
 
-void executeSegments()
+    void executeSegments()
     {
-        // ============================================
-        // RESET SIMULATION STATE
-        // ============================================
+        // =====================================================
+        // CAD REBUILD PATH
+        //
+        // This is NOT manufacturing simulation.
+        // It produces deterministic CAD geometry from operations.
+        // =====================================================
 
         nodes.clear();
+        cadNodes.clear();
 
-        frozenNodes.clear();
-
+        // Do not use manufacturing containers here.
+        // frozenNodes belongs to ManufacturingPlayback.
         activeZone.localNodes.clear();
-
         activeZone.active = false;
-
-        // ============================================
-        // RESET FRAME
-        // ============================================
 
         Frame frame;
 
         frame.P = { 0,0,0 };
-
         frame.T = { 1,0,0 };
         frame.N = { 0,1,0 };
         frame.B = { 0,0,1 };
 
-        // ============================================
-        // INITIAL NODE
-        // ============================================
-
-        frozenNodes.push_back({
+        cadNodes.push_back({
             frame.P,
             frame.T,
             frame.N,
             frame.B
             });
 
-        // ============================================
-        // EXECUTE SEGMENTS
-        // ============================================
-
         for (const auto& seg : segments)
         {
-            // ========================================
-            // FEED
-            // ========================================
-
             if (seg.type == Segment::LINE)
             {
-                buildLine(frame, seg.length);
+                buildLineCAD(frame, seg.length);
             }
-
-            // ========================================
-            // BEND
-            // ========================================
-
             else if (seg.type == Segment::ARC)
             {
-                beginBend(
-                    1.0 / seg.curvature,
+                buildArcCAD(
+                    frame,
+                    seg.curvature,
                     seg.angle
                 );
-
-                double stepAngle =
-                    seg.curvature * ds;
-
-                while (activeZone.active)
-                {
-                    updateActiveZone(stepAngle);
-
-                    if (activeZone.accumulatedAngle
-                        >= activeZone.targetAngle)
-                    {
-                        freezeActiveZone();
-                    }
-                }
-
-                frame = currentFrame;
             }
-
-            // ========================================
-            // ROTATE
-            // ========================================
-
             else if (seg.type == Segment::ROTATE)
             {
                 buildRotate(frame, seg.rotAngle);
             }
         }
 
-        // ============================================
-        // FINAL VISIBLE GEOMETRY
-        // ============================================
+        currentFrame = frame;
 
-        nodes = frozenNodes;
-
-        for (const auto& n : activeZone.localNodes)
-        {
-            nodes.push_back(n);
-        }
+        // Final CAD render geometry.
+        nodes = cadNodes;
     }
 
 
 
-    void buildLine(Frame& frame, double length)
+
+
+void buildLineCAD(Frame& frame, double length)
+{
+    // =====================================================
+    // CAD LINE BUILDER
+    //
+    // OWNER:
+    // PipeAxis3D CAD rebuild path.
+    //
+    // LINE:
+    // - moves frame.P along frame.T
+    // - does not rotate frame
+    // - writes to cadNodes, NOT frozenNodes
+    // =====================================================
+
+    if (length <= 0.0)
+        return;
+
+    int stepCount =
+        std::max(1, static_cast<int>(std::ceil(length / ds)));
+
+    double stepLength =
+        length / static_cast<double>(stepCount);
+
+    for (int i = 0; i < stepCount; ++i)
     {
-        int stepCount = std::max(1, (int)(length / ds));
+        frame.P = frame.P + frame.T * stepLength;
 
-        for (int i = 0; i < stepCount; ++i)
-        {
-            // Move along current tangent
-            frame.P = frame.P + frame.T * ds;
-            //nodes.push_back({ frame.P, frame.T });
-            frozenNodes.push_back({
-    frame.P,
-    frame.T,
-    frame.N,
-    frame.B
-                });
-        }
-
+        cadNodes.push_back({
+            frame.P,
+            frame.T,
+            frame.N,
+            frame.B
+            });
     }
+}
 
    
     void buildRotate(Frame& frame, double angle)
@@ -873,14 +913,28 @@ void executeSegments()
 
     //MANUFACTURING PATH
     //=========================================
-
-void beginBend(
+    void beginBendFromFrame(
+        const Frame& startFrame,
         double radius,
         double targetAngle)
     {
         // =====================================================
-        // INITIALIZE ACTIVE BEND STATE
+        // OWNER:
+        // PipeAxis3D owns active bend initialization.
+        //
+        // IMPORTANT:
+        // Bend starts from explicit frame, not from nodes.back().
+        // This prevents bends from jumping back near origin.
         // =====================================================
+
+        if (radius <= 1e-9)
+        {
+            std::cerr << "[BEND ERROR] Invalid radius: "
+                << radius << std::endl;
+            return;
+        }
+
+        activeZone.frame = startFrame;
 
         activeZone.curvature = 1.0 / radius;
 
@@ -891,30 +945,130 @@ void beginBend(
         activeZone.localNodes.clear();
 
         activeZone.active = true;
+    }
+
+
+
+    void buildArcCAD(
+        Frame& frame,
+        double curvature,
+        double angle)
+    {
+        // =====================================================
+        // CAD ARC BUILDER
+        //
+        // This builds a perfect planar circular arc.
+        //
+        // ROTATE changes the frame before this function.
+        // This function then bends around the current frame.B.
+        // =====================================================
+
+        if (std::abs(curvature) < 1e-12)
+            return;
+
+        if (std::abs(angle) < 1e-12)
+            return;
+
+        double radius =
+            1.0 / std::abs(curvature);
+
+        double arcLength =
+            radius * std::abs(angle);
+
+        int steps =
+            std::max(1, static_cast<int>(std::ceil(arcLength / ds)));
+
+        double stepAngle =
+            angle / static_cast<double>(steps);
+
+        double stepLength =
+            arcLength / static_cast<double>(steps);
+
+        // =====================================================
+        // Fixed bend axis for this entire CAD arc.
+        //
+        // This prevents the bend plane from drifting.
+        // =====================================================
+
+        Vec3D bendAxis =
+            frame.B.normalized();
+
+        for (int i = 0; i < steps; ++i)
+        {
+            Vec3D prevT =
+                frame.T;
+
+            frame.T =
+                rotateAroundAxis(
+                    frame.T,
+                    bendAxis,
+                    stepAngle
+                ).normalized();
+
+            Vec3D midT =
+                normalize(prevT + frame.T);
+
+            frame.P =
+                frame.P + midT * stepLength;
+
+            // Keep frame locked to the arc plane.
+            frame.B = bendAxis;
+            frame.N = cross(frame.B, frame.T).normalized();
+
+            cadNodes.push_back({
+                frame.P,
+                frame.T,
+                frame.N,
+                frame.B
+                });
+        }
+
+        currentFrame = frame;
+    }
+
+
+
+
+
+   // void beginBend(
+    //    const Frame& startFrame,
+    //    double radius,
+    //    double targetAngle)
+    //{
+        // =====================================================
+        // INITIALIZE ACTIVE BEND STATE
+        // =====================================================
+
+     //   activeZone.frame = startFrame;
+     //   activeZone.curvature = 1.0 / radius;
+     //   activeZone.targetAngle = targetAngle;
+     //   activeZone.accumulatedAngle = 0.0;
+     //   activeZone.localNodes.clear();
+     //   activeZone.active = true;
 
         // =====================================================
         // START FROM CURRENT PIPE END FRAME
         // =====================================================
 
-        if (!nodes.empty())
-        {
-            const Node& last = nodes.back();
+      //  if (!nodes.empty())
+      //  {
+      //      const Node& last = nodes.back();
 
-            activeZone.frame.P = last.pos;
+      //      activeZone.frame.P = last.pos;
 
-            activeZone.frame.T = last.T;
-            activeZone.frame.N = last.N;
-            activeZone.frame.B = last.B;
-        }
-        else
-        {
-            activeZone.frame.P = { 0,0,0 };
-
-            activeZone.frame.T = { 1,0,0 };
-            activeZone.frame.N = { 0,1,0 };
-            activeZone.frame.B = { 0,0,1 };
-        }
-    }
+       //     activeZone.frame.T = last.T;
+      //      activeZone.frame.N = last.N;
+      //      activeZone.frame.B = last.B;
+      //  }
+      //  else
+      //  {
+      //      activeZone.frame.P = { 0,0,0 };
+    //
+       //     activeZone.frame.T = { 1,0,0 };
+       //     activeZone.frame.N = { 0,1,0 };
+       //     activeZone.frame.B = { 0,0,1 };
+       // }
+    //}
 
 
 
