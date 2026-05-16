@@ -86,6 +86,30 @@ public:
     };
 
 
+    struct ManufacturingRenderData
+    {
+        // =====================================================
+        // OWNER:
+        // PipeAxis3D owns manufacturing render grouping.
+        //
+        // PURPOSE:
+        // Keep the three manufacturing zones separate.
+        //
+        // Renderer can later draw these with different colors,
+        // line styles, or separate draw calls.
+        // =====================================================
+
+        std::vector<Node> incomingStockNodes; // Zone 1
+        std::vector<Node> activeZoneNodes;    // Zone 2
+        std::vector<Node> frozenNodes;        // Zone 3
+
+        void clear()
+        {
+            incomingStockNodes.clear();
+            activeZoneNodes.clear();
+            frozenNodes.clear();
+        }
+    };
     struct Segment
     {
         enum Type
@@ -335,53 +359,28 @@ public:
 
     void clear()
     {
-        // =====================================================
-        // CLEAR PROCEDURAL INPUT
-        // =====================================================
-
         ops.clear();
 
-        // =====================================================
-        // CLEAR RECONSTRUCTED GEOMETRY
-        // =====================================================
-
         segments.clear();
-
         nodes.clear();
-
-        // =====================================================
-        // CLEAR FROZEN MANUFACTURING HISTORY
-        // =====================================================
 
         frozenNodes.clear();
 
-        // =====================================================
-        // RESET ACTIVE DEFORMATION ZONE
-        // =====================================================
+        manufacturingRender.clear();
 
         activeZone.localNodes.clear();
-
         activeZone.accumulatedAngle = 0.0;
-
         activeZone.curvature = 0.0;
-
         activeZone.activeLength = 20.0;
-
         activeZone.active = false;
 
-        // =====================================================
-        // RESET RECONSTRUCTION FRAME
-        // =====================================================
-
         currentFrame.P = { 0,0,0 };
-
         currentFrame.T = { 1,0,0 };
         currentFrame.N = { 0,1,0 };
         currentFrame.B = { 0,0,1 };
 
-        // =====================================================
-        // REBUILD REQUIRED
-        // =====================================================
+        incomingStock.entryFrame = currentFrame;
+        incomingStock.remainingLength = incomingStock.totalLength;
 
         markDirty();
     }
@@ -414,16 +413,14 @@ public:
          // =====================================================
          // MANUFACTURING RENDER RECONSTRUCTION
          //
-         // This does NOT execute the program.
-         // This does NOT rebuild from operation history.
+         // This does NOT execute CNC program.
+         // This does NOT rebuild CAD history.
          //
-         // It only assembles:
-         //
-         // Incoming Stock
-         // Active Bend Zone
-         // Frozen Geometry
+         // It only converts current manufacturing state into
+         // renderable zone groups.
          // =====================================================
 
+         
          buildNodes();
      }
     // =====================================================================
@@ -633,6 +630,10 @@ public:
     // =====================================================================
     // PROPERTIES
     // =====================================================================
+    const ManufacturingRenderData& getManufacturingRenderData() const
+    {
+        return manufacturingRender;
+    }
 
     double getTotalLength() const
     {
@@ -686,6 +687,8 @@ private:
     ActiveZone activeZone;
     IncomingStock incomingStock;
     Frame currentFrame;
+    // Manufacturing render grouping
+    ManufacturingRenderData manufacturingRender;
 
     //General
     double ds;                      // Segment step size (mm)
@@ -1287,78 +1290,152 @@ void buildLineCAD(Frame& frame, double length)
         currentFrame = activeZone.frame;
     }
 
+
     void buildIncomingStock()
-     {
-         // =====================================================
-         // OWNER:
-         // PipeAxis3D owns construction of visible incoming stock.
-         //
-         // This function is RENDER RECONSTRUCTION ONLY.
-         // It does NOT simulate feed.
-         // It does NOT change remainingLength.
-         // =====================================================
+    {
+        // =====================================================
+        // OWNER:
+        // PipeAxis3D owns construction of incoming stock render data.
+        //
+        // OUTPUT:
+        // manufacturingRender.incomingStockNodes
+        //
+        // IMPORTANT:
+        // This function does NOT simulate FEED.
+        // It only rebuilds visible stock geometry from current state.
+        // =====================================================
 
-         if (!incomingStock.visible)
-             return;
+        manufacturingRender.incomingStockNodes.clear();
 
-         if (incomingStock.remainingLength <= 0.0)
-             return;
+        if (!incomingStock.visible)
+            return;
 
-         if (ds <= 1e-9)
-             return;
+        if (incomingStock.remainingLength <= 0.0)
+            return;
 
-         // =====================================================
-         // PIPEFLOW VIEW
-         //
-         // incoming stock is behind the machine entry frame:
-         //
-         //     tail ---------------------> entry / die
-         //
-         // Direction:
-         //     entryFrame.T points forward through the machine.
-         //
-         // Therefore incoming stock extends backward:
-         //     -entryFrame.T
-         // =====================================================
+        if (ds <= 1e-9)
+            return;
 
-         const Frame& entry = incomingStock.entryFrame;
+        // =====================================================
+        // PIPEFLOW VIEW
+        //
+        // tail ---------------------> entry / die
+        //
+        // entryFrame.T points forward through the machine.
+        // Incoming stock extends backward from entryFrame.P.
+        // =====================================================
 
-         double visibleLength = incomingStock.remainingLength;
+        const Frame& entry = incomingStock.entryFrame;
 
-         int stepCount =
-             std::max(1, static_cast<int>(visibleLength / ds));
+        double visibleLength = incomingStock.remainingLength;
 
-         Vec3D startPoint =
-             entry.P - entry.T * visibleLength;
+        int stepCount =
+            std::max(
+                1,
+                static_cast<int>(std::ceil(visibleLength / ds))
+            );
 
-         // =====================================================
-         // Build from stock tail toward machine entry.
-         //
-         // This keeps node order physically correct:
-         //
-         // Incoming Stock -> Active Zone -> Frozen Geometry
-         // =====================================================
+        double stepLength =
+            visibleLength / static_cast<double>(stepCount);
 
-         for (int i = 0; i <= stepCount; ++i)
-         {
-             double s = std::min(i * ds, visibleLength);
+        Vec3D startPoint =
+            entry.P - entry.T * visibleLength;
 
-             Vec3D p =
-                 startPoint + entry.T * s;
+        for (int i = 0; i <= stepCount; ++i)
+        {
+            double s =
+                stepLength * static_cast<double>(i);
 
-             nodes.push_back({
-                 p,
-                 entry.T,
-                 entry.N,
-                 entry.B
-                 });
-         }
-     }
-    
+            Vec3D p =
+                startPoint + entry.T * s;
+
+            manufacturingRender.incomingStockNodes.push_back({
+                p,
+                entry.T,
+                entry.N,
+                entry.B
+                });
+        }
+    }
+
+    void buildManufacturingRenderData()
+    {
+        // =====================================================
+        // OWNER:
+        // PipeAxis3D owns manufacturing render reconstruction.
+        //
+        // PURPOSE:
+        // Keep zones separated.
+        //
+        // Zone 1: Incoming stock
+        // Zone 2: Active bend window
+        // Zone 3: Frozen finished geometry
+        // =====================================================
+
+        manufacturingRender.clear();
+
+        // =====================================================
+        // ZONE 1 — Incoming Stock
+        // =====================================================
+
+        buildIncomingStock();
+
+        // =====================================================
+        // ZONE 2 — Active Bend Zone
+        // =====================================================
+
+        manufacturingRender.activeZoneNodes =
+            activeZone.localNodes;
+
+        // =====================================================
+        // ZONE 3 — Frozen Geometry
+        // =====================================================
+
+        manufacturingRender.frozenNodes =
+            frozenNodes;
+    }
+
+    void flattenManufacturingRenderData()
+    {
+        // =====================================================
+        // TEMPORARY LEGACY OUTPUT
+        //
+        // Current renderer expects one continuous nodes vector.
+        //
+        // Later:
+        // renderer should draw each group separately:
+        // incomingStockNodes, activeZoneNodes, frozenNodes.
+        // =====================================================
+
+        nodes.clear();
+
+        // =====================================================
+        // WARNING:
+        // Flattening can create artificial connector lines
+        // between zones if renderer uses GL_LINE_STRIP.
+        //
+        // This is temporary until renderer supports zone groups.
+        // =====================================================
+
+        for (const auto& node : manufacturingRender.incomingStockNodes)
+        {
+            nodes.push_back(node);
+        }
+
+        for (const auto& node : manufacturingRender.activeZoneNodes)
+        {
+            nodes.push_back(node);
+        }
+
+        for (const auto& node : manufacturingRender.frozenNodes)
+        {
+            nodes.push_back(node);
+        }
+    }
    
 
-    void buildNodes()
-    {
+   // void buildNodes()
+    //{
         // =====================================================
         // VISIBLE PIPE RECONSTRUCTION
         //
@@ -1373,7 +1450,7 @@ void buildLineCAD(Frame& frame, double length)
         //
         // =====================================================
 
-        nodes.clear();
+       // nodes.clear();
 
         // =====================================================
         // ZONE 1 — INCOMING STOCK
@@ -1383,7 +1460,7 @@ void buildLineCAD(Frame& frame, double length)
         // No curvature.
         // =====================================================
 
-        buildIncomingStock();
+       // buildIncomingStock();
 
         // =====================================================
         // ZONE 2 — ACTIVE BEND WINDOW
@@ -1392,10 +1469,10 @@ void buildLineCAD(Frame& frame, double length)
         // This is the only deforming area.
         // =====================================================
 
-        for (const auto& node : activeZone.localNodes)
-        {
-            nodes.push_back(node);
-        }
+       // for (const auto& node : activeZone.localNodes)
+       // {
+       //     nodes.push_back(node);
+       // }
 
         // =====================================================
         // ZONE 3 — FROZEN GEOMETRY
@@ -1404,10 +1481,31 @@ void buildLineCAD(Frame& frame, double length)
         // No deformation.
         // =====================================================
 
-        for (const auto& node : frozenNodes)
-        {
-            nodes.push_back(node);
-        }
+        //for (const auto& node : frozenNodes)
+        //{
+         //   nodes.push_back(node);
+        //}
+    //}
+
+    void buildNodes()
+    {
+        // =====================================================
+        // BUILD MANUFACTURING RENDER DATA
+        //
+        // Zone 1: Incoming Stock
+        // Zone 2: Active Bend Zone
+        // Zone 3: Frozen Geometry
+        // =====================================================
+
+        buildManufacturingRenderData();
+
+        // =====================================================
+        // TEMPORARY LEGACY OUTPUT
+        //
+        // Current renderer still expects one nodes vector.
+        // =====================================================
+
+        flattenManufacturingRenderData();
     }
     
 };

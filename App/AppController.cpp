@@ -11,12 +11,12 @@ AppController::AppController()
 
     Operation op1;
     op1.type = Operation::FEED;
-    op1.length = 20;
+    op1.length = 100;
 
     Operation op2;
     op2.type = Operation::BEND;
     op2.R = 10;
-    op2.angle = 3.1415 / 0.75;
+    op2.angle = 3.1415 / 1;
 
     Operation op4;
 	op4.type = Operation::ROTATE;
@@ -38,20 +38,22 @@ AppController::AppController()
 
     ops.push_back(op1);
     ops.push_back(op2);
-    ops.push_back(op3);
-    ops.push_back(op4);
-	ops.push_back(op5);
-    ops.push_back(op6);
+    //ops.push_back(op3);
+   // ops.push_back(op4);
+	//ops.push_back(op5);
+   // ops.push_back(op6);
     sim.loadProgram(ops);
-    //sim.setMode(
-       // SimulationController::SimulationMode::ManufacturingPlayback
-    //);
+
+
+    sim.setMode(
+    SimulationController::SimulationMode::ManufacturingPlayback
+    );
 
     // Or for CAD preview:
     //
-     sim.setMode(
-       SimulationController::SimulationMode::CADPreview
-     );
+    // sim.setMode(
+    //   SimulationController::SimulationMode::CADPreview
+    // );
 
     
 
