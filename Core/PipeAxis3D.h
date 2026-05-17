@@ -185,7 +185,7 @@ private:
         // ACTIVE DEFORMATION WINDOW
         // =====================================================
 
-        double activeLength = 20.0;
+        double activeLength = 5.0;
 
         // =====================================================
         // LOCAL TEMPORARY GEOMETRY
@@ -215,9 +215,8 @@ private:
         double totalLength = 300.0;      // full raw stock length
         double remainingLength = 300.0;  // stock not yet consumed by machine
 
-        // Entry frame of machine / bend die.
-        // Incoming stock is drawn behind this frame.
-        Frame entryFrame;
+		// Material already fed into machine     
+        double consumedLength=0.0;
 
         bool visible = true;
     };
@@ -283,7 +282,7 @@ public:
    // Incoming stock is positioned behind this frame.
    // =====================================================
 
-        incomingStock.entryFrame = currentFrame;
+		resetFrames();
     }
 
    
@@ -374,16 +373,55 @@ public:
         activeZone.activeLength = 20.0;
         activeZone.active = false;
 
-        currentFrame.P = { 0,0,0 };
-        currentFrame.T = { 1,0,0 };
-        currentFrame.N = { 0,1,0 };
-        currentFrame.B = { 0,0,1 };
+		resetFrames();
 
-        incomingStock.entryFrame = currentFrame;
+       
         incomingStock.remainingLength = incomingStock.totalLength;
+		incomingStock.consumedLength = 0.0;
+
+		resetFrames();
+        markDirty();
+    }
+
+	// =====================================================================
+	//GETTERS  for debugging 
+    Frame getMachineEntryFrame() const
+    {
+        return machineEntryFrame;
+    } 
+    double getIncomingStockRemainingLength() const
+    {
+        return incomingStock.remainingLength;
+    }
+
+    double getIncomingStockConsumedLength() const
+    {
+        return incomingStock.consumedLength;
+    }
+
+    double getIncomingStockTotalLength() const
+    {
+        return incomingStock.totalLength;
+    }
+
+
+
+	// =====================================================================
+    //SETTERRS
+    void setIncomingStockLength(double length)
+    {
+        if (length <= 0.0)
+            return;
+
+        incomingStock.totalLength = length;
+        incomingStock.remainingLength = length;
+        incomingStock.consumedLength = 0.0;
 
         markDirty();
     }
+
+
+
     // ====================================================
     // FUNCTION MANUFACTURING
     // 
@@ -465,27 +503,58 @@ public:
     void processFeed(double distance)
     {
         // =====================================================
-        // OWNER:
-        // SimulationController decides WHEN feed happens.
-        // PipeAxis3D decides WHAT geometric state changes.
+        // OWNER SPLIT:
         //
-        // PIPEFLOW:
+        // SimulationController:
+        //   decides WHEN feed happens
+        //   decides HOW MUCH feed this frame
         //
-        // Incoming Stock  --->  Active Zone  --->  Frozen Geometry
-        //
-        // FEED:
-        // - does NOT create curvature
-        // - does NOT create bend geometry
-        // - only consumes/translates incoming stock
+        // PipeAxis3D:
+        //   owns incoming stock state
+        //   owns frozen geometry rigid motion
         // =====================================================
 
         if (distance <= 0.0)
             return;
 
-        incomingStock.remainingLength -= distance;
+        // =====================================================
+        // Clamp feed to available stock.
+        // =====================================================
+
+        double actualFeed =
+            std::min(distance, incomingStock.remainingLength);
+
+        if (actualFeed <= 0.0)
+            return;
+
+        // =====================================================
+        // ZONE 1 — Incoming Stock
+        //
+        // Raw stock before machine entry becomes shorter.
+        // =====================================================
+
+        incomingStock.remainingLength -= actualFeed;
+        incomingStock.consumedLength += actualFeed;
 
         if (incomingStock.remainingLength < 0.0)
             incomingStock.remainingLength = 0.0;
+
+        // =====================================================
+        // ZONE 3 — Frozen Geometry
+        //
+        // Finished geometry moves rigidly during FEED.
+        // Shape is unchanged.
+        // =====================================================
+
+        moveFrozenGeometryDuringFeed(actualFeed);
+
+        std::cout << "[FEED] consumed="
+            << incomingStock.consumedLength
+            << " remaining="
+            << incomingStock.remainingLength
+            << " movedFrozenBy="
+            << actualFeed
+            << std::endl;
 
         markDirty();
     }
@@ -537,7 +606,7 @@ public:
         if (!activeZone.active)
         {
             beginBendFromFrame(
-                currentFrame,
+                machineEntryFrame,
                 radius,
                 targetAngle
             );
@@ -586,24 +655,33 @@ public:
         // =====================================================
         // OWNER:
         // SimulationController decides WHEN rotation happens.
-        // PipeAxis3D owns HOW geometric frames are rotated.
+        // PipeAxis3D owns HOW machine/material frames rotate.
         //
         // ROTATE:
-        // - does NOT move pipe position
-        // - does NOT add nodes
-        // - rotates local frame around pipe tangent
-        // - changes orientation of the NEXT bend plane
+        // - does NOT move machine entry position
+        // - does NOT move incoming stock position
+        // - rotates N/B around feed axis T
+        // - changes orientation of next bend plane
         // =====================================================
 
         if (std::abs(angleIncrement) < 1e-12)
             return;
 
-        // Rotate manufacturing current frame.
-        // This affects the orientation of the next bend.
+        // =====================================================
+        // Rotate material roll orientation at machine entry.
+        //
+        // P and T stay the same.
+        // N/B rotate around T.
+        // =====================================================
+
+        buildRotate(machineEntryFrame, angleIncrement);
+
+        // Keep current frame orientation synchronized for now.
+        // Later we may split this into a separate bendPlaneFrame.
+
         buildRotate(currentFrame, angleIncrement);
 
-        // Incoming stock frame should stay consistent with machine entry.
-        incomingStock.entryFrame = currentFrame;
+       
 
         markDirty();
     }
@@ -686,9 +764,11 @@ private:
     std::vector<Node> frozenNodes; 
     ActiveZone activeZone;
     IncomingStock incomingStock;
-    Frame currentFrame;
+    Frame machineEntryFrame;//fixed machine/die entry frame
+    Frame currentFrame;//current pipe/material frame
     // Manufacturing render grouping
     ManufacturingRenderData manufacturingRender;
+    
 
     //General
     double ds;                      // Segment step size (mm)
@@ -717,6 +797,8 @@ private:
             + a * dot(a, v) * (1.0 - cos(angle));
     }
 
+
+
     void orthonormalizeFrame(Frame& f)
     {
         // =====================================================
@@ -740,6 +822,8 @@ private:
 
         f.N = cross(f.B, f.T).normalized();
     }
+
+
 
     void transportFrame(
         const Vec3D& prevT,
@@ -776,6 +860,9 @@ private:
         orthonormalizeFrame(frame);
     }
 
+
+
+
     //CAD Rebuild Path
 
     void buildSegments()
@@ -806,6 +893,8 @@ private:
             segments.push_back(s);
         }
     }
+
+
 
     void executeSegments()
     {
@@ -904,6 +993,7 @@ void buildLineCAD(Frame& frame, double length)
     }
 }
 
+
    
     void buildRotate(Frame& frame, double angle)
     {
@@ -925,9 +1015,12 @@ void buildLineCAD(Frame& frame, double length)
         // OWNER:
         // PipeAxis3D owns active bend initialization.
         //
-        // IMPORTANT:
-        // Bend starts from explicit frame, not from nodes.back().
-        // This prevents bends from jumping back near origin.
+        // ACTIVE ZONE MEANING:
+        // This is the local deformation window at the machine.
+        //
+        // BEND START:
+        // The bend starts from an explicit frame.
+        // In Manufacturing mode this should be machineEntryFrame.
         // =====================================================
 
         if (radius <= 1e-9)
@@ -936,6 +1029,10 @@ void buildLineCAD(Frame& frame, double length)
                 << radius << std::endl;
             return;
         }
+
+        // =====================================================
+        // Reset active bend state
+        // =====================================================
 
         activeZone.frame = startFrame;
 
@@ -948,6 +1045,25 @@ void buildLineCAD(Frame& frame, double length)
         activeZone.localNodes.clear();
 
         activeZone.active = true;
+
+        // =====================================================
+        // Important:
+        // Add start node so active zone is visible immediately.
+        // Without this, the active zone appears only after
+        // first deformation step.
+        // =====================================================
+
+        activeZone.localNodes.push_back({
+            activeZone.frame.P,
+            activeZone.frame.T,
+            activeZone.frame.N,
+            activeZone.frame.B
+            });
+
+        std::cout << "[ACTIVE ZONE BEGIN] "
+            << "radius=" << radius
+            << " targetAngle=" << targetAngle
+            << std::endl;
     }
 
 
@@ -1030,9 +1146,48 @@ void buildLineCAD(Frame& frame, double length)
     }
 
 
+//HELPER FRAMES REST HELPER
+
+    void resetFrames()
+    {
+        // =====================================================
+        // MACHINE ENTRY FRAME
+        //
+        // OWNER:
+        // PipeAxis3D owns the machine entry reference.
+        //
+        // Meaning:
+        // P = fixed die / entry position
+        // T = feed direction
+        // N/B = current roll orientation around pipe axis
+        // =====================================================
+
+        machineEntryFrame.P = { 0,0,0 };
+        machineEntryFrame.T = { 1,0,0 };
+        machineEntryFrame.N = { 0,1,0 };
+        machineEntryFrame.B = { 0,0,1 };
+
+        // =====================================================
+        // CURRENT MATERIAL FRAME
+        //
+        // At reset, material frame starts at machine entry.
+        // =====================================================
+
+        currentFrame = machineEntryFrame;
+
+        // =====================================================
+        // Incoming stock is visualized behind machine entry.
+        // =====================================================
+
+       
+    }
+
+    
 
 
-
+//=============================
+// LEGACY NOT USED IN CURRENT IMPLEMENTATION
+//======================
    // void beginBend(
     //    const Frame& startFrame,
     //    double radius,
@@ -1080,58 +1235,73 @@ void buildLineCAD(Frame& frame, double length)
         // ==========================================================
         // ACTIVE ZONE PIPE FLOW
         //
-        // incoming stock
+        // machineEntryFrame
         //        ?
         // local curvature evolution
         //        ?
-        // material exits bend die
+        // activeZone.localNodes
         //        ?
-        // geometry freezes
+        // old material exits active window
+        //        ?
+        // frozenNodes
         //
-        // ONLY THIS LOCAL REGION DEFORMS
+        // ONLY activeZone.localNodes deform.
+        // frozenNodes never deform again.
         // ==========================================================
-
 
         // ==========================================================
         // STEP 1
-        // Stop if bend already complete
+        // Validate active bend state
         // ==========================================================
+
+        if (!activeZone.active)
+            return;
+
+        if (std::abs(activeZone.curvature) < 1e-12)
+            return;
+
+        if (stepAngle <= 0.0)
+            return;
 
         if (activeZone.accumulatedAngle >= activeZone.targetAngle)
             return;
 
+        if (ds <= 1e-9)
+            return;
 
         // ==========================================================
         // STEP 2
-        // Clamp angle increment
+        // Clamp angular increment
         //
-        // Prevent overshooting target bend angle
+        // Prevent overshooting target bend angle.
         // ==========================================================
 
         double remaining =
             activeZone.targetAngle
             - activeZone.accumulatedAngle;
 
-        double dA = std::min(stepAngle, remaining);
+        double dA =
+            std::min(stepAngle, remaining);
 
+        if (dA <= 0.0)
+            return;
 
         // ==========================================================
         // STEP 3
         // Save previous tangent
         //
-        // Needed for minimal frame transport
+        // Needed for midpoint integration and frame transport.
         // ==========================================================
 
-        Vec3D prevT = activeZone.frame.T;
-
+        Vec3D prevT =
+            activeZone.frame.T;
 
         // ==========================================================
         // STEP 4
-        // Curvature propagation
+        // Local curvature propagation
         //
-        // Pipe locally bends around current binormal
-        //
-        // This is the actual geometric deformation step
+        // Rotate tangent around current bend axis.
+        // This is the geometric deformation step.
         // ==========================================================
 
         activeZone.frame.T =
@@ -1141,12 +1311,14 @@ void buildLineCAD(Frame& frame, double length)
                 dA
             );
 
+        activeZone.frame.T =
+            activeZone.frame.T.normalized();
 
         // ==========================================================
         // STEP 5
-        // Minimal rotation frame transport
+        // Minimal frame transport
         //
-        // Keeps local frame stable during curvature evolution
+        // Keeps N/B stable while tangent changes.
         // ==========================================================
 
         transportFrame(
@@ -1155,36 +1327,36 @@ void buildLineCAD(Frame& frame, double length)
             activeZone.frame
         );
 
-
         // ==========================================================
         // STEP 6
         // Midpoint integration
         //
-        // More numerically stable than forward Euler
+        // Arc-length step:
+        //
+        //     ds = R * dA
+        //
+        // But in your simulator ds is also the geometric sampling
+        // step, so this advances one node-length along the bend.
         // ==========================================================
 
         Vec3D midT =
             normalize(prevT + activeZone.frame.T);
 
-
-        // ==========================================================
-        // STEP 7
-        // Advance material through bend die
-        //
-        // This represents pipe feed through active deformation zone
-        // ==========================================================
+        if (midT.lengthSquared() < 1e-12)
+        {
+            midT = activeZone.frame.T;
+        }
 
         activeZone.frame.P =
             activeZone.frame.P
             + midT * ds;
 
-
         // ==========================================================
-        // STEP 8
-        // Store local active geometry
+        // STEP 7
+        // Store new active-zone sample
         //
-        // IMPORTANT:
-        // This is NOT frozen geometry yet
+        // This node still belongs to active deformation.
+        // It is NOT frozen yet.
         // ==========================================================
 
         activeZone.localNodes.push_back({
@@ -1194,64 +1366,42 @@ void buildLineCAD(Frame& frame, double length)
             activeZone.frame.B
             });
 
-
         // ==========================================================
-        // STEP 9
+        // STEP 8
         // Accumulate bend progress
         // ==========================================================
 
         activeZone.accumulatedAngle += dA;
 
-
-        // ==========================================================
-// STEP 10
-// Maintain fixed active deformation window
-//
-// Active zone must NOT grow forever.
-//
-// As new material enters:
-// oldest material exits
-// ? becomes frozen geometry
-// ==========================================================
-
-        double currentArcLength =
-            activeZone.accumulatedAngle
-            / activeZone.curvature;
-
-        // ==========================================================
-        // Calculate maximum node count allowed
-        // ==========================================================
-
-        size_t maxActiveNodes =
-            static_cast<size_t>(
-                activeZone.activeLength / ds);
-
-        // Safety
-        maxActiveNodes = std::max<size_t>(2, maxActiveNodes);
-
-        // ==========================================================
-        // If active zone becomes too large:
-        //
-        // oldest node exits deformation zone
-        // ? freeze it
-        // ==========================================================
-
-        while (activeZone.localNodes.size() > maxActiveNodes)
+        if (activeZone.accumulatedAngle > activeZone.targetAngle)
         {
-            // ==============================================
-            // Move oldest deforming node into frozen history
-            // ==============================================
-
-            frozenNodes.push_back(
-                activeZone.localNodes.front());
-
-            // ==============================================
-            // Remove from active deformation zone
-            // ==============================================
-
-            activeZone.localNodes.erase(
-                activeZone.localNodes.begin());
+            activeZone.accumulatedAngle =
+                activeZone.targetAngle;
         }
+
+        // ==========================================================
+        // STEP 9
+        // Transfer old active material into frozen geometry
+        //
+        // Active zone must remain local.
+        // Oldest active nodes leave the deformation window.
+        // ==========================================================
+
+        maintainActiveWindow();
+
+        // ==========================================================
+        // DEBUG
+        // ==========================================================
+
+        std::cout << "[ACTIVE ZONE] angle="
+            << activeZone.accumulatedAngle
+            << " / "
+            << activeZone.targetAngle
+            << " activeNodes="
+            << activeZone.localNodes.size()
+            << " frozenNodes="
+            << frozenNodes.size()
+            << std::endl;
     }
 
     
@@ -1261,48 +1411,51 @@ void buildLineCAD(Frame& frame, double length)
     void freezeActiveZone()
     {
         // =====================================================
-        // MOVE ACTIVE GEOMETRY INTO FROZEN HISTORY
+        // FINALIZE ACTIVE BEND
+        //
+        // Called when the BEND operation completes.
+        //
+        // Any remaining active nodes are no longer deforming.
+        // They become frozen manufactured geometry.
         // =====================================================
 
         for (const auto& node : activeZone.localNodes)
         {
-             frozenNodes.push_back(node);
+            frozenNodes.push_back(node);
         }
 
-        // =====================================================
-        // CLEAR ACTIVE GEOMETRY
-        // =====================================================
-
         activeZone.localNodes.clear();
-
-        // =====================================================
-        // DEACTIVATE
-        // =====================================================
 
         activeZone.active = false;
 
         // =====================================================
-        // COMMIT FINAL FRAME
+        // Commit final material frame.
         //
-        // Future geometry starts from here
+        // Future operations continue from this orientation.
         // =====================================================
 
         currentFrame = activeZone.frame;
+
+        std::cout << "[FREEZE ACTIVE ZONE] frozenNodes="
+            << frozenNodes.size()
+            << std::endl;
     }
+
+
 
 
     void buildIncomingStock()
     {
         // =====================================================
         // OWNER:
-        // PipeAxis3D owns construction of incoming stock render data.
+        // PipeAxis3D owns incoming stock render reconstruction.
         //
         // OUTPUT:
         // manufacturingRender.incomingStockNodes
         //
         // IMPORTANT:
         // This function does NOT simulate FEED.
-        // It only rebuilds visible stock geometry from current state.
+        // It only draws current incoming stock state.
         // =====================================================
 
         manufacturingRender.incomingStockNodes.clear();
@@ -1317,17 +1470,18 @@ void buildLineCAD(Frame& frame, double length)
             return;
 
         // =====================================================
-        // PIPEFLOW VIEW
+        // MACHINE ENTRY REFERENCE
         //
-        // tail ---------------------> entry / die
+        // machineEntryFrame is the fixed die / entry point.
         //
-        // entryFrame.T points forward through the machine.
-        // Incoming stock extends backward from entryFrame.P.
+        // Incoming stock is always drawn behind it.
         // =====================================================
 
-        const Frame& entry = incomingStock.entryFrame;
+        const Frame& entry =
+            machineEntryFrame;
 
-        double visibleLength = incomingStock.remainingLength;
+        double visibleLength =
+            incomingStock.remainingLength;
 
         int stepCount =
             std::max(
@@ -1338,8 +1492,23 @@ void buildLineCAD(Frame& frame, double length)
         double stepLength =
             visibleLength / static_cast<double>(stepCount);
 
-        Vec3D startPoint =
+        // =====================================================
+        // Stock tail is behind the machine entry.
+        //
+        // entry.P = machine entry / die location
+        // entry.T = feed direction
+        //
+        // tail = entry.P - entry.T * remainingLength
+        // =====================================================
+
+        Vec3D tailPoint =
             entry.P - entry.T * visibleLength;
+
+        // =====================================================
+        // Build stock from tail toward machine entry.
+        //
+        // tail ---------------------> machine entry
+        // =====================================================
 
         for (int i = 0; i <= stepCount; ++i)
         {
@@ -1347,7 +1516,7 @@ void buildLineCAD(Frame& frame, double length)
                 stepLength * static_cast<double>(i);
 
             Vec3D p =
-                startPoint + entry.T * s;
+                tailPoint + entry.T * s;
 
             manufacturingRender.incomingStockNodes.push_back({
                 p,
@@ -1382,6 +1551,14 @@ void buildLineCAD(Frame& frame, double length)
 
         // =====================================================
         // ZONE 2 — Active Bend Zone
+        //
+        // This is local, temporary deformation geometry.
+        // It should be rendered separately from incoming stock
+        // and frozen geometry.
+        // =====================================================
+
+        manufacturingRender.activeZoneNodes =
+            activeZone.localNodes;
         // =====================================================
 
         manufacturingRender.activeZoneNodes =
@@ -1402,19 +1579,18 @@ void buildLineCAD(Frame& frame, double length)
         //
         // Current renderer expects one continuous nodes vector.
         //
-        // Later:
-        // renderer should draw each group separately:
-        // incomingStockNodes, activeZoneNodes, frozenNodes.
+        // Better physical order:
+        //
+        // Incoming Stock -> Frozen Geometry -> Active Zone
+        //
+        // This reduces false connector lines.
+        // Final solution: render each zone separately.
         // =====================================================
 
         nodes.clear();
 
         // =====================================================
-        // WARNING:
-        // Flattening can create artificial connector lines
-        // between zones if renderer uses GL_LINE_STRIP.
-        //
-        // This is temporary until renderer supports zone groups.
+        // ZONE 1 — Incoming Stock
         // =====================================================
 
         for (const auto& node : manufacturingRender.incomingStockNodes)
@@ -1422,12 +1598,26 @@ void buildLineCAD(Frame& frame, double length)
             nodes.push_back(node);
         }
 
-        for (const auto& node : manufacturingRender.activeZoneNodes)
+        // =====================================================
+        // ZONE 3 — Frozen Geometry
+        //
+        // Old material that already left active zone.
+        // Should come before active zone in centerline order.
+        // =====================================================
+
+        for (const auto& node : manufacturingRender.frozenNodes)
         {
             nodes.push_back(node);
         }
 
-        for (const auto& node : manufacturingRender.frozenNodes)
+        // =====================================================
+        // ZONE 2 — Active Bend Zone
+        //
+        // Current local deformation window.
+        // Comes last because it is the newest material.
+        // =====================================================
+
+        for (const auto& node : manufacturingRender.activeZoneNodes)
         {
             nodes.push_back(node);
         }
@@ -1507,5 +1697,163 @@ void buildLineCAD(Frame& frame, double length)
 
         flattenManufacturingRenderData();
     }
+
+
+
+    // HELPER
+
+  
+
+
+    void freezeOldestActiveNode()
+    {
+        // =====================================================
+        // OWNER:
+        // PipeAxis3D owns transfer from active deformation
+        // state into frozen manufactured geometry.
+        //
+        // PIPEFLOW:
+        //
+        // activeZone.localNodes.front()
+        //        ?
+        // frozenNodes
+        //
+        // Meaning:
+        // oldest material has exited bend window.
+        // It no longer deforms.
+        // =====================================================
+
+        if (activeZone.localNodes.empty())
+            return;
+
+        frozenNodes.push_back(
+            activeZone.localNodes.front()
+        );
+
+        activeZone.localNodes.erase(
+            activeZone.localNodes.begin()
+        );
+    }
+
+
+
+
+
+    //HELPER
+
+	// It's connected with freezeOldestActiveNode 
+    void maintainActiveWindow()
+    {
+        // =====================================================
+        // ACTIVE WINDOW CONTROL
+        //
+        // The active bend zone must remain local.
+        // If it grows too long, oldest material freezes.
+        // =====================================================
+
+        if (ds <= 1e-9)
+            return;
+
+        size_t maxActiveNodes =
+            static_cast<size_t>(
+                std::ceil(activeZone.activeLength / ds)
+                );
+
+        maxActiveNodes =
+            std::max<size_t>(2, maxActiveNodes);
+
+        while (activeZone.localNodes.size() > maxActiveNodes)
+        {
+            freezeOldestActiveNode();
+        }
+    }
     
+
+	// =====================================================
+	// TRANSLATE
+    // 
+	// =====================================================
+    void translateNode(Node& node, const Vec3D& delta)
+    {
+        // =====================================================
+        // RIGID TRANSLATION
+        //
+        // Position changes.
+        // T/N/B do NOT change.
+        //
+        // This means the geometry moves but does not deform.
+        // =====================================================
+
+        node.pos = node.pos + delta;
+    }
+
+    void translateFrame(Frame& frame, const Vec3D& delta)
+    {
+        // =====================================================
+        // RIGID TRANSLATION OF FRAME
+        //
+        // Only origin moves.
+        // Orientation stays unchanged.
+        // =====================================================
+
+        frame.P = frame.P + delta;
+    }
+
+    
+
+
+    void translateFrozenGeometry(const Vec3D& delta)
+{
+    // =====================================================
+    // ZONE 3 — FROZEN GEOMETRY RIGID MOTION
+    //
+    // OWNER:
+    // PipeAxis3D owns frozen geometry state.
+    //
+    // Meaning:
+    // Finished geometry moves through space,
+    // but its shape is not recalculated.
+    // =====================================================
+
+    for (auto& node : frozenNodes)
+    {
+        translateNode(node, delta);
+    }
+}
+
+    void moveFrozenGeometryDuringFeed(double feedDistance)
+    {
+        // =====================================================
+        // FEED EFFECT ON ZONE 3
+        //
+        // During FEED, finished pipe is pushed forward.
+        //
+        // Machine entry stays fixed.
+        // Incoming stock shortens.
+        // Frozen geometry translates rigidly.
+        // =====================================================
+
+        if (feedDistance <= 0.0)
+            return;
+
+        if (frozenNodes.empty())
+            return;
+
+        Vec3D feedDirection =
+            machineEntryFrame.T.normalized();
+
+        Vec3D delta =
+            feedDirection * feedDistance;
+
+        translateFrozenGeometry(delta);
+
+        // Keep current material frame consistent with moved geometry.
+        translateFrame(currentFrame, delta);
+
+        std::cout << "[ZONE 3 MOVE] frozen geometry translated by "
+            << feedDistance
+            << std::endl;
+    }
+
+
 };
