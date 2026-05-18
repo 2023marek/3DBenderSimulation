@@ -7,7 +7,7 @@
 #endif
 
 SimulationController::SimulationController()
-    : playing(false), paused(false), speed(50.0),
+    : playing(false), paused(false), speed(40.0),
     accumulatedDistance(0.0), accumulatedAngle(0.0),
     pipeGeometry(0.5)
    

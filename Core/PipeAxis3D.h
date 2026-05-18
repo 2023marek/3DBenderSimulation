@@ -1269,6 +1269,10 @@ void buildLineCAD(Frame& frame, double length)
         if (ds <= 1e-9)
             return;
 
+
+        Frame previousActiveFrame =
+            activeZone.frame;
+
         // ==========================================================
         // STEP 2
         // Clamp angular increment
@@ -1365,11 +1369,22 @@ void buildLineCAD(Frame& frame, double length)
             activeZone.frame.N,
             activeZone.frame.B
             });
+        // ==========================================================
+// STEP 7b
+// Move frozen geometry as rigid body with active zone.
+//
+// The frozen shape is immutable,
+// but its world transform follows the active bend output.
+// ==========================================================
 
+        transformFrozenGeometryBetweenFrames(
+            previousActiveFrame,
+            activeZone.frame
+		);
         // ==========================================================
-        // STEP 8
-        // Accumulate bend progress
-        // ==========================================================
+// STEP 8
+// Accumulate bend progress
+// ==========================================================
 
         activeZone.accumulatedAngle += dA;
 
@@ -1388,6 +1403,23 @@ void buildLineCAD(Frame& frame, double length)
         // ==========================================================
 
         maintainActiveWindow();
+
+        // ==========================================================
+        // STEP 10
+        // Move frozen geometry as rigid body with active zone.
+        //
+        // The frozen shape is immutable,
+        // but its world transform follows the active bend output.
+        //
+        // IMPORTANT:
+        // This comes AFTER maintainActiveWindow(), so any node
+        // that just became frozen also follows the same rigid motion.
+        // ==========================================================
+
+        transformFrozenGeometryBetweenFrames(
+            previousActiveFrame,
+            activeZone.frame
+        );
 
         // ==========================================================
         // DEBUG
@@ -1854,6 +1886,173 @@ void buildLineCAD(Frame& frame, double length)
             << feedDistance
             << std::endl;
     }
+	//=============================
+    // ATTACH  RIGIDLY ZONE 3  TO ACTIVE ZONE 2
+	//==============================
+
+
+    // HELPERS
+	// FRAME TRANSFORMS HELPERS
+    Vec3D vectorToLocal(
+        const Vec3D& v,
+        const Frame& frame) const
+    {
+        // =====================================================
+        // Convert world vector into frame-local coordinates.
+        // =====================================================
+
+        return {
+            dot(v, frame.T),
+            dot(v, frame.N),
+            dot(v, frame.B)
+        };
+    }
+
+    Vec3D vectorFromLocal(
+        const Vec3D& v,
+        const Frame& frame) const
+    {
+        // =====================================================
+        // Convert local vector into world coordinates.
+        // =====================================================
+
+        return
+            frame.T * v.x +
+            frame.N * v.y +
+            frame.B * v.z;
+    }
+
+    Vec3D pointToLocal(
+        const Vec3D& p,
+        const Frame& frame) const
+    {
+        // =====================================================
+        // Convert world point into frame-local coordinates.
+        // =====================================================
+
+        Vec3D relative =
+            p - frame.P;
+
+        return vectorToLocal(
+            relative,
+            frame
+        );
+    }
+
+    Vec3D pointFromLocal(
+        const Vec3D& p,
+        const Frame& frame) const
+    {
+        // =====================================================
+        // Convert local point into world coordinates.
+        // =====================================================
+
+        return
+            frame.P +
+            frame.T * p.x +
+            frame.N * p.y +
+            frame.B * p.z;
+    }
+//NODE TRANSFORM HELPER
+
+    void transformNodeBetweenFrames(
+        Node& node,
+        const Frame& fromFrame,
+        const Frame& toFrame)
+    {
+        // =====================================================
+        // RIGID BODY TRANSFORM
+        //
+        // Shape does not deform.
+        //
+        // We convert node position/orientation into old frame,
+        // then rebuild it in the new frame.
+        // =====================================================
+
+        Vec3D localPos =
+            pointToLocal(
+                node.pos,
+                fromFrame
+            );
+
+        Vec3D localT =
+            vectorToLocal(
+                node.T,
+                fromFrame
+            );
+
+        Vec3D localN =
+            vectorToLocal(
+                node.N,
+                fromFrame
+            );
+
+        Vec3D localB =
+            vectorToLocal(
+                node.B,
+                fromFrame
+            );
+
+        node.pos =
+            pointFromLocal(
+                localPos,
+                toFrame
+            );
+
+        node.T =
+            vectorFromLocal(
+                localT,
+                toFrame
+            ).normalized();
+
+        node.N =
+            vectorFromLocal(
+                localN,
+                toFrame
+            ).normalized();
+
+        node.B =
+            vectorFromLocal(
+                localB,
+                toFrame
+            ).normalized();
+    }
+
+//FROZEN GEOMETRY TRANSFORM
+
+    void transformFrozenGeometryBetweenFrames(
+        const Frame& fromFrame,
+        const Frame& toFrame)
+    {
+        // =====================================================
+        // ZONE 3 — RIGID BODY FOLLOW
+        //
+        // Frozen geometry does NOT deform.
+        // But during active bending it must follow the outgoing
+        // active zone frame.
+        //
+        // This makes old completed geometry stay attached
+        // to the active bend.
+        // =====================================================
+
+        if (frozenNodes.empty())
+            return;
+
+        for (auto& node : frozenNodes)
+        {
+            transformNodeBetweenFrames(
+                node,
+                fromFrame,
+                toFrame
+            );
+        }
+    }
+
+    // ADDITIONALLY NEED Update updateActiveZone()
+    // IT WAS DONE
+
+    // END -ATTACH  RIGIDLY ZONE 3  TO ACTIVE ZONE 2
+//==============================
 
 
 };
