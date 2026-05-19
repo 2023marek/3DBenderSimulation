@@ -277,7 +277,13 @@ void SimulationController::executeBend(double angle)
         op->angle,
         toBend
     );
-
+    std::cout << "[EXECUTE BEND INPUT] R="
+        << op->R
+        << " angleRad="
+        << op->angle
+        << " angleDeg="
+        << op->angle * 180.0 / PI
+        << std::endl;
     accumulatedAngle += toBend;
 
     if (accumulatedAngle > op->angle)
@@ -285,6 +291,9 @@ void SimulationController::executeBend(double angle)
         accumulatedAngle = op->angle;
     }
 }
+
+
+
 void SimulationController::advanceToNextOperation()
 {
     const Operation* currentOp = operationQueue.getCurrent();

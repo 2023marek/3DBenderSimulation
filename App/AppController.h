@@ -35,7 +35,10 @@ public:
     void step() { sim.step(); }
    
     void handleAction(UserAction action);
-
+    SimulationController::SimulationMode getSimulationMode() const
+    {
+        return sim.getMode();
+    }
 private:
 	RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;

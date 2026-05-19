@@ -12,26 +12,31 @@ public:
 
     void setMode(RenderMode m);
 
-    // line rendering (axis)
+    // Single line strip, used by CADPreview
     void uploadLine(const std::vector<float>& vertices);
 
-    // mesh rendering (tube)
+    // Multiple line strips, used by ManufacturingPlayback
+    void uploadLineStrips(const std::vector<std::vector<float>>& strips);
+
     void uploadMesh(const std::vector<TubeMesh::Vertex>& vertices,
         const std::vector<unsigned int>& indices);
 
     void draw();
-    void init(); 
+    void init();
+
+private:
+    struct LineRange
+    {
+        int first = 0;
+        int count = 0;
+    };
+
 private:
     void setupBuffers();
-      
 
 private:
     RenderMode mode = RenderMode::LINE;
 
-   
-private:
-
-    // TWO separate VAOs
     unsigned int lineVAO = 0;
     unsigned int meshVAO = 0;
 
@@ -39,10 +44,12 @@ private:
     unsigned int meshVBO = 0;
     unsigned int meshEBO = 0;
 
-    // Setup functions
     void setupLineBuffers();
     void setupMeshBuffers();
 
     size_t vertexCount = 0;
     size_t indexCount = 0;
+
+    // For drawing several independent GL_LINE_STRIP batches
+    std::vector<LineRange> lineRanges;
 };
