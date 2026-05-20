@@ -401,7 +401,8 @@ public:
     Frame getMachineEntryFrame() const
     {
         return machineEntryFrame;
-    } 
+    }
+
     double getIncomingStockRemainingLength() const
     {
         return incomingStock.remainingLength;
@@ -417,7 +418,7 @@ public:
         return incomingStock.totalLength;
     }
 
-
+   
 
 	// =====================================================================
     //SETTERRS
@@ -596,6 +597,10 @@ public:
             return;
         }
 
+        // =====================================================
+        // Start active bend once.
+        // =====================================================
+
         if (!activeZone.active)
         {
             beginBendFromFrame(
@@ -604,6 +609,28 @@ public:
                 targetAngle
             );
         }
+
+        // =====================================================
+        // Previous downstream attachment frame.
+        //
+        // This is where old frozen geometry is currently attached:
+        //
+        // active bend output frame
+        //        +
+        // remaining positioned straight
+        // =====================================================
+
+        Frame previousFrozenAttachFrame =
+            makePositionedStraightEndFrame(
+                activeZone.frame,
+                positionedStraight.length
+            );
+
+        // =====================================================
+        // Clamp angle by:
+        // - remaining target bend angle
+        // - available positioned straight material
+        // =====================================================
 
         double remainingAngle =
             activeZone.targetAngle
@@ -615,12 +642,6 @@ public:
             markDirty();
             return;
         }
-
-        // =====================================================
-        // Clamp bend by:
-        // - remaining target angle
-        // - available positioned straight material
-        // =====================================================
 
         double maxAngleByMaterial =
             positionedStraight.length / radius;
@@ -638,7 +659,9 @@ public:
             radius * stepAngle;
 
         // =====================================================
-        // Consume Zone 2 material into Zone 3 active bending.
+        // ZONE 2 -> ZONE 3
+        //
+        // Bending consumes positioned straight material.
         // =====================================================
 
         positionedStraight.length -= arcStepLength;
@@ -646,7 +669,42 @@ public:
         if (positionedStraight.length < 0.0)
             positionedStraight.length = 0.0;
 
+        // =====================================================
+        // Update active bend geometry.
+        //
+        // This updates activeZone.frame and adds trace nodes.
+        // =====================================================
+
         updateActiveZone(stepAngle);
+
+        // =====================================================
+        // New downstream attachment frame.
+        //
+        // Old frozen body must follow the END of the remaining
+        // positioned straight, not the active zone itself.
+        // =====================================================
+
+        Frame newFrozenAttachFrame =
+            makePositionedStraightEndFrame(
+                activeZone.frame,
+                positionedStraight.length
+            );
+
+        // =====================================================
+        // Move old frozen geometry as rigid body.
+        //
+        // Shape does not deform.
+        // It only follows the downstream attachment frame.
+        // =====================================================
+
+        transformFrozenGeometryBetweenFrames(
+            previousFrozenAttachFrame,
+            newFrozenAttachFrame
+        );
+
+        // =====================================================
+        // Finish bend if target reached.
+        // =====================================================
 
         if (activeZone.accumulatedAngle
             >= activeZone.targetAngle)
@@ -1253,11 +1311,11 @@ void buildLineCAD(Frame& frame, double length)
         // ACTIVE ZONE PIPE FLOW — FOUR-ZONE MODEL
         //
         // PositionedStraight
-        //        ¡
+        //        ?
         // ActiveZone.localNodes
-        //        ¡
+        //        ?
         // currentBendTraceNodes
-        //        ¡
+        //        ?
         // FrozenGeometry after bend completion
         //
         // IMPORTANT:
@@ -1288,16 +1346,6 @@ void buildLineCAD(Frame& frame, double length)
 
         // ==========================================================
         // STEP 2
-        // Save previous active output frame
-        //
-        // Used to rigidly move already-frozen downstream geometry.
-        // ==========================================================
-
-        Frame previousActiveFrame =
-            activeZone.frame;
-
-        // ==========================================================
-        // STEP 3
         // Clamp angular increment
         // ==========================================================
 
@@ -1312,7 +1360,7 @@ void buildLineCAD(Frame& frame, double length)
             return;
 
         // ==========================================================
-        // STEP 4
+        // STEP 3
         // Save previous tangent
         // ==========================================================
 
@@ -1320,7 +1368,7 @@ void buildLineCAD(Frame& frame, double length)
             activeZone.frame.T;
 
         // ==========================================================
-        // STEP 5
+        // STEP 4
         // Curvature propagation
         //
         // Rotate tangent around current bend axis.
@@ -1334,7 +1382,7 @@ void buildLineCAD(Frame& frame, double length)
             ).normalized();
 
         // ==========================================================
-        // STEP 6
+        // STEP 5
         // Frame transport
         // ==========================================================
 
@@ -1345,7 +1393,7 @@ void buildLineCAD(Frame& frame, double length)
         );
 
         // ==========================================================
-        // STEP 7
+        // STEP 6
         // Midpoint integration
         //
         // stepLength = R * dA
@@ -1369,16 +1417,14 @@ void buildLineCAD(Frame& frame, double length)
             + midT * stepLength;
 
         // ==========================================================
-        // STEP 8
+        // STEP 7
         // Create new sample node
         //
-        // This node has TWO meanings:
+        // 1. activeZone.localNodes:
+        //    local deformation window
         //
-        // 1. It belongs temporarily to activeZone.localNodes
-        //    so the active window is visible.
-        //
-        // 2. It belongs permanently to currentBendTraceNodes
-        //    so the full arc trace stays anchored and visible.
+        // 2. currentBendTraceNodes:
+        //    full visible arc trace
         // ==========================================================
 
         Node newNode{
@@ -1393,7 +1439,7 @@ void buildLineCAD(Frame& frame, double length)
         currentBendTraceNodes.push_back(newNode);
 
         // ==========================================================
-        // STEP 9
+        // STEP 8
         // Accumulate bend progress
         // ==========================================================
 
@@ -1406,35 +1452,14 @@ void buildLineCAD(Frame& frame, double length)
         }
 
         // ==========================================================
-        // STEP 10
+        // STEP 9
         // Keep active window short
         //
-        // IMPORTANT:
-        // maintainActiveWindow() should now REMOVE old active nodes
-        // from activeZone.localNodes only.
-        //
-        // It should NOT push them into frozenNodes anymore.
-        // The visible/current bend arc is stored in
-        // currentBendTraceNodes.
+        // This removes old nodes from activeZone.localNodes only.
+        // It does NOT push them to frozenNodes.
         // ==========================================================
 
         maintainActiveWindow();
-
-        // ==========================================================
-        // STEP 11
-        // Rigidly move OLD frozen geometry
-        //
-        // Frozen geometry does not deform, but if there is already
-        // downstream finished geometry from previous bends, it should
-        // follow the output frame of the current bend.
-        //
-        // Call this ONCE only.
-        // ==========================================================
-
-        transformFrozenGeometryBetweenFrames(
-            previousActiveFrame,
-            activeZone.frame
-        );
 
         // ==========================================================
         // DEBUG
@@ -1714,8 +1739,35 @@ void buildLineCAD(Frame& frame, double length)
         std::cout << "[FREEZE POSITIONED STRAIGHT]\n";
     }
 
+	//Positionin Helper
 
+    Frame makePositionedStraightEndFrame(
+        const Frame& startFrame,
+        double length) const
+    {
+        // =====================================================
+        // POSITIONED STRAIGHT END FRAME
+        //
+        // startFrame:
+        //   usually activeZone.frame during bending
+        //
+        // length:
+        //   remaining positioned straight length
+        //
+        // The old frozen body should attach here.
+        // =====================================================
 
+        Frame endFrame = startFrame;
+
+        if (length > 0.0)
+        {
+            endFrame.P =
+                startFrame.P
+                + startFrame.T.normalized() * length;
+        }
+
+        return endFrame;
+    }
 
 
 
@@ -1774,28 +1826,49 @@ void buildLineCAD(Frame& frame, double length)
 
     void flattenManufacturingRenderData()
     {
+        // =====================================================
+        // TEMPORARY LEGACY OUTPUT
+        //
+        // This is only for getNodes() compatibility/debugging.
+        // Renderer should eventually draw zones separately.
+        // =====================================================
+
         nodes.clear();
 
-        // =====================================================
-        // TEMPORARY LINE-STRIP ORDER
-        //
-        // Final solution:
-        // draw each zone separately.
-        // =====================================================
-
+        // ZONE 1 — Incoming Stock
         for (const auto& node : manufacturingRender.incomingStockNodes)
+        {
             nodes.push_back(node);
+        }
 
-        for (const auto& node : manufacturingRender.activeZoneNodes)
-            nodes.push_back(node);
-
-        for (const auto& node : manufacturingRender.frozenNodes)
-            nodes.push_back(node);
-
+        // ZONE 2 — Positioned Straight
         for (const auto& node : manufacturingRender.positionedStraightNodes)
+        {
             nodes.push_back(node);
+        }
+
+        // CURRENT BEND TRACE
+        //
+        // Full visible arc currently being formed.
+        for (const auto& node : manufacturingRender.currentBendTraceNodes)
+        {
+            nodes.push_back(node);
+        }
+
+        // ZONE 4 — Frozen Geometry
+        for (const auto& node : manufacturingRender.frozenNodes)
+        {
+            nodes.push_back(node);
+        }
+
+        // ZONE 3 — Active Bend Window
+        //
+        // Draw last in flattened order because it is the working zone.
+        for (const auto& node : manufacturingRender.activeZoneNodes)
+        {
+            nodes.push_back(node);
+        }
     }
-   
 
    // void buildNodes()
     //{

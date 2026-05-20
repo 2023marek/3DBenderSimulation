@@ -278,11 +278,15 @@ void GLView::uploadPipeGeometry()
         );
 
         strips.push_back(
-            nodesToFloatLine(data.activeZoneNodes)
+            nodesToFloatLine(data.currentBendTraceNodes)
         );
 
         strips.push_back(
             nodesToFloatLine(data.frozenNodes)
+        );
+
+        strips.push_back(
+            nodesToFloatLine(data.activeZoneNodes)
         );
 
         pipeRenderer.uploadLineStrips(strips);
