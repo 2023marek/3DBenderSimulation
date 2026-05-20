@@ -18,9 +18,9 @@ AppController::AppController()
     op2.R = 20;
     op2.angle = 3.1415 / 1;
 
-   // Operation op4;
-	//op4.type = Operation::ROTATE;
-	//op4.angle = 3.1415 / 2; // Rotate 90 degrees
+    Operation op4;
+	op4.type = Operation::ROTATE;
+	op4.angle = 3.1415 / 2; // Rotate 90 degrees
 
     Operation op3;
     op3.type = Operation::FEED;
@@ -34,15 +34,24 @@ AppController::AppController()
 
     Operation op6;
     op6.type = Operation::FEED;
-    op6.length = 30;
+    op6.length = 60;
+
+    Operation op7;
+    op7.type = Operation::BEND;
+    op7.R = 10;
+    op7.angle = 3.1415 /3;
+
+
+
 
 
     ops.push_back(op1);  
     ops.push_back(op2);
     ops.push_back(op3);
-    //ops.push_back(op4);
+    ops.push_back(op4);
 	ops.push_back(op5);
-    //ops.push_back(op6);
+    ops.push_back(op6);
+	ops.push_back(op7);
     sim.loadProgram(ops);
 
 

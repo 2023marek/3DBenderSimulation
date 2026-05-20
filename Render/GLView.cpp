@@ -190,11 +190,67 @@ void main()
     glEnable(GL_DEPTH_TEST);       // enable depth (3D)
     glClearColor(0, 0, 0, 1);      // black background
 }
+//=========================
+//RENDER HELPER
+
+static void nodesToCenterlineAndTangents(
+    const std::vector<PipeAxis3D::Node>& nodes,
+    std::vector<Vec3D>& centers,
+    std::vector<Vec3D>& tangents)
+{
+    centers.clear();
+    tangents.clear();
+
+    centers.reserve(nodes.size());
+    tangents.reserve(nodes.size());
+
+    for (const auto& n : nodes)
+    {
+        centers.push_back(n.pos);
+        tangents.push_back(n.T);
+    }
+}
+
+//Helper Draw TUBE ZONE
+void drawTubeZone(
+    PipeRenderer& renderer,
+    TubeMesh& tubeMesh,
+    const std::vector<PipeAxis3D::Node>& nodes,
+    double radius,
+    int radialSegments)
+{
+    if (nodes.size() < 2)
+        return;
+
+    std::vector<Vec3D> centers;
+    std::vector<Vec3D> tangents;
+
+    nodesToCenterlineAndTangents(
+        nodes,
+        centers,
+        tangents
+    );
+
+    tubeMesh.generate(
+        centers,
+        tangents,
+        radius,
+        radialSegments
+    );
+
+    renderer.uploadMesh(
+        tubeMesh.getVertices(),
+        tubeMesh.getIndices()
+    );
+
+    renderer.draw();
+}
 
 
 // =========================
 // RENDER FRAME (RUNS EVERY FRAME)
 // =========================
+
 
 
 
@@ -225,7 +281,81 @@ void GLView::paintGL()
 
     shader->use();
     shader->setMat4("MVP", mvp);
+    if (app &&
+        app->getSimulationMode()
+        == SimulationController::SimulationMode::ManufacturingPlayback &&
+        pipe)
+    {
+        const auto& data =
+            pipe->getManufacturingRenderData();
 
+        pipeRenderer.setMode(renderMode);
+
+        if (renderMode == RenderMode::LINE)
+        {
+            uploadPipeGeometry();
+            glLineWidth(2.0f);
+            pipeRenderer.draw();
+        }
+        else if (renderMode == RenderMode::MESH)
+        {
+            // =====================================================
+            // MANUFACTURING MESH MODE
+            //
+            // Generate one tube mesh per zone.
+            // Do NOT use flattened pipe->getNodes().
+            // =====================================================
+
+            drawTubeZone(
+                pipeRenderer,
+                tubeMesh,
+                data.incomingStockNodes,
+                5.0,
+                12
+            );
+
+            drawTubeZone(
+                pipeRenderer,
+                tubeMesh,
+                data.positionedStraightNodes,
+                5.0,
+                12
+            );
+
+            drawTubeZone(
+                pipeRenderer,
+                tubeMesh,
+                data.currentBendTraceNodes,
+                5.0,
+                12
+            );
+
+            drawTubeZone(
+                pipeRenderer,
+                tubeMesh,
+                data.frozenNodes,
+                5.0,
+                12
+            );
+
+            drawTubeZone(
+                pipeRenderer,
+                tubeMesh,
+                data.activeZoneNodes,
+                5.0,
+                12
+            );
+        }
+    }
+    else
+    {
+        uploadPipeGeometry();
+
+        pipeRenderer.setMode(renderMode);
+
+        glLineWidth(2.0f);
+        pipeRenderer.draw();
+    }
     uploadPipeGeometry();
 
     pipeRenderer.setMode(renderMode);
@@ -430,6 +560,9 @@ glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
 
     return center;
 }
+
+
+
 
 
 

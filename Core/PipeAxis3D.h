@@ -1221,7 +1221,7 @@ void buildLineCAD(Frame& frame, double length)
     }
 
 
-//HELPER FRAMES REST HELPER
+//HELPER FRAMES RESET HELPER
 
     void resetFrames()
     {
@@ -1260,48 +1260,6 @@ void buildLineCAD(Frame& frame, double length)
     
 
 
-//=============================
-// LEGACY NOT USED IN CURRENT IMPLEMENTATION
-//======================
-   // void beginBend(
-    //    const Frame& startFrame,
-    //    double radius,
-    //    double targetAngle)
-    //{
-        // =====================================================
-        // INITIALIZE ACTIVE BEND STATE
-        // =====================================================
-
-     //   activeZone.frame = startFrame;
-     //   activeZone.curvature = 1.0 / radius;
-     //   activeZone.targetAngle = targetAngle;
-     //   activeZone.accumulatedAngle = 0.0;
-     //   activeZone.localNodes.clear();
-     //   activeZone.active = true;
-
-        // =====================================================
-        // START FROM CURRENT PIPE END FRAME
-        // =====================================================
-
-      //  if (!nodes.empty())
-      //  {
-      //      const Node& last = nodes.back();
-
-      //      activeZone.frame.P = last.pos;
-
-       //     activeZone.frame.T = last.T;
-      //      activeZone.frame.N = last.N;
-      //      activeZone.frame.B = last.B;
-      //  }
-      //  else
-      //  {
-      //      activeZone.frame.P = { 0,0,0 };
-    //
-       //     activeZone.frame.T = { 1,0,0 };
-       //     activeZone.frame.N = { 0,1,0 };
-       //     activeZone.frame.B = { 0,0,1 };
-       // }
-    //}
 
 
 
@@ -1485,48 +1443,123 @@ void buildLineCAD(Frame& frame, double length)
     void freezeActiveZone()
     {
         // =====================================================
+        // FREEZE ACTIVE BEND — CORRECT CENTERLINE ORDER
+        //
+        // Physical order from machine entry outward:
+        //
+        // current bend trace
+        //      ?
+        // remaining positioned straight
+        //      ?
+        // old frozen body
+        //
+        // This prevents line-strip jump artifacts.
+        // =====================================================
+
+        std::vector<Node> oldFrozen =
+            frozenNodes;
+
+        std::vector<Node> newFrozen;
+
+        // =====================================================
         // STEP 1
-        // Current bend trace becomes frozen geometry.
+        // Add current bend trace first.
+        // This starts at machineEntryFrame.
         // =====================================================
 
         for (const auto& node : currentBendTraceNodes)
         {
-            frozenNodes.push_back(node);
+            appendNodeNoDuplicate(
+                newFrozen,
+                node
+            );
         }
-
-        currentBendTraceNodes.clear();
 
         // =====================================================
         // STEP 2
-        // Bend output frame.
-        // Positioned straight starts from here.
+        // Add remaining positioned straight after bend trace.
+        //
+        // It starts from activeZone.frame, which is the bend
+        // output frame.
         // =====================================================
 
-        currentFrame = activeZone.frame;
+        std::vector<Node> positionedFrozen =
+            buildPositionedStraightFrozenNodes(
+                activeZone.frame,
+                positionedStraight.length
+            );
+
+        for (const auto& node : positionedFrozen)
+        {
+            appendNodeNoDuplicate(
+                newFrozen,
+                node
+            );
+        }
 
         // =====================================================
         // STEP 3
-        // Remaining positioned straight becomes frozen too.
+        // Add old frozen body last.
         //
-        // This prevents old positioned straight from staying
-        // as a temporary scalar length after the bend.
+        // During bending, oldFrozen should already have been
+        // moved so its first node is attached to the end of
+        // positioned straight.
         // =====================================================
 
-        freezePositionedStraight();
+        for (const auto& node : oldFrozen)
+        {
+            appendNodeNoDuplicate(
+                newFrozen,
+                node
+            );
+        }
 
         // =====================================================
         // STEP 4
-        // Clear active state.
+        // Commit new frozen geometry.
         // =====================================================
+
+        frozenNodes =
+            newFrozen;
+
+        // =====================================================
+        // STEP 5
+        // Update current frame to end of complete pipe.
+        // =====================================================
+
+        if (!frozenNodes.empty())
+        {
+            const Node& last =
+                frozenNodes.back();
+
+            currentFrame.P = last.pos;
+            currentFrame.T = last.T;
+            currentFrame.N = last.N;
+            currentFrame.B = last.B;
+        }
+        else
+        {
+            currentFrame =
+                activeZone.frame;
+        }
+
+        // =====================================================
+        // STEP 6
+        // Clear temporary bend state.
+        // =====================================================
+
+        currentBendTraceNodes.clear();
+
+        positionedStraight.length = 0.0;
+        positionedStraight.nodes.clear();
 
         activeZone.localNodes.clear();
         activeZone.active = false;
 
-        std::cout << "[FREEZE ACTIVE ZONE] frozenNodes="
+        std::cout << "[FREEZE ACTIVE ZONE ORDERED] frozenNodes="
             << frozenNodes.size()
             << std::endl;
     }
-
 
 
 
@@ -1615,7 +1648,60 @@ void buildLineCAD(Frame& frame, double length)
 
 
 	//=================================================
-    //POSITIONING
+    // POSITIONING HELPER
+    // HELPER FUNCTION
+    
+    std::vector<Node> buildPositionedStraightFrozenNodes(
+        const Frame& startFrame,
+        double length) const
+    {
+        // =====================================================
+        // BUILD REMAINING POSITIONED STRAIGHT AS FROZEN NODES
+        //
+        // This does NOT modify frozenNodes directly.
+        // It only returns nodes in correct local order.
+        // =====================================================
+
+        std::vector<Node> result;
+
+        if (length <= 0.0)
+            return result;
+
+        if (ds <= 1e-9)
+            return result;
+
+        int stepCount =
+            std::max(
+                1,
+                static_cast<int>(std::ceil(length / ds))
+            );
+
+        double stepLength =
+            length / static_cast<double>(stepCount);
+
+        for (int i = 1; i <= stepCount; ++i)
+        {
+            double s =
+                stepLength * static_cast<double>(i);
+
+            Vec3D p =
+                startFrame.P
+                + startFrame.T.normalized() * s;
+
+            result.push_back({
+                p,
+                startFrame.T,
+                startFrame.N,
+                startFrame.B
+                });
+        }
+
+        return result;
+    }
+
+
+    // POSITIONING
+
 
     void buildPositionedStraight()
     {
@@ -1870,58 +1956,7 @@ void buildLineCAD(Frame& frame, double length)
         }
     }
 
-   // void buildNodes()
-    //{
-        // =====================================================
-        // VISIBLE PIPE RECONSTRUCTION
-        //
-        // OWNER:
-        // PipeAxis3D owns final render geometry assembly.
-        //
-        // Pipe is reconstructed from:
-        //
-        // 1. Incoming Stock
-        // 2. Active Bend Zone
-        // 3. Frozen Geometry
-        //
-        // =====================================================
-
-       // nodes.clear();
-
-        // =====================================================
-        // ZONE 1 — INCOMING STOCK
-        //
-        // Straight only.
-        // Translation/feed only.
-        // No curvature.
-        // =====================================================
-
-       // buildIncomingStock();
-
-        // =====================================================
-        // ZONE 2 — ACTIVE BEND WINDOW
-        //
-        // Local temporary deformation.
-        // This is the only deforming area.
-        // =====================================================
-
-       // for (const auto& node : activeZone.localNodes)
-       // {
-       //     nodes.push_back(node);
-       // }
-
-        // =====================================================
-        // ZONE 3 — FROZEN GEOMETRY
-        //
-        // Immutable manufactured pipe.
-        // No deformation.
-        // =====================================================
-
-        //for (const auto& node : frozenNodes)
-        //{
-         //   nodes.push_back(node);
-        //}
-    //}
+   
 
     void buildNodes()
     {
@@ -1998,7 +2033,32 @@ void buildLineCAD(Frame& frame, double length)
         );
     }
 
+    //HELPER AVOID DUPLICATE NODES
 
+    bool nearlySamePoint(
+        const Node& a,
+        const Node& b,
+        double eps = 1e-6) const
+    {
+        Vec3D d = a.pos - b.pos;
+        return d.lengthSquared() < eps * eps;
+    }
+
+
+
+    void appendNodeNoDuplicate(
+        std::vector<Node>& dst,
+        const Node& node)
+    {
+        if (!dst.empty() && nearlySamePoint(dst.back(), node))
+            return;
+
+        dst.push_back(node);
+    }
+
+
+
+    //=========
 
     //HELPER
 
