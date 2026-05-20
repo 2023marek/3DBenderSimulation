@@ -800,19 +800,14 @@ private:
 	// GETTERS PRIVATE 
     Frame getPositionedStraightStartFrame() const
     {
-        // =====================================================
-        // If bending is active, positioned straight is attached
-        // to the outgoing active bend frame.
-        //
-        // Otherwise it starts from currentFrame.
-        // =====================================================
-
         if (activeZone.active)
         {
             return activeZone.frame;
         }
 
-        return currentFrame;
+        // During FEED, new positioned straight is created
+        // from the machine entry.
+        return machineEntryFrame;
     }
 
 
@@ -1459,13 +1454,14 @@ void buildLineCAD(Frame& frame, double length)
     }
 
     
-
-
-
+    // freezeActive zone
+   //order
+    
     void freezeActiveZone()
     {
         // =====================================================
-        // Current bend trace becomes finished geometry.
+        // STEP 1
+        // Current bend trace becomes frozen geometry.
         // =====================================================
 
         for (const auto& node : currentBendTraceNodes)
@@ -1475,17 +1471,34 @@ void buildLineCAD(Frame& frame, double length)
 
         currentBendTraceNodes.clear();
 
-        activeZone.localNodes.clear();
-        activeZone.active = false;
+        // =====================================================
+        // STEP 2
+        // Bend output frame.
+        // Positioned straight starts from here.
+        // =====================================================
 
         currentFrame = activeZone.frame;
 
+        // =====================================================
+        // STEP 3
+        // Remaining positioned straight becomes frozen too.
+        //
+        // This prevents old positioned straight from staying
+        // as a temporary scalar length after the bend.
+        // =====================================================
+
+        freezePositionedStraight();
+
+        // =====================================================
+        // STEP 4
+        // Clear active state.
+        // =====================================================
+
+        activeZone.localNodes.clear();
+        activeZone.active = false;
+
         std::cout << "[FREEZE ACTIVE ZONE] frozenNodes="
             << frozenNodes.size()
-            << " endT=("
-            << currentFrame.T.x << ", "
-            << currentFrame.T.y << ", "
-            << currentFrame.T.z << ")"
             << std::endl;
     }
 
@@ -1637,22 +1650,125 @@ void buildLineCAD(Frame& frame, double length)
         }
     }
 
+//POSTIONONG HELPER
+   // bake positioned stright into frozen geometry 
+
+    void freezePositionedStraight()
+    {
+        // =====================================================
+        // ZONE 2 -> ZONE 4 TRANSFER
+        //
+        // When a bend operation finishes, any remaining
+        // positioned straight section is no longer a temporary
+        // feed buffer.
+        //
+        // It becomes completed pipe geometry and should move
+        // later as part of frozen geometry.
+        // =====================================================
+
+        if (positionedStraight.length <= 0.0)
+            return;
+
+        if (ds <= 1e-9)
+            return;
+
+        // Start from the current bend output frame.
+        Frame frame = currentFrame;
+
+        int stepCount =
+            std::max(
+                1,
+                static_cast<int>(std::ceil(positionedStraight.length / ds))
+            );
+
+        double stepLength =
+            positionedStraight.length / static_cast<double>(stepCount);
+
+        for (int i = 1; i <= stepCount; ++i)
+        {
+            double s =
+                stepLength * static_cast<double>(i);
+
+            Vec3D p =
+                frame.P + frame.T * s;
+
+            frozenNodes.push_back({
+                p,
+                frame.T,
+                frame.N,
+                frame.B
+                });
+        }
+
+        // Move currentFrame to the end of this straight section.
+        currentFrame.P =
+            frame.P + frame.T * positionedStraight.length;
+
+        currentFrame.T = frame.T;
+        currentFrame.N = frame.N;
+        currentFrame.B = frame.B;
+
+        positionedStraight.length = 0.0;
+        positionedStraight.nodes.clear();
+
+        std::cout << "[FREEZE POSITIONED STRAIGHT]\n";
+    }
+
+
+
+
+
+
 
     void buildManufacturingRenderData()
     {
         manufacturingRender.clear();
 
+        // =====================================================
+        // ZONE 1 — Incoming Stock
+        // =====================================================
+
         buildIncomingStock();
+
+        // =====================================================
+        // ZONE 2 — Positioned Straight
+        // =====================================================
+
         buildPositionedStraight();
+
+        // =====================================================
+        // CURRENT BEND TRACE
+        //
+        // This is the visible arc currently being formed.
+        // It is NOT the same as activeZone.localNodes.
+        // =====================================================
 
         manufacturingRender.currentBendTraceNodes =
             currentBendTraceNodes;
 
+        // =====================================================
+        // ZONE 3 — Active Bend Window
+        //
+        // Small moving/local deformation window.
+        // =====================================================
+
         manufacturingRender.activeZoneNodes =
             activeZone.localNodes;
 
+        // =====================================================
+        // ZONE 4 — Frozen Geometry
+        // =====================================================
+
         manufacturingRender.frozenNodes =
             frozenNodes;
+
+        std::cout << "[MFG RENDER DATA] "
+            << "incoming=" << manufacturingRender.incomingStockNodes.size()
+            << " positioned=" << manufacturingRender.positionedStraightNodes.size()
+            << " trace=" << manufacturingRender.currentBendTraceNodes.size()
+            << " active=" << manufacturingRender.activeZoneNodes.size()
+            << " frozen=" << manufacturingRender.frozenNodes.size()
+            << std::endl;
     }
 
 

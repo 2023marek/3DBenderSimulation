@@ -39,7 +39,7 @@ AppController::AppController()
 
     ops.push_back(op1);  
     ops.push_back(op2);
-    ops.push_back(op3);
+    //ops.push_back(op3);
     //ops.push_back(op4);
 	//ops.push_back(op5);
     //ops.push_back(op6);
