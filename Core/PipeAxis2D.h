@@ -89,14 +89,21 @@ public:
         ops.push_back(op);
     }
 
-    void addBend(double R, double angle, BendDirection dir)
+    void addBend(
+        double radius,
+        double angle,
+        BendDirection bendDirection = BendDirection::CCW)
     {
         Operation op;
+
         op.type = Operation::BEND;
-        op.R = R;
+        op.R = radius;
         op.angle = angle;
-        op.dir = dir;
+        op.bendDirection = bendDirection;
+
         ops.push_back(op);
+
+        markDirty();
     }
     // =========================
 // SAFE EDITING API
@@ -275,34 +282,34 @@ private:
     // SIMULATION LAYER
     // =========================
     void buildSegments()
-       
     {
-       
         segments.clear();
 
         for (const auto& op : ops)
         {
+            Segment s;
+
             if (op.type == Operation::FEED)
             {
-                Segment s;
                 s.type = Segment::LINE;
                 s.length = op.length;
-
-                segments.push_back(s);
             }
-            else
+            else if (op.type == Operation::BEND)
             {
-                Segment s;
                 s.type = Segment::ARC;
-                s.R = op.R;
+                s.curvature = 1.0 / op.R;
                 s.angle = op.angle;
-                s.dir = op.dir;
-                s.length = op.R * op.angle;
-
-                segments.push_back(s);
+                s.bendDirection = op.bendDirection;
             }
-		} dirty = true;
-    }
+            else if (op.type == Operation::ROTATE)
+            {
+                s.type = Segment::ROTATE;
+                s.rotAngle = op.angle;
+            }
+
+            segments.push_back(s);
+        }
+    }dBend
 
     // =========================
     // RENDER LAYER

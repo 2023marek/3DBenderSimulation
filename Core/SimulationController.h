@@ -8,7 +8,7 @@
 class SimulationController
 {
 public:
-
+   
     enum class SimulationMode
     {
         CADPreview,
@@ -41,6 +41,18 @@ public:
     bool isPaused() const { return paused; }
     double getSpeed() const { return speed; }
     void setSpeed(double speedMmPerSec) { speed = speedMmPerSec; }
+    void setRotationSpeedRadPerSec(double value)
+    {
+        if (value > 0.0)
+        {
+            rotationSpeedRadPerSec = value;
+        }
+    }
+
+    double getRotationSpeedRadPerSec() const
+    {
+        return rotationSpeedRadPerSec;
+    }
 
     double getCurrentOperationProgress() const;
     double getOverallProgress() const;
@@ -49,6 +61,7 @@ public:
     OperationQueue& getQueue();              // ? non-const (for writing)
     const OperationQueue& getQueue() const;  // ? const (for reading)
 private:
+    double rotationSpeedRadPerSec = PI;//180 degrees per second
 	SimulationMode mode =SimulationMode::ManufacturingPlayback;                  
     // =========================================================================
     // PLAYBACK STATE
@@ -105,7 +118,7 @@ private:
     // INTERNAL EXECUTION METHODS
     // =========================================================================
 
-    void executeOperation(double distance);
+    void executeOperation(double deltaTime);
     void executeFeed(double distance);
     void executeBend(double angleIncrement);
     void executeRotate(double angleIncrement);

@@ -117,33 +117,19 @@ void SimulationController::step()
 
 void SimulationController::update(double deltaTime)
 {
-    // Exit if not playing or already complete
     if (!playing || operationQueue.isComplete())
         return;
 
-    // Calculate distance to move this frame
-    // Example: speed=100mm/s, deltaTime=0.01s ? distance=1mm
-    double distanceThisFrame = speed * deltaTime;
+    executeOperation(deltaTime);
 
-    // Execute current operation (FEED, BEND, or ROTATE)
-    executeOperation(distanceThisFrame);
-
-    // Update simulation time
     machineState.currentTime += deltaTime;
-    std::cout << "dt: " << deltaTime << std::endl;
-    // =====================================================================
-    // CHECK IF CURRENT OPERATION IS COMPLETE
-    // =====================================================================
-    //
-    // After executeOperation(), check if we've finished the current op
-    // If yes, advance to next operation
-    //
+
     const Operation* op = operationQueue.getCurrent();
+
     if (op)
     {
         if (op->type == Operation::FEED)
         {
-            // FEED complete when accumulated distance >= operation length
             if (accumulatedDistance >= op->length)
             {
                 accumulatedDistance = 0.0;
@@ -152,25 +138,22 @@ void SimulationController::update(double deltaTime)
         }
         else if (op->type == Operation::BEND)
         {
-            // BEND complete when accumulated angle >= operation angle
             if (accumulatedAngle >= op->angle)
             {
                 accumulatedAngle = 0.0;
                 advanceToNextOperation();
             }
         }
-        else if (op->type == Operation::ROTATE)  // ? NEW
+        else if (op->type == Operation::ROTATE)
         {
-            // ROTATE complete when accumulated rotation >= operation angle
             if (accumulatedRotation >= op->angle)
             {
-                accumulatedRotation = 0.0;  // Reset for next operation
+                accumulatedRotation = 0.0;
                 advanceToNextOperation();
             }
         }
     }
 
-    // Update visualization geometry
     if (mode == SimulationMode::CADPreview)
     {
         updatePipeGeometryCAD();
@@ -181,64 +164,86 @@ void SimulationController::update(double deltaTime)
     }
 }
 
-
-void SimulationController::executeOperation(double distance)
+void SimulationController::executeOperation(double deltaTime)
 {
-    // Get current operation (FEED, BEND, or ROTATE)
-    const Operation* op = operationQueue.getCurrent();
-    if (!op) return;
+    const Operation* op =
+        operationQueue.getCurrent();
 
-    // =====================================================================
-    // DISPATCH TO APPROPRIATE EXECUTOR BASED ON TYPE
-    // =====================================================================
+    if (!op)
+        return;
+
+    if (deltaTime <= 0.0)
+        return;
+
+    // =====================================================
+    // FEED
+    //
+    // Linear operation.
+    //
+    // speed:
+    //   mm / second
+    //
+    // distance:
+    //   mm this frame
+    // =====================================================
 
     if (op->type == Operation::FEED)
     {
-        // ?????????????????????????????????????????????????????????????
-        // FEED: Linear motion forward
-        // ?????????????????????????????????????????????????????????????
-        // distance = mm to move this frame
+        double distance =
+            speed * deltaTime;
+
         executeFeed(distance);
     }
+
+    // =====================================================
+    // BEND
+    //
+    // Material moves through bend by arc length.
+    //
+    // arcDistance:
+    //   mm this frame
+    //
+    // angleToBend:
+    //   radians this frame
+    //
+    // relation:
+    //   arcLength = R * angle
+    //   angle = arcLength / R
+    // =====================================================
+
     else if (op->type == Operation::BEND)
     {
-        // ?????????????????????????????????????????????????????????????
-        // BEND: Arc motion with radius R
-        // ?????????????????????????????????????????????????????????????
-        // Arc length = radius * angle
-        // Therefore: angle = arc_length / radius
-        //
+        double arcDistance =
+            speed * deltaTime;
+
         if (op->R > 0.0)
         {
-            double angleToRotate = distance / op->R;
-            executeBend(angleToRotate);
+            double angleToBend =
+                arcDistance / op->R;
+
+            executeBend(angleToBend);
         }
     }
+
+    // =====================================================
+    // ROTATE
+    //
+    // Angular operation.
+    //
+    // rotationSpeedRadPerSec:
+    //   radians / second
+    //
+    // angleIncrement:
+    //   radians this frame
+    //
+    // This is independent from feed speed.
+    // =====================================================
+
     else if (op->type == Operation::ROTATE)
     {
-        // ?????????????????????????????????????????????????????????????
-        // ROTATE: Twist around longitudinal axis
-        // ?????????????????????????????????????????????????????????????
-        //
-        // PARAMETER EXPLANATION:
-        //   distance = speed (mm/s) * deltaTime (s) = mm traveled
-        //   
-        //   For ROTATE, we reinterpret this as rotation rate:
-        //   angleIncrement (radians) = distance (mm) / 100.0
-        //   
-        //   This maps: 100mm/s speed ? ~1 radian/frame (at 0.01s)
-        //
-        // EXAMPLE EXECUTION:
-        //   speed = 100 mm/s
-        //   deltaTime = 0.01 s
-        //   distance = 100 * 0.01 = 1.0 mm
-        //   angleIncrement = 1.0 / 100.0 = 0.01 radians
-        //   
-        //   For ROTATE 90° (?/2 ? 1.57 radians):
-        //   Frames needed: 1.57 / 0.01 ? 157 frames
-        //   Time: 157 * 0.01 = 1.57 seconds ?
-        //
-        double angleIncrement = distance / 100.0;  // Convert mm to radians
+        double angleIncrement =
+            rotationSpeedRadPerSec * deltaTime;
+
         executeRotate(angleIncrement);
     }
 }
@@ -264,26 +269,25 @@ void SimulationController::executeFeed(double distance)
 
 void SimulationController::executeBend(double angle)
 {
-    const Operation* op = operationQueue.getCurrent();
+    const Operation* op =
+        operationQueue.getCurrent();
 
     if (!op || op->type != Operation::BEND)
         return;
 
-    double remaining = op->angle - accumulatedAngle;
-    double toBend = std::min(angle, remaining);
+    double remaining =
+        op->angle - accumulatedAngle;
+
+    double toBend =
+        std::min(angle, remaining);
 
     pipeGeometry.processBend(
         op->R,
         op->angle,
-        toBend
+        toBend,
+        op->bendDirection
     );
-    std::cout << "[EXECUTE BEND INPUT] R="
-        << op->R
-        << " angleRad="
-        << op->angle
-        << " angleDeg="
-        << op->angle * 180.0 / PI
-        << std::endl;
+
     accumulatedAngle += toBend;
 
     if (accumulatedAngle > op->angle)
@@ -291,7 +295,6 @@ void SimulationController::executeBend(double angle)
         accumulatedAngle = op->angle;
     }
 }
-
 
 
 void SimulationController::advanceToNextOperation()
@@ -560,66 +563,51 @@ void SimulationController::updatePipeGeometryManufacturing()
 
 void SimulationController::executeRotate(double angleIncrement)
 {
-    // Step 1: Get current operation from queue
-    const Operation* op = operationQueue.getCurrent();
+    const Operation* op =
+        operationQueue.getCurrent();
 
-    // Safety check: current operation MUST be ROTATE type
     if (!op || op->type != Operation::ROTATE)
-    {
-        // Not a ROTATE operation - exit silently
         return;
-    }
 
-    // Step 2: Calculate how much rotation is left to do
-    //
-    // If operation says ROTATE ?/2 (90°), and we've already done
-    // ?/4 (45°), then remaining = ?/4 (45°)
-    //
-    double remaining = op->angle - accumulatedRotation;
+    double remaining =
+        op->angle - accumulatedRotation;
 
-    // Step 3: Take the smaller of:
-    //   • angleIncrement (what we want to do this frame)
-    //   • remaining (what's actually left in the operation)
-    //
-    // This ensures we don't overshoot
-    //
-    double toRotate = std::min(angleIncrement, remaining);
+    double toRotate =
+        std::min(angleIncrement, remaining);
 
-   
-	// Step3a Inform PipeGeometry of rotation (for visual twist)
+    if (toRotate <= 0.0)
+        return;
+
     // =====================================================
-    // Apply rotation to geometric pipe model
+    // ROTATION SIGN
+    //
+    // accumulatedRotation stays positive.
+    // signedRotation is used for actual geometry motion.
     // =====================================================
 
-    pipeGeometry.processRotate(toRotate);
+    double signedRotation =
+        toRotate * rotationDirectionSign(op->rotationDirection);
 
- // Step 4: Apply rotation to machine state
-    //
-    // This tracks the total rotation of the entire pipe assembly
-    // Used later for G-Code generation and visualization
-    machineState.rotation += toRotate;
+    pipeGeometry.processRotate(signedRotation);
 
-    // Step 5: Accumulate progress in this ROTATE operation
-    //
-    // When this equals operation.angle, the operation is complete
-    //
+    machineState.rotation += signedRotation;
+
     accumulatedRotation += toRotate;
 
-    // Step 6: Safety clamp
-    //
-    // Prevent floating-point errors from exceeding target angle
-    //
     if (accumulatedRotation > op->angle)
     {
         accumulatedRotation = op->angle;
     }
-     
-    // Done! Frame has been twisted by toRotate radians
-}  
 
-OperationQueue& SimulationController::getQueue()
-{
-    return operationQueue;   // ? correct
+    std::cout << "[ROTATE] stepDeg="
+        << signedRotation * 180.0 / PI
+        << " accumulatedDeg="
+        << accumulatedRotation * 180.0 / PI
+        << " targetDeg="
+        << op->angle * 180.0 / PI
+        << " dir="
+        << rotationDirectionToString(op->rotationDirection)
+        << std::endl;
 }
 
 const OperationQueue& SimulationController::getQueue() const

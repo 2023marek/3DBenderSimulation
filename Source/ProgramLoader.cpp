@@ -99,7 +99,7 @@ Operation ProgramLoader::parseLine(const std::string& line, int lineNumber)
             {
                 std::string dir = tokens[3];
                 std::transform(dir.begin(), dir.end(), dir.begin(), ::toupper);
-                op.dir = (dir == "CW") ? BendDirection::CW : BendDirection::CCW;
+                op.bendDirection = (dir == "CW") ? BendDirection::CW : BendDirection::CCW;
             }
 
             // Validation

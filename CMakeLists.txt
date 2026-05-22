@@ -76,6 +76,8 @@ set(CORE_HEADERS
     Core/ProgramLoader.h
     Core/Math/Vec2D.h
     Core/Math/Vec3D.h
+    Core/BendDirection.h
+    Core/RotationDirection.h
 )
 
 set(MACHINE_HEADERS

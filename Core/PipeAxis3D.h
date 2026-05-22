@@ -4,6 +4,7 @@
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+#include "Core/Operations.h"
 #include "Core/Math/Vec3D.h"
 
 
@@ -48,22 +49,7 @@ public:
     // INPUT LAYER 
     // =======================================================================
     // 
-    struct Operation
-    {
-        enum Type
-        {
-            FEED,
-            BEND,
-            ROTATE
-        };
-
-        Type type = FEED;
-
-        double length = 0.0;
-        double R = 0.0;
-        double angle = 0.0;
-        double rotAngle = 0.0;
-    };
+    
     // =====================================================================
     // NODE (Point on pipe centerline)
     // =====================================================================
@@ -114,15 +100,19 @@ public:
 
         Type type = LINE;
 
-        double length = 0.0;   // used for LINE
-        double curvature = 0.0; // ? = 1/R (ARC)
-        double angle = 0.0;     // ARC bending angle
-        double rotAngle = 0.0;  // twist
+        double length = 0.0;
+        double curvature = 0.0;
+        double angle = 0.0;
+        double rotAngle = 0.0;
+
+        BendDirection bendDirection = BendDirection::CCW;
 
         double arcLength() const
         {
-            if (curvature == 0.0) return 0.0;
-            return angle / curvature; // R * angle
+            if (std::abs(curvature) < 1e-12)
+                return 0.0;
+
+            return angle / std::abs(curvature);
         }
     };
 
@@ -153,46 +143,38 @@ public:
         GeometricSegment geometry;
     };
 
+ enum class RotationKinematicMode
+ {
+     // =====================================================
+     
+     // The pipe rolls around machineEntryFrame.T.
+     // =====================================================
+     PipeRoll,
+     // =====================================================
+     // Tool / bend plane rotates around the pipe axis.
+     // =====================================================
+     ToolHeadRotate
+ };
 
 
 private:
     struct ActiveZone
     {
-        // =====================================================
-        // LOCAL DEFORMATION FRAME
-        // =====================================================
-
         Frame frame;
 
-        // =====================================================
-        // BEND STATE
-        // =====================================================
-
         double curvature = 0.0;
-
         double accumulatedAngle = 0.0;
-
         double targetAngle = 0.0;
 
-        // =====================================================
-        // ACTIVE DEFORMATION WINDOW
-        // =====================================================
+        BendDirection direction = BendDirection::CCW;
 
         double activeLength = 5.0;
 
-        // =====================================================
-        // LOCAL TEMPORARY GEOMETRY
-        //
-        // ONLY ACTIVE REGION DEFORMS
-        // =====================================================
-
         std::vector<Node> localNodes;
 
-        // =====================================================
-        // STATE
-        // =====================================================
-        size_t frozenCountAtBendStart = 0;
         bool active = false;
+
+        size_t frozenCountAtBendStart = 0;
     };
 
   struct IncomingStock
@@ -257,7 +239,8 @@ private:
     }
 	
 
-  
+    RotationKinematicMode rotationMode =
+        RotationKinematicMode::PipeRoll;
 	public:
 
 
@@ -297,8 +280,12 @@ public:
 
 		resetFrames();
     }
-
-   
+    //Helper for Bend direction
+    double bendDirectionSign(BendDirection dir) const
+    {
+        return static_cast<int>(dir);
+    }
+    
     // =====================================================================
     // CAD OPERATION INTERFACE (Store operations)-history API
     // =====================================================================
@@ -314,23 +301,42 @@ public:
     }
 
     /// Add arc bend
-    void addBend(double radius, double angle)
+    void addBend(double radius, double angle, BendDirection bendDirection = BendDirection::CCW)
     {
         Operation op;
         op.type = Operation::BEND;
         op.R = radius;
         op.angle = angle;
+        op.bendDirection;
         ops.push_back(op);
         markDirty();
     }
 
     // Add rotation (twist)
+   // Add rotation / twist operation
     void addRotate(double angle)
     {
+        // =====================================================
+        // OWNER:
+        // PipeAxis3D stores procedural operation history.
+        //
+        // Shared Operation uses:
+        //     angle
+        //
+        // for both:
+        //     BEND angle
+        //     ROTATE angle
+        //
+        // So there is no op.rotAngle anymore.
+        // =====================================================
+
         Operation op;
+
         op.type = Operation::ROTATE;
-        op.rotAngle = angle;
+        op.angle = angle;
+
         ops.push_back(op);
+
         markDirty();
     }
 
@@ -397,7 +403,7 @@ public:
     }
 
 	// =====================================================================
-	//GETTERS  for debugging 
+	//GETTERS  
     Frame getMachineEntryFrame() const
     {
         return machineEntryFrame;
@@ -418,7 +424,10 @@ public:
         return incomingStock.totalLength;
     }
 
-   
+    RotationKinematicMode getRotationKinematicMode() const
+    {
+        return rotationMode;
+    }
 
 	// =====================================================================
     //SETTERRS
@@ -434,7 +443,12 @@ public:
         markDirty();
     }
 
+    void setRotationKinematicMode(RotationKinematicMode mode)
+    {
+        rotationMode = mode;
+    }
 
+   
 
     // ====================================================
     // FUNCTION MANUFACTURING
@@ -577,7 +591,8 @@ public:
     void processBend(
         double radius,
         double targetAngle,
-        double angleIncrement)
+        double angleIncrement,
+        BendDirection bendDirection)
     {
         if (radius <= 1e-9)
         {
@@ -606,7 +621,8 @@ public:
             beginBendFromFrame(
                 machineEntryFrame,
                 radius,
-                targetAngle
+                targetAngle,
+                bendDirection
             );
         }
 
@@ -720,42 +736,74 @@ public:
 
         markDirty();
     }
-    void processRotate(double angleIncrement)
-    {
-        // =====================================================
-        // OWNER:
-        // SimulationController decides WHEN rotation happens.
-        // PipeAxis3D owns HOW machine/material frames rotate.
-        //
-        // ROTATE:
-        // - does NOT move machine entry position
-        // - does NOT move incoming stock position
-        // - rotates N/B around feed axis T
-        // - changes orientation of next bend plane
-        // =====================================================
+    public:
+        void processRotate(double signedAngle)
+        {
+            // =====================================================
+            // ROTATE OPERATION
+            //
+            // OWNER SPLIT:
+            //
+            // SimulationController:
+            //     decides time and signed rotation amount
+            //
+            // PipeAxis3D:
+            //     applies machine-specific kinematics
+            //
+            // TWO MODES:
+            //
+            // 1. PipeRoll
+            //      pipe body rotates
+            //      bend plane stays fixed
+            //
+            // 2. ToolHeadRotate
+            //      pipe body stays fixed
+            //      bend plane rotates
+            //
+            // =====================================================
 
-        if (std::abs(angleIncrement) < 1e-12)
-            return;
+            if (std::abs(signedAngle) < 1e-12)
+                return;
 
-        // =====================================================
-        // Rotate material roll orientation at machine entry.
-        //
-        // P and T stay the same.
-        // N/B rotate around T.
-        // =====================================================
+            if (rotationMode == RotationKinematicMode::PipeRoll)
+            {
+                // =================================================
+                // Typical CNC tube bender:
+                //
+                // Pipe rotates around the machine feed axis.
+                // Machine bend plane does NOT rotate.
+                //
+                // This is what produces 3D multi-bend geometry.
+                // =================================================
 
-        buildRotate(machineEntryFrame, angleIncrement);
+                rotatePipeBodyAroundMachineAxis(
+                    signedAngle
+                );
 
-        // Keep current frame orientation synchronized for now.
-        // Later we may split this into a separate bendPlaneFrame.
+                std::cout << "[ROTATE MODE] PipeRoll angleDeg="
+                    << signedAngle * 180.0 / PI
+                    << std::endl;
+            }
+            else if (rotationMode == RotationKinematicMode::ToolHeadRotate)
+            {
+                // =================================================
+                // Alternative machine:
+                //
+                // Pipe remains fixed.
+                // Tool / bend plane rotates around pipe axis.
+                // =================================================
 
-        buildRotate(currentFrame, angleIncrement);
+                rotateToolPlaneAroundMachineAxis(
+                    signedAngle
+                );
 
-       
+                std::cout << "[ROTATE MODE] ToolHeadRotate angleDeg="
+                    << signedAngle * 180.0 / PI
+                    << std::endl;
+            }
 
-        markDirty();
-    }
-
+            markDirty();
+        }
 
 
 
@@ -973,13 +1021,25 @@ private:
             else if (op.type == Operation::BEND)
             {
                 s.type = Segment::ARC;
-                s.curvature = 1.0 / op.R;   // ? key idea
+
+                if (op.R > 1e-9)
+                {
+                    s.curvature = 1.0 / op.R;
+                }
+                else
+                {
+                    s.curvature = 0.0;
+                }
+
                 s.angle = op.angle;
+                s.bendDirection = op.bendDirection;
             }
             else if (op.type == Operation::ROTATE)
             {
                 s.type = Segment::ROTATE;
-                s.rotAngle = op.rotAngle;
+
+                // ROTATE also uses Operation::angle.
+                s.rotAngle = op.angle;
             }
 
             segments.push_back(s);
@@ -1101,7 +1161,8 @@ void buildLineCAD(Frame& frame, double length)
     void beginBendFromFrame(
         const Frame& startFrame,
         double radius,
-        double targetAngle)
+        double targetAngle,
+        BendDirection direction)
     {
         if (radius <= 1e-9)
         {
@@ -1114,6 +1175,7 @@ void buildLineCAD(Frame& frame, double length)
         activeZone.curvature = 1.0 / radius;
         activeZone.targetAngle = targetAngle;
         activeZone.accumulatedAngle = 0.0;
+		activeZone.direction = direction;
         activeZone.localNodes.clear();
         activeZone.active = true;
 
@@ -1121,18 +1183,16 @@ void buildLineCAD(Frame& frame, double length)
             frozenNodes.size();
 
         Node startNode{
-            activeZone.frame.P,
-            activeZone.frame.T,
-            activeZone.frame.N,
-            activeZone.frame.B
-        };
+    activeZone.frame.P,
+    activeZone.frame.T,
+    activeZone.frame.N,
+    activeZone.frame.B
+};
 
-        // Small moving active window starts here.
-        activeZone.localNodes.push_back(startNode);
+activeZone.localNodes.push_back(startNode);
 
-        // Full visible bend trace starts here and stays anchored.
-        currentBendTraceNodes.clear();
-        currentBendTraceNodes.push_back(startNode);
+currentBendTraceNodes.clear();
+currentBendTraceNodes.push_back(startNode);
 
         std::cout << "[ACTIVE ZONE BEGIN] radius="
             << radius
@@ -1332,11 +1392,14 @@ void buildLineCAD(Frame& frame, double length)
         // Rotate tangent around current bend axis.
         // ==========================================================
 
+        double signedDA =
+            dA * bendDirectionSign(activeZone.direction);
+
         activeZone.frame.T =
             rotateAroundAxis(
                 activeZone.frame.T,
                 activeZone.frame.B,
-                dA
+                signedDA
             ).normalized();
 
         // ==========================================================
@@ -2339,4 +2402,295 @@ void buildLineCAD(Frame& frame, double length)
 //==============================
 
 
-};
+    //ROTATE RIGID MODULE
+    //============================
+
+    //Point rotation around machine axis
+
+    Vec3D rotatePointAroundAxisLine(
+        const Vec3D& point,
+        const Vec3D& axisPoint,
+        const Vec3D& axisDir,
+        double angle) const
+    {
+        // =====================================================
+        // OWNER:
+        // PipeAxis3D owns geometric transforms.
+        //
+        // PURPOSE:
+        // Rotate a WORLD POINT around a WORLD AXIS LINE.
+        //
+        // Axis line:
+        //     axisPoint + axisDir * t
+        //
+        // Used for rigid-body ROTATE operation.
+        // =====================================================
+
+        Vec3D local =
+            point - axisPoint;
+
+        Vec3D rotatedLocal =
+            rotateAroundAxis(
+                local,
+                axisDir,
+                angle
+            );
+
+        return axisPoint + rotatedLocal;
+    }
+
+    //Rigid Node Rotation
+     
+    void rotateNodeAroundMachineAxis(
+        Node& node,
+        double angle)
+    {
+        // =====================================================
+        // RIGID BODY ROTATION OF ONE PIPE NODE
+        //
+        // Position rotates around machine feed axis.
+        // Frame vectors rotate around same axis.
+        //
+        // Shape is not recalculated.
+        // This is rigid-body motion.
+        // =====================================================
+
+        const Vec3D axisPoint =
+            machineEntryFrame.P;
+
+        const Vec3D axisDir =
+            machineEntryFrame.T.normalized();
+
+        node.pos =
+            rotatePointAroundAxisLine(
+                node.pos,
+                axisPoint,
+                axisDir,
+                angle
+            );
+
+        node.T =
+            rotateAroundAxis(
+                node.T,
+                axisDir,
+                angle
+            ).normalized();
+
+        node.N =
+            rotateAroundAxis(
+                node.N,
+                axisDir,
+                angle
+            ).normalized();
+
+        node.B =
+            rotateAroundAxis(
+                node.B,
+                axisDir,
+                angle
+            ).normalized();
+    }
+
+    //Rigid frame Rotation
+
+
+    void rotateFrameAroundMachineAxis(
+        Frame& frame,
+        double angle)
+    {
+        // =====================================================
+        // RIGID BODY ROTATION OF FRAME
+        //
+        // Used for:
+        // - currentFrame
+        // - activeZone.frame
+        //
+        // Position rotates around machine axis.
+        // Orientation rotates with the body.
+        // =====================================================
+
+        const Vec3D axisPoint =
+            machineEntryFrame.P;
+
+        const Vec3D axisDir =
+            machineEntryFrame.T.normalized();
+
+        frame.P =
+            rotatePointAroundAxisLine(
+                frame.P,
+                axisPoint,
+                axisDir,
+                angle
+            );
+
+        frame.T =
+            rotateAroundAxis(
+                frame.T,
+                axisDir,
+                angle
+            ).normalized();
+
+        frame.N =
+            rotateAroundAxis(
+                frame.N,
+                axisDir,
+                angle
+            ).normalized();
+
+        frame.B =
+            rotateAroundAxis(
+                frame.B,
+                axisDir,
+                angle
+            ).normalized();
+
+        orthonormalizeFrame(frame);
+    }
+
+    //Helper for node vector
+
+    void rotateNodeListAroundMachineAxis(
+        std::vector<Node>& list,
+        double angle)
+    {
+        // =====================================================
+        // Rotate one manufacturing zone as rigid body.
+        // =====================================================
+
+        for (auto& node : list)
+        {
+            rotateNodeAroundMachineAxis(
+                node,
+                angle
+            );
+        }
+    }
+
+    //HELPER
+
+    void syncCurrentFrameFromFrozen()
+    {
+        // =====================================================
+        // Keep currentFrame aligned with final frozen node.
+        // =====================================================
+
+        if (frozenNodes.empty())
+            return;
+
+        const Node& last =
+            frozenNodes.back();
+
+        currentFrame.P = last.pos;
+        currentFrame.T = last.T;
+        currentFrame.N = last.N;
+        currentFrame.B = last.B;
+    }
+
+	//HELPER
+	//=====================================================
+    //Rotate Tool Only
+
+    void rotateToolPlaneAroundMachineAxis(double angle)
+    {
+        // =====================================================
+        // TOOL-HEAD ROTATION MODE
+        //
+        // OWNER:
+        // PipeAxis3D owns machine/bend-plane frame state.
+        //
+        // Meaning:
+        // - machineEntryFrame.P stays fixed
+        // - machineEntryFrame.T stays fixed
+        // - N/B rotate around T
+        //
+        // This changes the next bend plane WITHOUT moving
+        // already manufactured pipe geometry.
+        // =====================================================
+
+        Vec3D axis =
+            machineEntryFrame.T.normalized();
+
+        if (axis.lengthSquared() < 1e-12)
+            return;
+
+        machineEntryFrame.N =
+            rotateAroundAxis(
+                machineEntryFrame.N,
+                axis,
+                angle
+            ).normalized();
+
+        machineEntryFrame.B =
+            rotateAroundAxis(
+                machineEntryFrame.B,
+                axis,
+                angle
+            ).normalized();
+
+        orthonormalizeFrame(machineEntryFrame);
+    }
+    //Helper 
+    // Rotate Pipe Only Default
+    void rotatePipeBodyAroundMachineAxis(double angle)
+    {
+        // =====================================================
+        // PIPE-ROLL MODE
+        //
+        // OWNER:
+        // PipeAxis3D owns pipe manufacturing geometry.
+        //
+        // Meaning:
+        // The already-fed / manufactured pipe rotates as
+        // a rigid body around machineEntryFrame.T.
+        //
+        // IMPORTANT:
+        // This function does NOT rotate machineEntryFrame.N/B.
+        // The machine bend plane stays fixed.
+        //
+        // PIPEFLOW:
+        //
+        // frozen geometry
+        // positioned straight
+        // active bend trace
+        // active window
+        //        ?
+        // rigid rotation around machineEntryFrame.T
+        // =====================================================
+
+        rotateNodeListAroundMachineAxis(
+            frozenNodes,
+            angle
+        );
+
+        rotateNodeListAroundMachineAxis(
+            currentBendTraceNodes,
+            angle
+        );
+
+        rotateNodeListAroundMachineAxis(
+            activeZone.localNodes,
+            angle
+        );
+
+        rotateNodeListAroundMachineAxis(
+            positionedStraight.nodes,
+            angle
+        );
+
+        // currentFrame belongs to downstream pipe body.
+        rotateFrameAroundMachineAxis(
+            currentFrame,
+            angle
+        );
+
+        if (activeZone.active)
+        {
+            rotateFrameAroundMachineAxis(
+                activeZone.frame,
+                angle
+            );
+        }
+
+        syncCurrentFrameFromFrozen();
+    }
+};  

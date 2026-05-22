@@ -22,7 +22,9 @@ public:
         camera.pitch = 20.0f;
         camera.yaw = -45.0f;
         setFocusPolicy(Qt::StrongFocus);
+		
     }
+  
     void setPipe(const PipeAxis3D* pipe);
 
 protected:
@@ -61,6 +63,30 @@ private:
     int pipeVertexCount = 0;
 
     void uploadPipeGeometry();   // 
+private:
+    // =====================================================
+    // OWNER:
+    // GLView owns conversion from PipeAxis3D render-zone
+    // nodes into TubeMesh input arrays.
+    //
+    // ACCESS:
+    // private
+    //
+    // Reason:
+    // Only GLView needs these helpers during rendering.
+    // =====================================================
+
+    void nodesToCenterlineAndTangents(
+        const std::vector<PipeAxis3D::Node>& nodes,
+        std::vector<Vec3D>& centers,
+        std::vector<Vec3D>& tangents);
+
+    void drawTubeZone(
+        const std::vector<PipeAxis3D::Node>& nodes,
+        double radius,
+        int radialSegments);
+
+
 public:
     
     void setHUDData(const HUDData& data)

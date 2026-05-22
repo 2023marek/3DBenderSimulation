@@ -1,5 +1,5 @@
 #include "../Core/PipeAxis2D.h"
-#include "../Render/GnuplotExporter.h"
+//#include "../Render/GnuplotExporter.h"
 #include "../Core/Operations.h"
 
 int main()
@@ -32,7 +32,7 @@ int main()
     pipe.build();
 
     pipe.printSegments();
-    GnuplotExporter::exportPipe(pipe);
+    //GnuplotExporter::exportPipe(pipe);
 	
    
     return 0;
