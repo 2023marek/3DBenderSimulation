@@ -1,6 +1,6 @@
 #pragma once
 
-#include <glad/glad.h>
+#include <glad/gl.h>
 #include <QOpenGLWidget>
 class AppController;
 #include "Render/HUDPanel.h"  
@@ -9,6 +9,7 @@ class AppController;
 #include "Render/ControlCamera.h"
 #include "Render/TubeMesh.h"
 #include "Render/PipeRenderer.h"
+
 
 
 
@@ -26,7 +27,7 @@ public:
     }
   
     void setPipe(const PipeAxis3D* pipe);
-
+    
 protected:
     void initializeGL() override;
     void paintGL() override;
@@ -119,7 +120,7 @@ private:
 
     TubeMesh tubeMesh;
 
-    //GLuint meshVAO = 0;
+    //GLuint meshVAO = 0 ;
    // GLuint meshVBO = 0;
     //GLuint meshEBO = 0;
 

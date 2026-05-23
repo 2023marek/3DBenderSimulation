@@ -90,7 +90,7 @@ set(MACHINE_HEADERS
 # =========================================================
 # GLAD is REQUIRED because OpenGL functions are NOT linked directly on Windows
 add_library(glad STATIC
-    external/glad/src/glad.c
+    external/glad/src/gl.c
 )
 
 # Make GLAD headers visible to all users of this library

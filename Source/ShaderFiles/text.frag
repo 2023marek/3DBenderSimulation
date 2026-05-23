@@ -1,5 +1,5 @@
+const char* textFrag = R"(
 #version 330 core
-
 in vec2 TexCoord;
 out vec4 FragColor;
 
@@ -8,6 +8,9 @@ uniform vec4 textColor;
 
 void main()
 {
-    vec4 sampled = texture(fontTex, TexCoord);
-    FragColor = textColor * sampled;
+    vec4 sampleColor = texture(fontTex, TexCoord);
+    float alpha = sampleColor.a;
+
+    FragColor = vec4(textColor.rgb, textColor.a * alpha);
 }
+)";

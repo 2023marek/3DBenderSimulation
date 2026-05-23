@@ -9,29 +9,63 @@
 #include <QOpenGLContext>
 #include <iostream>
 
+
+
+
 // =========================
 // SIMPLE SHADERS (GPU PROGRAM)
 // =========================
 static const char* vertexShaderSrc = R"(
 #version 330 core
 layout(location = 0) in vec3 aPos;
+layout(location = 1) in vec3 aNormal;
+
 uniform mat4 MVP;
+uniform mat4 model;
+
+out vec3 Normal;
+out vec3 FragPos;
 
 void main()
 {
+    FragPos = vec3(model * vec4(aPos, 1.0));
+    Normal = mat3(transpose(inverse(model))) * aNormal;
     gl_Position = MVP * vec4(aPos, 1.0);
 }
 )";
 
 static const char* fragmentShaderSrc = R"(
 #version 330 core
+in vec3 Normal;
+in vec3 FragPos;
 out vec4 FragColor;
+
+uniform vec3 lightDir;   // Directional light (normalized)
+uniform vec3 viewPos;    // Camera position
+uniform vec3 pipeColor;  // Pipe base color
 
 void main()
 {
-    FragColor = vec4(0.2, 0.9, 0.3, 1.0); // green color
+    // Ambient
+    float ambientStrength = 0.8;
+    vec3 ambient = ambientStrength * pipeColor;
+
+    // Diffuse
+    vec3 norm = normalize(Normal);
+    float diff = max(dot(norm, -lightDir), 0.0);
+    vec3 diffuse = diff * pipeColor;
+
+    // Specular
+    float specularStrength = 0.25;
+    vec3 viewDir = normalize(viewPos - FragPos);
+    vec3 reflectDir = reflect(lightDir, norm);
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32);
+    vec3 specular = specularStrength * spec * vec3(1.0);
+
+    vec3 result = ambient + diffuse + specular;
+    FragColor = vec4(result, 1.0);
 }
-)"; 
+)";
 //HELPER
 static std::vector<float> nodesToFloatLine(
     const std::vector<PipeAxis3D::Node>& nodes)
@@ -60,10 +94,14 @@ void GLView::setPipe(const PipeAxis3D* p)
 // =========================
 // INITIALIZE OPENGL (RUNS ONCE)
 // =========================
+static void* qt_gl_get_proc(const char* name) {
+    return reinterpret_cast<void*>(
+        QOpenGLContext::currentContext()->getProcAddress(name)
+        );
+}
+
 void GLView::initializeGL()
 {
-    
-    // Get current OpenGL context from Qt
     QOpenGLContext* ctx = QOpenGLContext::currentContext();
     std::cout << "[HUD] created\n";
     if (!ctx)
@@ -72,28 +110,25 @@ void GLView::initializeGL()
         return;
     }
 
-    // =========================
-    // LOAD GLAD (function pointers)
-    // =========================
-    auto loader = [](const char* name) -> void*
-        {
-            return reinterpret_cast<void*>(
-                QOpenGLContext::currentContext()->getProcAddress(name)
-                );
-        };
-
-    if (!gladLoadGLLoader((GLADloadproc)loader))
-    {
-        std::cout << "Failed to initialize GLAD\n";
+    // Cast the function pointer to the correct type
+    if (!gladLoadGL((GLADloadfunc)&qt_gl_get_proc)) {
+        std::cerr << "Failed to initialize GLAD!" << std::endl;
         return;
-    }
+    } 
+   
+
+   // glad_glEnable(GL_DEBUG_OUTPUT);
+   // glad_glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+    
+
     pipeRenderer.init();
     // =========================
     // CREATE SHADER (YOUR CLASS)
     // =========================
     shader = new ShaderGL(vertexShaderSrc, fragmentShaderSrc);
-
-    hud = new HUDPanel(width(), height());
+    
+   
+    hud = new HUDPanel(this->width(), this->height());
     // =========================
 // HUD SHADERS (ADD THIS BLOCK)
 // =========================
@@ -176,19 +211,19 @@ void main()
     //glBindBuffer(GL_ARRAY_BUFFER, pipeVBO);
 
     // no data yet!
-    glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
+   // glad_glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+   // glad_glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+   // glad_glEnableVertexAttribArray(0);
 
-    glBindVertexArray(0);
+   // glad_glBindVertexArray(0);
 
 
     // =========================
     // BASIC SETTINGS
     // =========================
-    glEnable(GL_DEPTH_TEST);       // enable depth (3D)
-    glClearColor(0, 0, 0, 1);      // black background
+    glad_glEnable(GL_DEPTH_TEST);       // enable depth (3D)
+    glad_glClearColor(0, 0, 0, 1);      // black background
 }
 //=========================
 //RENDER HELPER
@@ -340,7 +375,10 @@ void GLView::paintGL()
 
     shader->use();
     shader->setMat4("MVP", mvp);
-
+    shader->setMat4("model", model);
+    shader->setVec3("lightDir", glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f)));
+    shader->setVec3("viewPos", camera.getPosition());
+    shader->setVec3("pipeColor", glm::vec3(0.2f, 0.9f, 0.3f)); // green
     // =====================================================
     // MANUFACTURING RENDER PATH
     //
@@ -386,6 +424,7 @@ void GLView::paintGL()
 
             pipeRenderer.draw();
         }
+
         else if (renderMode == RenderMode::MESH)
         {
             // =================================================

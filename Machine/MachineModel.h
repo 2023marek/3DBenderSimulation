@@ -1,4 +1,4 @@
-#pragma once
+ #pragma once
 
 #include "../core/Math/Vec2D.h"
 

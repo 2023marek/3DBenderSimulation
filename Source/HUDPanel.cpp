@@ -4,7 +4,7 @@
 #define _CRT_SECURE_NO_WARNINGS
 #include "Source/ThirdParty/stb_image.h"
 #include "Render/HUDPanel.h"
-#include <glad/glad.h>
+#include <glad/gl.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <sstream>
@@ -12,7 +12,17 @@
 #include <cmath>
 unsigned int loadFontTexture(const std::string& path);
 // ===== ADD THIS NEAR TOP OF HUDPanel.cpp =====
+// Add at the top of the file (or in an appropriate header)
+#ifdef _WIN32
+#define APIENTRY __stdcall
+#endif
 
+void APIENTRY GLDebugMessageCallback(GLenum source, GLenum type, GLuint id,
+    GLenum severity, GLsizei length,
+    const GLchar* message, const void* userParam)
+{
+    std::cerr << "[OpenGL Debug] " << message << std::endl;
+}
 
 HUDPanel::HUDPanel(unsigned int windowWidth, unsigned int windowHeight)
     : windowWidth(windowWidth), windowHeight(windowHeight)
@@ -31,17 +41,30 @@ HUDPanel::HUDPanel(unsigned int windowWidth, unsigned int windowHeight)
     glBindVertexArray(textVAO);
     glBindBuffer(GL_ARRAY_BUFFER, textVBO);
 
-    // 6 vertices * 4 floats (x,y,u,v)
-    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, nullptr, GL_DYNAMIC_DRAW);
 
-    // position
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glVertexAttribPointer(
+        0,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        4 * sizeof(float),
+        (void*)0
+    );
 
-    // UV
     glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glVertexAttribPointer(
+        1,
+        2,
+        GL_FLOAT,
+        GL_FALSE,
+        4 * sizeof(float),
+        (void*)(2 * sizeof(float))
+    );
 
+    // Important cleanup
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
 
@@ -51,6 +74,15 @@ HUDPanel::~HUDPanel()
         glDeleteVertexArrays(1, &quadVAO);
     if (quadVBO != 0)
         glDeleteBuffers(1, &quadVBO);
+}
+static void checkGLError(const char* where)
+{
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR)
+    {
+        std::cout << "[GL ERROR] " << where << " : 0x"
+            << std::hex << err << std::dec << std::endl;
+    }
 }
 
 void HUDPanel::initQuadMesh()
@@ -75,6 +107,7 @@ void HUDPanel::initQuadMesh()
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindVertexArray(0);
 }
 
@@ -99,68 +132,78 @@ void HUDPanel::update(const HUDData& data, const RenderMode& mode)
 
 void HUDPanel::render()
 {
-    if (!visible) return;
+    if (!visible)
+        return;
 
     glDisable(GL_DEPTH_TEST);
+    glDisable(GL_CULL_FACE);
+
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    std::cout << "[HUD] textShader: " << textShader << std::endl;
-    std::cout << "[HUD] hudShader: " << hudShader << std::endl;
-    // ===== 1. RECTANGLES (HUD shader) =====
+
+    // 1. Draw panel rectangles first
     drawMainPanel();
 
-    // ===== 2. TEXT (TEXT shader) =====
-    if (!textShader) return;
+    // 2. Draw text after text shader setup
+    if (!textShader || fontTexture == 0)
+        return;
 
     textShader->use();
 
     glm::mat4 projection = glm::ortho(
-        0.0f, (float)windowWidth,
-        (float)windowHeight, 0.0f
+        0.0f,
+        static_cast<float>(windowWidth),
+        static_cast<float>(windowHeight),
+        0.0f
     );
 
     textShader->setMat4("projection", projection);
-    textShader->setVec4("textColor", glm::vec4(1, 1, 1, 1));
+    textShader->setInt("fontTex", 0);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, fontTexture);
-    textShader->setInt("fontTex", 0);
+
     glBindVertexArray(textVAO);
 
     float textX = 35.0f;
     float textY = 50.0f;
-    float lineH = 24.0f;
+    float lineH = 28.0f;
 
-    drawText(textX, textY + lineH * 0, "STATUS: " + statusStr, textColor);
-    drawText(textX, textY + lineH * 1, "SPEED: " + std::to_string(speed), textColor);
-    drawText(textX, textY + lineH * 2, "TIME: " + std::to_string(currentTime), textColor);
+    drawText(textX, textY + lineH * 0, "VISIBLE TEST", glm::vec4(1, 0, 0, 1));
+    drawText(textX, textY + lineH * 1, "STATUS: " + statusStr, glm::vec4(1, 1, 1, 1));
+    drawText(textX, textY + lineH * 2, "SPEED: " + std::to_string(speed), glm::vec4(1, 1, 1, 1));
+    drawText(textX, textY + lineH * 3, "TIME: " + std::to_string(currentTime), glm::vec4(1, 1, 1, 1));
     drawText(textX, textY + lineH * 4, "OP: " + currentOpName, glm::vec4(1, 1, 0, 1));
 
     glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 }
 
 
 //=========================================================
 void HUDPanel::drawCharacter(float x, float y, char c, glm::vec4 color)
 {
-    if (glyphs.find(c) == glyphs.end())
+    auto it = glyphs.find(c);
+    if (it == glyphs.end())
         return;
 
-    Glyph& g = glyphs[c];
+    Glyph& g = it->second;
 
-    float x0 = x + g.xOffset;
-    float y0 = y + g.yOffset;
-    float x1 = x0 + g.width;
-    float y1 = y0 + g.height;
+    float scale = 1.0f;
+
+    float x0 = x + g.xOffset * scale;
+    float y0 = y + g.yOffset * scale;
+    float x1 = x0 + g.width * scale;
+    float y1 = y0 + g.height * scale;
 
     float vertices[6][4] = {
-        {x0,y0, g.u0,g.v0},
-        {x1,y0, g.u1,g.v0},
-        {x1,y1, g.u1,g.v1},
+        {x0, y0, g.u0, g.v0},
+        {x1, y0, g.u1, g.v0},
+        {x1, y1, g.u1, g.v1},
 
-        {x0,y0, g.u0,g.v0},
-        {x1,y1, g.u1,g.v1},
-        {x0,y1, g.u0,g.v1}
+        {x0, y0, g.u0, g.v0},
+        {x1, y1, g.u1, g.v1},
+        {x0, y1, g.u0, g.v1}
     };
 
     glBindBuffer(GL_ARRAY_BUFFER, textVBO);
@@ -172,23 +215,23 @@ void HUDPanel::drawCharacter(float x, float y, char c, glm::vec4 color)
 
 
 
-
 void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 color)
 {
+    textShader->setVec4("textColor", color);
+
     float cursor = x;
+    float scale = 1.0f;
 
     for (char c : text)
     {
-        if (glyphs.find(c) == glyphs.end())
+        auto it = glyphs.find(c);
+        if (it == glyphs.end())
             continue;
 
         drawCharacter(cursor, y, c, color);
-        float scale = 0.1f;
-        cursor += glyphs[c].xAdvance*scale;
+        cursor += it->second.xAdvance * scale;
     }
 }
-
-
 void HUDPanel::drawRect(float x, float y, float width, float height, glm::vec4 color)
 {
     if (!hudShader) return;
@@ -228,23 +271,15 @@ void HUDPanel::drawMainPanel()
 {
     float x = 20.0f;
     float y = 20.0f;
-    float w = 70.0f;
-    float h = 50.0f;
+    float w = 360.0f;
+    float h = 190.0f;
 
-    // panel background
     drawRect(x, y, w, h, glm::vec4(0.2f, 0.3f, 0.0f, 0.3f));
 
     float textX = x + 15.0f;
     float textY = y + 30.0f;
     float lineH = 24.0f;
 
-    // ===== TEXT =====
-    drawText(textX, textY + lineH * 0, "STATUS: " + statusStr, glm::vec4(1, 1, 1, 1));
-    drawText(textX, textY + lineH * 1, "SPEED: " + std::to_string(speed), glm::vec4(1, 1, 1, 1));
-    drawText(textX, textY + lineH * 2, "TIME: " + std::to_string(currentTime), glm::vec4(1, 1, 1, 1));
-    drawText(textX, textY + lineH * 4, "OP: " + currentOpName, glm::vec4(1, 1, 0, 1));
-    std::cout << "[HUD TEXT] " << currentOpName << std::endl;
-    // ===== PROGRESS =====
     drawProgressBar(
         textX,
         textY + lineH * 6,

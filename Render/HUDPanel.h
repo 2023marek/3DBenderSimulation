@@ -8,6 +8,7 @@
 #include "Render/HUDData.h"
 #include "Render/RenderMode.h"
 #include "Render/ShaderManager.h"
+// Add at the top of the file (or in an appropriate header)
 
 
 // =========================================================================

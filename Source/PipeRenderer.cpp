@@ -1,5 +1,5 @@
 #include "Render/PipeRenderer.h"
-#include <glad/glad.h>
+#include <glad/gl.h>
 #include <iostream>
 
 // =========================
@@ -34,44 +34,44 @@ void PipeRenderer::init()
 
 void PipeRenderer::setupLineBuffers()
 {
-    glGenVertexArrays(1, &lineVAO);
-    glGenBuffers(1, &lineVBO);
+    glad_glGenVertexArrays(1, &lineVAO);
+    glad_glGenBuffers(1, &lineVBO);
 
-    glBindVertexArray(lineVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+    glad_glBindVertexArray(lineVAO);
+    glad_glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
 
     // Position only (raw floats)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+    glad_glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
         3 * sizeof(float),  // stride for positions
         (void*)0);
-    glEnableVertexAttribArray(0);
+    glad_glEnableVertexAttribArray(0);
 
-    glBindVertexArray(0);
+    glad_glBindVertexArray(0);
 }
 
 void PipeRenderer::setupMeshBuffers()
 {
-    glGenVertexArrays(1, &meshVAO);
-    glGenBuffers(1, &meshVBO);
-    glGenBuffers(1, &meshEBO);
+    glad_glGenVertexArrays(1, &meshVAO);
+    glad_glGenBuffers(1, &meshVBO);
+    glad_glGenBuffers(1, &meshEBO);
 
-    glBindVertexArray(meshVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, meshVBO);
+    glad_glBindVertexArray(meshVAO);
+    glad_glBindBuffer(GL_ARRAY_BUFFER, meshVBO);
 
     // Position: 3 floats (0-11 bytes)
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
+    glad_glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE,
         sizeof(TubeMesh::Vertex),
         (void*)offsetof(TubeMesh::Vertex, position));
-    glEnableVertexAttribArray(0);
+    glad_glEnableVertexAttribArray(0);
 
     // Normal: 3 floats (12-23 bytes)
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
+    glad_glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE,
         sizeof(TubeMesh::Vertex),
         (void*)offsetof(TubeMesh::Vertex, normal));
-    glEnableVertexAttribArray(1);
+    glad_glEnableVertexAttribArray(1);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshEBO);
-    glBindVertexArray(0);
+    glad_glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshEBO);
+    glad_glBindVertexArray(0);
 }
 
 void PipeRenderer::setupBuffers()
@@ -94,15 +94,15 @@ void PipeRenderer::uploadLine(const std::vector<float>& vertices)
             });
     }
 
-    glBindVertexArray(lineVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+    glad_glBindVertexArray(lineVAO);
+    glad_glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
 
-    glBufferData(GL_ARRAY_BUFFER,
+    glad_glBufferData(GL_ARRAY_BUFFER,
         vertices.size() * sizeof(float),
         vertices.empty() ? nullptr : vertices.data(),
         GL_DYNAMIC_DRAW);
 
-    glBindVertexArray(0);
+    glad_glBindVertexArray(0);
 }
 void PipeRenderer::uploadLineStrips(
     const std::vector<std::vector<float>>& strips)
@@ -146,15 +146,15 @@ void PipeRenderer::uploadLineStrips(
     vertexCount =
         static_cast<size_t>(first);
 
-    glBindVertexArray(lineVAO);
-    glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
+    glad_glBindVertexArray(lineVAO);
+    glad_glBindBuffer(GL_ARRAY_BUFFER, lineVBO);
 
-    glBufferData(GL_ARRAY_BUFFER,
+    glad_glBufferData(GL_ARRAY_BUFFER,
         combined.size() * sizeof(float),
         combined.empty() ? nullptr : combined.data(),
         GL_DYNAMIC_DRAW);
 
-    glBindVertexArray(0);
+    glad_glBindVertexArray(0);
 }
 
 void PipeRenderer::uploadMesh(
@@ -164,23 +164,23 @@ void PipeRenderer::uploadMesh(
     vertexCount = vertices.size();
     indexCount = indices.size();
 
-    glBindVertexArray(meshVAO);
+    glad_glBindVertexArray(meshVAO);
 
     // Upload interleaved vertex data (position + normal)
-    glBindBuffer(GL_ARRAY_BUFFER, meshVBO);
-    glBufferData(GL_ARRAY_BUFFER,
+    glad_glBindBuffer(GL_ARRAY_BUFFER, meshVBO);
+    glad_glBufferData(GL_ARRAY_BUFFER,
         vertices.size() * sizeof(TubeMesh::Vertex),
         vertices.data(),
         GL_DYNAMIC_DRAW);
 
     // Upload indices
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER,
+    glad_glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshEBO);
+    glad_glBufferData(GL_ELEMENT_ARRAY_BUFFER,
         indices.size() * sizeof(unsigned int),
         indices.data(),
         GL_DYNAMIC_DRAW);
 
-    glBindVertexArray(0);
+    glad_glBindVertexArray(0);
 }
 
 void PipeRenderer::draw()
@@ -203,12 +203,12 @@ void PipeRenderer::draw()
     }
     else
     {
-        glBindVertexArray(meshVAO);
-        glDrawElements(GL_TRIANGLES, (GLsizei)indexCount,
+        glad_glBindVertexArray(meshVAO);
+        glad_glDrawElements(GL_TRIANGLES, (GLsizei)indexCount,
             GL_UNSIGNED_INT, 0);
     }
 
-    glBindVertexArray(0);
+    glad_glBindVertexArray(0);
 }
 
 void PipeRenderer::setMode(RenderMode m)
