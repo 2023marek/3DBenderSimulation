@@ -167,7 +167,7 @@ void HUDPanel::render()
 
     float textX = 15.0f;
     float textY = 5.0f;
-    float lineH = 5.0f;
+    float lineH = 4.0f;
 
     drawText(textX, textY + lineH * 0, "VISIBLE TEST", glm::vec4(1, 0, 0, 1));
     drawText(textX, textY + lineH * 1, "STATUS: " + statusStr, glm::vec4(1, 1, 1, 1));

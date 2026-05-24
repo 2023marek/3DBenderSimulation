@@ -448,11 +448,11 @@ void SimulationController::updatePipeGeometryCAD()
         }
         else if (op.type == Operation::BEND)
         {
-            pipeGeometry.addBend(op.R, op.angle);
+            pipeGeometry.addBend(op.R, op.angle,op.bendDirection);
         }
         else if (op.type == Operation::ROTATE)
         {
-            pipeGeometry.addRotate(op.angle);
+            pipeGeometry.addRotate(op.angle,op.rotationDirection);
         }
     }
 

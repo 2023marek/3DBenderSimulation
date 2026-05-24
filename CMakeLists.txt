@@ -78,6 +78,9 @@ set(CORE_HEADERS
     Core/Math/Vec3D.h
     Core/BendDirection.h
     Core/RotationDirection.h
+    Core/Geometry/Frame.h
+    Core/Geometry/PipeNode.h
+    Core/Geometry/PipeSegment.h
 )
 
 set(MACHINE_HEADERS
@@ -88,10 +91,10 @@ set(MACHINE_HEADERS
 # =========================================================
 # GLAD (OpenGL loader - compiled library)
 # =========================================================
-# GLAD is REQUIRED because OpenGL functions are NOT linked directly on Windows
+#OpenGL functions are NOT linked directly on Windows
 add_library(glad STATIC
     external/glad/src/gl.c
-)
+ )
 
 # Make GLAD headers visible to all users of this library
 target_include_directories(glad PUBLIC

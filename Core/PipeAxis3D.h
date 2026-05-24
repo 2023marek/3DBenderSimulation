@@ -1,11 +1,17 @@
 #pragma once
+
 #include <glm/glm.hpp> 
 #include <vector>
 #include <cmath>
 #include <iostream>
 #include <algorithm>
+
+#include "Core/Geometry/Frame.h"
+#include "Core/Geometry/PipeNode.h"
+#include "Core/Geometry/PipeSegment.h"
 #include "Core/Operations.h"
 #include "Core/Math/Vec3D.h"
+
 
 
 #ifndef PI
@@ -34,16 +40,36 @@
 class PipeAxis3D
 {
 public:
+
+
+
+    // =====================================================
+   // TEMPORARY COMPATIBILITY ALIASES
+   //
+   // Phase 2 extracts shared geometry primitives.
+   //
+   // Existing code can still use:
+   //     PipeAxis3D::Frame
+   //     PipeAxis3D::Node
+   //     PipeAxis3D::Segment
+   //
+   // Later phases may replace these names directly.
+   // =====================================================
+
+    using Frame = ::Frame;
+    using Node = ::PipeNode;
+    using Segment = ::PipeSegment;
+
     // =====================================================================
     // FRAME (3D coordinate system along pipe)
     // =====================================================================
-    struct Frame
-    {
-        Vec3D P;  // Position
-        Vec3D T;  // Tangent (direction pipe is pointing)
-        Vec3D N;  // Normal (perpendicular to tangent)
-        Vec3D B;  // Binormal (perpendicular to both)
-    };
+  //  struct Frame
+  //  {
+  //      Vec3D P;  // Position
+  //      Vec3D T;  // Tangent (direction pipe is pointing)
+  //      Vec3D N;  // Normal (perpendicular to tangent)
+  //      Vec3D B;  // Binormal (perpendicular to both)
+ //   };
     //======================================================================
     // OPERATION (User input for pipe construction)
     // INPUT LAYER 
@@ -53,23 +79,23 @@ public:
     // =====================================================================
     // NODE (Point on pipe centerline)
     // =====================================================================
-    struct Node
-    {
-        Vec3D pos;
+   // struct Node
+   // {
+   //     Vec3D pos;
 
-        Vec3D T;
-        Vec3D N;
-        Vec3D B;
+ //       Vec3D T;
+  //      Vec3D N;
+  //      Vec3D B;
 
-        glm::vec3 getPosition() const
-        {
-            return glm::vec3(
-                (float)pos.x,
-                (float)pos.y,
-                (float)pos.z
-            );
-        }
-    };
+ //       glm::vec3 getPosition() const
+  //      {
+  //          return glm::vec3(
+  //              (float)pos.x,
+   //             (float)pos.y,
+  //              (float)pos.z
+  //          );
+  //      }
+  //  };
 
     struct ManufacturingRenderData
     {
@@ -89,34 +115,39 @@ public:
         }
     };
   
-    struct Segment
-    {
-        enum Type
-        {
-            LINE,
-            ARC,
-            ROTATE
-        };
+  //  struct Segment
+   // {
+     //   enum Type
+     //   {
+     //       LINE,
+     //       ARC,
+     //       ROTATE
+      //  };
 
-        Type type = LINE;
+        //Type type = LINE;
 
-        double length = 0.0;
-        double curvature = 0.0;
-        double angle = 0.0;
-        double rotAngle = 0.0;
+        // LINE
+        //double length = 0.0;
 
-        BendDirection bendDirection = BendDirection::CCW;
+        // ARC
+        //double curvature = 0.0;
+        //double angle = 0.0;
+        //BendDirection bendDirection = BendDirection::CCW;
 
-        double arcLength() const
-        {
-            if (std::abs(curvature) < 1e-12)
-                return 0.0;
+        // ROTATE
+        //double rotAngle = 0.0;
+        //RotationDirection rotationDirection = RotationDirection::CCW;
 
-            return angle / std::abs(curvature);
-        }
-    };
+        //double arcLength() const
+        //{
+          //  if (std::abs(curvature) < 1e-12)
+            //    return 0.0;
 
+            //return angle / std::abs(curvature);
+        //}
+    //};
 
+      
  struct GeometricSegment
     {
         enum Type
@@ -314,31 +345,20 @@ public:
 
     // Add rotation (twist)
    // Add rotation / twist operation
-    void addRotate(double angle)
-    {
-        // =====================================================
-        // OWNER:
-        // PipeAxis3D stores procedural operation history.
-        //
-        // Shared Operation uses:
-        //     angle
-        //
-        // for both:
-        //     BEND angle
-        //     ROTATE angle
-        //
-        // So there is no op.rotAngle anymore.
-        // =====================================================
+   void addRotate(
+    double angle,
+    RotationDirection rotationDirection = RotationDirection::CCW)
+{
+    Operation op;
 
-        Operation op;
+    op.type = Operation::ROTATE;
+    op.angle = angle;
+    op.rotationDirection = rotationDirection;
 
-        op.type = Operation::ROTATE;
-        op.angle = angle;
+    ops.push_back(op);
 
-        ops.push_back(op);
-
-        markDirty();
-    }
+    markDirty();
+}
 
     // =====================================================================
     // EDITING API (Modify operations)
@@ -1023,13 +1043,9 @@ private:
                 s.type = Segment::ARC;
 
                 if (op.R > 1e-9)
-                {
                     s.curvature = 1.0 / op.R;
-                }
                 else
-                {
                     s.curvature = 0.0;
-                }
 
                 s.angle = op.angle;
                 s.bendDirection = op.bendDirection;
@@ -1038,15 +1054,13 @@ private:
             {
                 s.type = Segment::ROTATE;
 
-                // ROTATE also uses Operation::angle.
                 s.rotAngle = op.angle;
+                s.rotationDirection = op.rotationDirection;
             }
 
             segments.push_back(s);
         }
     }
-
-
 
     void executeSegments()
     {
@@ -1162,7 +1176,7 @@ void buildLineCAD(Frame& frame, double length)
         const Frame& startFrame,
         double radius,
         double targetAngle,
-        BendDirection direction)
+        BendDirection bendDirection)
     {
         if (radius <= 1e-9)
         {
@@ -1175,7 +1189,7 @@ void buildLineCAD(Frame& frame, double length)
         activeZone.curvature = 1.0 / radius;
         activeZone.targetAngle = targetAngle;
         activeZone.accumulatedAngle = 0.0;
-		activeZone.direction = direction;
+		activeZone.direction = bendDirection;
         activeZone.localNodes.clear();
         activeZone.active = true;
 
@@ -1194,11 +1208,13 @@ activeZone.localNodes.push_back(startNode);
 currentBendTraceNodes.clear();
 currentBendTraceNodes.push_back(startNode);
 
-        std::cout << "[ACTIVE ZONE BEGIN] radius="
-            << radius
-            << " targetAngle="
-            << targetAngle
-            << std::endl;
+std::cout << "[ACTIVE ZONE BEGIN] radius="
+<< radius
+<< " targetAngle="
+<< targetAngle
+<< " direction="
+<< bendDirectionToString(bendDirection)
+<< std::endl;
     }
 
 

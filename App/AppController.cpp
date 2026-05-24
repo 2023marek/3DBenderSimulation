@@ -11,54 +11,29 @@ AppController::AppController()
 
     Operation op1;
     op1.type = Operation::FEED;
-    op1.length = 120 ;
+    op1.length = 120;
 
     Operation op2;
     op2.type = Operation::BEND;
     op2.R = 20;
-    op2.angle = 3.1415 / 1;
-    op2.bendDirection = BendDirection::CW;
-    Operation op4;
-	op4.type = Operation::ROTATE;
-	op4.angle = 3.1415 / 2; // Rotate 90 degrees
-    op4.rotationDirection = RotationDirection::CW;
+    op2.angle = PI / 2.0;
+    op2.bendDirection = BendDirection::CCW;
 
     Operation op3;
-    op3.type = Operation::FEED;
-    op3.length = 100;
+    op3.type = Operation::ROTATE;
+    op3.angle = PI / 2.0;
+    op3.rotationDirection = RotationDirection::CW;
 
-    
-    Operation op5;
-    op5.type = Operation::BEND;
-    op5.R = 30;
-    op5.angle = 3.1415 /1  ;
-    op5.bendDirection = BendDirection::CCW;
+    Operation op4;
+    op4.type = Operation::BEND;
+    op4.R = 20;
+    op4.angle = PI / 2.0;
+    op4.bendDirection = BendDirection::CW;
 
-     
-    Operation op6;
-    op6.type = Operation::FEED;
-    op6.length = 60;
-
-    Operation op7;
-    op7.type = Operation::BEND;
-    op7.R = 10;
-    op7.angle = 3.1415 /3;
-
-    Operation op8;
-    op8.type = Operation::ROTATE;
-    op8.angle = 3.1415 / 3; // Rotate 60 degrees
-    op8.rotationDirection = RotationDirection::CCW;
-
-
-
-    ops.push_back(op1);  
+    ops.push_back(op1);
     ops.push_back(op2);
     ops.push_back(op3);
     ops.push_back(op4);
-	ops.push_back(op5);
-    ops.push_back(op6);
-	ops.push_back(op7);
-	ops.push_back(op8);
     sim.loadProgram(ops);
 
 
