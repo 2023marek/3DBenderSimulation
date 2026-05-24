@@ -165,9 +165,9 @@ void HUDPanel::render()
 
     glBindVertexArray(textVAO);
 
-    float textX = 35.0f;
-    float textY = 50.0f;
-    float lineH = 28.0f;
+    float textX = 15.0f;
+    float textY = 5.0f;
+    float lineH = 5.0f;
 
     drawText(textX, textY + lineH * 0, "VISIBLE TEST", glm::vec4(1, 0, 0, 1));
     drawText(textX, textY + lineH * 1, "STATUS: " + statusStr, glm::vec4(1, 1, 1, 1));
@@ -189,7 +189,7 @@ void HUDPanel::drawCharacter(float x, float y, char c, glm::vec4 color)
 
     Glyph& g = it->second;
 
-    float scale = 1.0f;
+    float scale = 0.1f;
 
     float x0 = x + g.xOffset * scale;
     float y0 = y + g.yOffset * scale;
@@ -220,7 +220,7 @@ void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 col
     textShader->setVec4("textColor", color);
 
     float cursor = x;
-    float scale = 1.0f;
+    float scale = 0.1f;
 
     for (char c : text)
     {
@@ -269,10 +269,10 @@ void HUDPanel::drawProgressBar(float x, float y, float width, float height,
 
 void HUDPanel::drawMainPanel()
 {
-    float x = 20.0f;
-    float y = 20.0f;
-    float w = 360.0f;
-    float h = 190.0f;
+    float x = 3.0f;
+    float y = 3.0f;
+    float w = 35.0f;
+    float h = 35.0f;
 
     drawRect(x, y, w, h, glm::vec4(0.2f, 0.3f, 0.0f, 0.3f));
 
