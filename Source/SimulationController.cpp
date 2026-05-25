@@ -7,16 +7,15 @@
 #endif
 
 SimulationController::SimulationController()
-    : playing(false), paused(false), speed(40.0),
-    accumulatedDistance(0.0), accumulatedAngle(0.0),
-    pipeGeometry(0.5)
-   
-
-
+    : playing(false),
+    paused(false),
+    speed(40.0),
+    accumulatedDistance(0.0),
+    accumulatedAngle(0.0),
+    pipeSystem(0.5)
 {
-    std::cout << "? SimulationController initialized\n";
+    std::cout << "SimulationController initialized\n";
 }
-
 
 void SimulationController::loadProgram(const std::vector<Operation>& ops)
 {
@@ -44,18 +43,19 @@ void SimulationController::reset()
 {
     operationQueue.reset();
     machineState.reset();
+
     accumulatedDistance = 0.0;
     accumulatedAngle = 0.0;
+    accumulatedRotation = 0.0;
+
     playing = false;
     paused = false;
-    pipeGeometry = PipeAxis3D(0.5);
 
-    // ===================================================================
-    // IMPORTANT: Do NOT clear loadedOperations on reset!
-    // The operations are still needed for geometry rebuilding
-    // ===================================================================
+    pipeSystem.reset();
 
-    std::cout << "?? Simulation RESET\n";
+    pipe().setRotationKinematicMode(rotationKinematicMode);
+
+    std::cout << "[SimulationController] reset\n";
 }
 
 void SimulationController::play()
@@ -255,7 +255,7 @@ void SimulationController::executeFeed(double distance)
 
     double remaining = op->length - accumulatedDistance;
     double toMove = std::min(distance, remaining);
-    pipeGeometry.processFeed(toMove);
+    pipe().processFeed(toMove);
     //machineState.feedForward(toMove);
     accumulatedDistance += toMove;
    
@@ -281,7 +281,7 @@ void SimulationController::executeBend(double angle)
     double toBend =
         std::min(angle, remaining);
 
-    pipeGeometry.processBend(
+    pipe().processBend(
         op->R,
         op->angle,
         toBend,
@@ -420,7 +420,7 @@ double SimulationController::getOverallProgress() const
 void SimulationController::updatePipeGeometryCAD()
 {
     // Create fresh geometry object for CAD preview mode
-    pipeGeometry = PipeAxis3D(0.5);
+    pipe() = PipeAxis3D(0.5);
 
     size_t currentIdx = operationQueue.getCurrentIndex();
 
@@ -430,7 +430,7 @@ void SimulationController::updatePipeGeometryCAD()
     if (loadedOperations.empty())
     {
         std::cerr << "[CAD ERROR] loadedOperations is empty!\n";
-        pipeGeometry.build();
+        pipe().build();
         return;
     }
 
@@ -444,15 +444,15 @@ void SimulationController::updatePipeGeometryCAD()
 
         if (op.type == Operation::FEED)
         {
-            pipeGeometry.addFeed(op.length);
+            pipe().addFeed(op.length);
         }
         else if (op.type == Operation::BEND)
         {
-            pipeGeometry.addBend(op.R, op.angle,op.bendDirection);
+            pipe().addBend(op.R, op.angle, op.bendDirection);
         }
         else if (op.type == Operation::ROTATE)
         {
-            pipeGeometry.addRotate(op.angle,op.rotationDirection);
+            pipe().addRotate(op.angle, op.rotationDirection);
         }
     }
 
@@ -468,29 +468,29 @@ void SimulationController::updatePipeGeometryCAD()
         {
             if (accumulatedDistance > 0.0)
             {
-                pipeGeometry.addFeed(accumulatedDistance);
+                pipe().addFeed(accumulatedDistance);
             }
         }
         else if (currentOp->type == Operation::BEND)
         {
             if (accumulatedAngle > 0.0)
             {
-                pipeGeometry.addBend(currentOp->R, accumulatedAngle);
+                pipe().addBend(currentOp->R, accumulatedAngle);
             }
         }
         else if (currentOp->type == Operation::ROTATE)
         {
             if (accumulatedRotation > 0.0)
             {
-                pipeGeometry.addRotate(accumulatedRotation);
+                pipe().addRotate(accumulatedRotation);
             }
         }
     }
 
-    pipeGeometry.build();
+    pipe().build();
 
     std::cout << "[CAD GEOM AFTER] nodes: "
-        << pipeGeometry.getNodes().size()
+        << pipe().getNodes().size()
         << std::endl;
 }
 
@@ -515,10 +515,10 @@ void SimulationController::updatePipeGeometryManufacturing()
     // We only ask it to assemble visible render nodes.
     // =====================================================
 
-    pipeGeometry.reconstructVisiblePipe();
+    pipe().reconstructVisiblePipe();
 
     std::cout << "[MFG GEOM AFTER] nodes: "
-        << pipeGeometry.getNodes().size()
+        << pipe().getNodes().size()
         << std::endl;
 }
 // =========================================================================
@@ -588,7 +588,7 @@ void SimulationController::executeRotate(double angleIncrement)
     double signedRotation =
         toRotate * rotationDirectionSign(op->rotationDirection);
 
-    pipeGeometry.processRotate(signedRotation);
+    pipe().processRotate(signedRotation);
 
     machineState.rotation += signedRotation;
 
@@ -610,8 +610,37 @@ void SimulationController::executeRotate(double angleIncrement)
         << std::endl;
 }
 
-const OperationQueue& SimulationController::getQueue() const
-{
-    return operationQueue;   // ? correct
-}
- 
+   
+
+//Helpers for refactoring
+    const OperationQueue& SimulationController::getQueue() const
+    {
+        return operationQueue;
+    }
+
+    // =====================================================
+    // Helpers for PipeSystem refactor
+    // =====================================================
+
+   
+    
+
+    PipeSystem& SimulationController::getPipeSystem()
+    {
+        return pipeSystem;
+    }
+
+    const PipeSystem& SimulationController::getPipeSystem() const
+    {
+        return pipeSystem;
+    }
+
+    PipeAxis3D& SimulationController::pipe()
+    {
+        return pipeSystem.manufacturingPipe();
+    }
+
+    const PipeAxis3D& SimulationController::pipe() const
+    {
+        return pipeSystem.manufacturingPipe();
+    }

@@ -3,6 +3,7 @@
 #include "OperationQueue.h"
 #include "PipeAxis3D.h"
 #include "Machine/MachineState.h"
+#include "Core/PipeSystem.h"
 #include <vector>
 
 class SimulationController
@@ -25,6 +26,19 @@ public:
     void step();
     void reset();
     void update(double deltaTime);
+
+
+    void setRotationKinematicMode(
+        PipeAxis3D::RotationKinematicMode mode)
+    {
+        rotationKinematicMode = mode;
+        pipeSystem.manufacturingPipe().setRotationKinematicMode(mode);
+    }
+
+    PipeAxis3D::RotationKinematicMode getRotationKinematicMode() const
+    {
+        return rotationKinematicMode;
+    }
     void setMode(SimulationMode newMode) 
     {
         mode = newMode;
@@ -33,12 +47,36 @@ public:
     {
         return mode;
     }
-    const MachineState& getState() const { return machineState; }
-    MachineState& getState() { return machineState; }
-    const PipeAxis3D& getPipeGeometry() const { return pipeGeometry; }
-    //const OperationQueue& getQueue() const { return operationQueue; }
-    bool isPlaying() const { return playing; }
-    bool isPaused() const { return paused; }
+
+    const MachineState& getState() const
+    {
+        return machineState;
+    }
+
+    MachineState& getState()
+    {
+        return machineState;
+    }
+
+    const PipeAxis3D& getPipeGeometry() const
+    {
+        return pipeSystem.manufacturingPipe();
+    }
+
+    PipeAxis3D& getPipeGeometry()
+    {
+        return pipeSystem.manufacturingPipe();
+    }
+
+    bool isPlaying() const
+    {
+        return playing;
+    }
+
+    bool isPaused() const
+    {
+        return paused;
+    }
     double getSpeed() const { return speed; }
     void setSpeed(double speedMmPerSec) { speed = speedMmPerSec; }
     void setRotationSpeedRadPerSec(double value)
@@ -60,6 +98,13 @@ public:
     size_t getTotalOperations() const { return operationQueue.getTotalOperations(); }
     OperationQueue& getQueue();              // ? non-const (for writing)
     const OperationQueue& getQueue() const;  // ? const (for reading)
+   
+    //PipeAxis3D& getPipeGeometry();
+    //const PipeAxis3D& getPipeGeometry() const;
+
+    PipeSystem& getPipeSystem();
+    const PipeSystem& getPipeSystem() const;
+
 private:
     double rotationSpeedRadPerSec = PI;//180 degrees per second
 	SimulationMode mode =SimulationMode::ManufacturingPlayback;                  
@@ -100,15 +145,19 @@ private:
     //   Frame 2: accumulatedRotation = 1.0 rad (64%)
     //   Frame 3: accumulatedRotation = 1.57 rad (100% - DONE!)
     //
-   
+    PipeAxis3D::RotationKinematicMode rotationKinematicMode =
+        PipeAxis3D::RotationKinematicMode::PipeRoll;
 
     // =========================================================================
     // CORE COMPONENTS
     // =========================================================================
     OperationQueue operationQueue;    // Queue of operations to execute
     MachineState machineState;        // Current machine state
-    PipeAxis3D pipeGeometry;          // Pipe geometry (segments + nodes)
-
+   // PipeAxis3D pipeGeometry;          // Pipe geometry (segments + nodes)
+    PipeSystem pipeSystem;
+ 
+     PipeAxis3D& pipe();
+     const PipeAxis3D& pipe() const;
     // =========================================================================
     // LOCAL OPERATION STORAGE (for geometry accumulation)
     // =========================================================================
