@@ -1,65 +1,93 @@
 #pragma once
 
 #include "Core/PipeAxis3D.h"
+#include "Core/Geometry/GeometricPipeModel.h"
+#include "Core/Manufacturing/ManufacturingPipeSimulator.h"
 
 // =====================================================
 // PIPESYSTEM
 //
-// PHASE 3 BRIDGE WRAPPER
+// Owns pipe-related subsystems.
 //
-// Current purpose:
-//     Own the existing PipeAxis3D implementation.
+// Phase 4 status:
+// - GeometricPipeModel = CAD preview / ideal geometry
+// - ManufacturingPipeSimulator = manufacturing playback
 //
-// Future purpose:
-//     Own separate pipe subsystems:
-//
-//         GeometricPipeModel
-//         ManufacturingPipeSimulator
-//         PhysicalPipeSimulator
-//
-// Important:
-//     For now, this class changes architecture only.
-//     It should not change simulation behavior.
+// ManufacturingPipeSimulator still wraps old PipeAxis3D.
+// Later PipeAxis3D manufacturing state will move into it.
 // =====================================================
 
 class PipeSystem
 {
 public:
     PipeSystem()
-        : pipeAxis(0.5)
+        : cadModel(0.5),
+        manufacturing(0.5)
     {
     }
 
     explicit PipeSystem(double sampleStep)
-        : pipeAxis(sampleStep)
+        : cadModel(sampleStep),
+        manufacturing(sampleStep)
     {
     }
 
-    PipeAxis3D& manufacturingPipe()
+    // -----------------------------------------------------
+    // CAD / ideal geometric pipe
+    // -----------------------------------------------------
+
+    GeometricPipeModel& cadPipe()
     {
-        return pipeAxis;
+        return cadModel;
     }
 
-    const PipeAxis3D& manufacturingPipe() const
+    const GeometricPipeModel& cadPipe() const
     {
-        return pipeAxis;
+        return cadModel;
     }
+
+    // -----------------------------------------------------
+    // Manufacturing simulator
+    // -----------------------------------------------------
+
+    ManufacturingPipeSimulator& manufacturingPipe()
+    {
+        return manufacturing;
+    }
+
+    const ManufacturingPipeSimulator& manufacturingPipe() const
+    {
+        return manufacturing;
+    }
+
+    // -----------------------------------------------------
+    // Temporary legacy access
+    //
+    // Existing render/app code may still need PipeAxis3D.
+    // -----------------------------------------------------
 
     PipeAxis3D& legacyPipeAxis()
     {
-        return pipeAxis;
+        return manufacturing.legacyAxis();
     }
 
     const PipeAxis3D& legacyPipeAxis() const
     {
-        return pipeAxis;
+        return manufacturing.legacyAxis();
     }
 
     void reset()
     {
-        pipeAxis.clear();
+        cadModel.clear();
+        manufacturing.reset();
+    }
+
+    void setProgram(const std::vector<Operation>& operations)
+    {
+        cadModel.setOperations(operations);
     }
 
 private:
-    PipeAxis3D pipeAxis;
+    GeometricPipeModel cadModel;
+    ManufacturingPipeSimulator manufacturing;
 };

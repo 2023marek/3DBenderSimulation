@@ -399,97 +399,80 @@ void GLView::paintGL()
     // Each zone must be drawn as a separate tube.
     // =====================================================
 
-    if (app &&
-        app->getSimulationMode()
-        == SimulationController::SimulationMode::ManufacturingPlayback &&
-        pipe)
+    if (!app)
+        return;
+
+    auto mode =
+        app->getSimulationMode();
+    std::cout << "[GLView] mode="
+        << (mode == SimulationController::SimulationMode::CADPreview
+            ? "CADPreview"
+            : "ManufacturingPlayback")
+        << std::endl;
+    // =====================================================
+    // CAD PREVIEW
+    // Uses GeometricPipeModel.
+    // One ideal continuous pipe.
+    // =====================================================
+    if (mode == SimulationController::SimulationMode::CADPreview)
     {
+        auto& cadPipe =
+            app->getCadPipeGeometry();
+
+        const auto& cadNodes =
+            cadPipe.getNodes();
+        std::cout << "[GLView CADPreview] nodes="
+            << cadNodes.size()
+            << std::endl;
+        pipeRenderer.setMode(renderMode);
+
+        if (renderMode == RenderMode::LINE)
+        {
+            uploadCadPipeGeometry();
+
+            glLineWidth(2.0f);
+            pipeRenderer.draw();
+        }
+        else if (renderMode == RenderMode::MESH)
+        {
+            drawTubeZone(
+                cadNodes,
+                5.0,
+                12
+            );
+        }
+    }
+
+    // =====================================================
+    // MANUFACTURING PLAYBACK
+    // Uses current PipeAxis3D manufacturing zones.
+    // =====================================================
+    else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
+    {
+        const PipeAxis3D& pipe =
+            app->getPipeGeometry();
+
         const auto& data =
-            pipe->getManufacturingRenderData();
+            pipe.getManufacturingRenderData();
 
         pipeRenderer.setMode(renderMode);
 
         if (renderMode == RenderMode::LINE)
         {
-            // =================================================
-            // MANUFACTURING LINE MODE
-            //
-            // uploadPipeGeometry() should upload separate
-            // GL_LINE_STRIP ranges using ManufacturingRenderData.
-            // =================================================
-
             uploadPipeGeometry();
 
             glLineWidth(2.0f);
-
             pipeRenderer.draw();
         }
-
         else if (renderMode == RenderMode::MESH)
         {
-            // =================================================
-            // MANUFACTURING MESH MODE
-            //
-            // Draw one tube mesh per zone.
-            //
-            // This prevents tube faces from connecting:
-            // old node ---------------> entryFrame
-            // =================================================
-
-            drawTubeZone(
-                data.incomingStockNodes,
-                5.0,
-                12
-            );
-
-            drawTubeZone(
-                data.positionedStraightNodes,
-                5.0,
-                12
-            );
-
-            drawTubeZone(
-                data.currentBendTraceNodes,
-                5.0,
-                12
-            );
-
-            drawTubeZone(
-                data.frozenNodes,
-                5.0,
-                12
-            );
-
-            drawTubeZone(
-                data.activeZoneNodes,
-                5.0,
-                12
-            );
+            drawTubeZone(data.incomingStockNodes, 5.0, 12);
+            drawTubeZone(data.positionedStraightNodes, 5.0, 12);
+            drawTubeZone(data.currentBendTraceNodes, 5.0, 12);
+            drawTubeZone(data.frozenNodes, 5.0, 12);
+            drawTubeZone(data.activeZoneNodes, 5.0, 12);
         }
     }
-    else
-    {
-        // =====================================================
-        // CAD PREVIEW RENDER PATH
-        //
-        // CAD geometry is one continuous designed pipe.
-        // Flattened getNodes() is correct here.
-        // =====================================================
-
-        uploadPipeGeometry();
-
-        pipeRenderer.setMode(renderMode);
-
-        glLineWidth(2.0f);
-
-        pipeRenderer.draw();
-    }
-
-    // =====================================================
-    // HUD
-    //
-    // Draw last so it appears above 3D scene.
-    // =====================================================
 
     if (hud)
     {
@@ -497,6 +480,10 @@ void GLView::paintGL()
         hud->render();
     }
 }
+
+
+
+
 void GLView::uploadPipeGeometry()
 {
     if (!pipe)
@@ -684,6 +671,31 @@ glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
     outSize = glm::length(sizeVec);
 
     return center;
+}
+
+void GLView::uploadCadPipeGeometry()
+{
+    if (!app)
+        return;
+
+    auto& cadPipe =
+        app->getCadPipeGeometry();
+
+    const auto& cadNodes =
+        cadPipe.getNodes();
+
+    std::vector<float> line;
+
+    line.reserve(cadNodes.size() * 3);
+
+    for (const auto& node : cadNodes)
+    {
+        line.push_back(static_cast<float>(node.pos.x));
+        line.push_back(static_cast<float>(node.pos.y));
+        line.push_back(static_cast<float>(node.pos.z));
+    }
+
+    pipeRenderer.uploadLine(line);
 }
 
 

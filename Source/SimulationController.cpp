@@ -20,21 +20,53 @@ SimulationController::SimulationController()
 void SimulationController::loadProgram(const std::vector<Operation>& ops)
 {
     // ===================================================================
-    // KEY: Store operations BEFORE resetting anything
+    // Store complete program
     // ===================================================================
-    loadedOperations = ops;  // Store the COMPLETE program
-    // Choose ONE mode here:
+    loadedOperations = ops;
 
-  
+    // ===================================================================
+    // Reset runtime state for new program
+    // ===================================================================
     operationQueue.load(ops);
+
     machineState.reset();
+
     accumulatedDistance = 0.0;
     accumulatedAngle = 0.0;
+    accumulatedRotation = 0.0;
+
     playing = false;
     paused = false;
 
-    std::cout << "? Program loaded: " << ops.size() << " operations\n";
-    std::cout << "  [DEBUG] loadedOperations now has: " << loadedOperations.size() << " ops\n";
+    // ===================================================================
+    // Reset pipe systems
+    // ===================================================================
+    pipeSystem.reset();
+
+    // Preserve selected rotation kinematic mode
+    pipe().setRotationKinematicMode(rotationKinematicMode);
+
+    // ===================================================================
+    // Give full program to CAD / GeometricPipeModel
+    // ===================================================================
+    pipeSystem.setProgram(loadedOperations);
+
+    const auto& cadNodes =
+        pipeSystem.cadPipe().getNodes();
+
+    std::cout << "[CAD TEST] GeometricPipeModel nodes="
+        << cadNodes.size()
+        << std::endl;
+
+    std::cout << "[SimulationController] Program loaded: "
+        << ops.size()
+        << " operations\n";
+
+   
+
+    std::cout << "[DEBUG] loadedOperations now has: "
+        << loadedOperations.size()
+        << " ops\n";
 }
 
 
@@ -55,9 +87,11 @@ void SimulationController::reset()
 
     pipe().setRotationKinematicMode(rotationKinematicMode);
 
+    // Keep CAD preview available after reset.
+    pipeSystem.setProgram(loadedOperations);
+
     std::cout << "[SimulationController] reset\n";
 }
-
 void SimulationController::play()
 {
     std::cout << "[PLAY CALLED]\n";
@@ -117,6 +151,25 @@ void SimulationController::step()
 
 void SimulationController::update(double deltaTime)
 {
+    // =====================================================
+    // CAD PREVIEW MODE
+    //
+    // CADPreview displays the full ideal pipe from
+    // GeometricPipeModel.
+    //
+    // It should NOT process manufacturing FEED/BEND/ROTATE.
+    // =====================================================
+
+    if (mode == SimulationMode::CADPreview)
+    {
+        updatePipeGeometryCAD();
+        return;
+    }
+
+    // =====================================================
+    // MANUFACTURING PLAYBACK MODE
+    // =====================================================
+
     if (!playing || operationQueue.isComplete())
         return;
 
@@ -154,16 +207,8 @@ void SimulationController::update(double deltaTime)
         }
     }
 
-    if (mode == SimulationMode::CADPreview)
-    {
-        updatePipeGeometryCAD();
-    }
-    else if (mode == SimulationMode::ManufacturingPlayback)
-    {
-        updatePipeGeometryManufacturing();
-    }
+    updatePipeGeometryManufacturing();
 }
-
 void SimulationController::executeOperation(double deltaTime)
 {
     const Operation* op =
@@ -317,56 +362,6 @@ void SimulationController::advanceToNextOperation()
     }
 }
 
-// =========================================================================
-// IMPLEMENTATION: updatePipeGeometry() - OPTION C (PROPER VERSION)
-// =========================================================================
-//
-// STRATEGY: Accumulate ALL executed operations + current partial operation
-//
-// Execution Flow:
-//
-//   ????????????????????????????????????????????????
-//   ? updatePipeGeometry()                         ?
-//   ????????????????????????????????????????????????
-//                    ?
-//   ????????????????????????????????????????????????
-//   ? Create fresh PipeAxis3D                      ?
-//   ????????????????????????????????????????????????
-//                    ?
-//   ????????????????????????????????????????????????
-//   ? Add ALL completed operations (full segments) ?
-//   ? for i = 0 to currentIdx-1:                   ?
-//   ?   Add loadedOperations[i] completely        ?
-//   ????????????????????????????????????????????????
-//                    ?
-//   ????????????????????????????????????????????????
-//   ? Add PARTIAL current operation                ?
-//   ? if currentIdx < total:                       ?
-//   ?   Add accumulated progress of current op    ?
-//   ????????????????????????????????????????????????
-//                    ?
-//   ????????????????????????????????????????????????
-//   ? Call pipeGeometry.build()                    ?
-//   ? Generate all nodes from segments             ?
-//   ????????????????????????????????????????????????
-//                    ?
-//   ????????????????????????????????????????????????
-//   ? Result: Complete pipe up to current point    ?
-//   ? Ready for rendering!                         ?
-//   ????????????????????????????????????????????????
-//
-// =========================================================================
-
-
-    // Step 5: Build geometry
-    //
-    // This converts segments into nodes (3D coordinates)
-    // Ready for rendering!
-
-
-// =========================================================================
-// PROGRESS TRACKING IMPLEMENTATIONS
-// =========================================================================
 
 double SimulationController::getCurrentOperationProgress() const
 {
@@ -419,78 +414,19 @@ double SimulationController::getOverallProgress() const
 
 void SimulationController::updatePipeGeometryCAD()
 {
-    // Create fresh geometry object for CAD preview mode
-    pipe() = PipeAxis3D(0.5);
-
-    size_t currentIdx = operationQueue.getCurrentIndex();
-
-    std::cout << "[CAD STEP] currentIdx: " << currentIdx << std::endl;
-    std::cout << "[CAD STEP] accumulatedDistance: " << accumulatedDistance << std::endl;
-
-    if (loadedOperations.empty())
-    {
-        std::cerr << "[CAD ERROR] loadedOperations is empty!\n";
-        pipe().build();
-        return;
-    }
-
     // =====================================================
-    // ADD ALL COMPLETED OPERATIONS
+    // CAD PREVIEW MODE
+    //
+    // Uses GeometricPipeModel.
+    // Does not touch ManufacturingPipeSimulator.
+    // Does not touch PipeAxis3D legacy manufacturing axis.
     // =====================================================
 
-    for (size_t i = 0; i < currentIdx && i < loadedOperations.size(); i++)
-    {
-        const Operation& op = loadedOperations[i];
+    const auto& cadNodes =
+        pipeSystem.cadPipe().getNodes();
 
-        if (op.type == Operation::FEED)
-        {
-            pipe().addFeed(op.length);
-        }
-        else if (op.type == Operation::BEND)
-        {
-            pipe().addBend(op.R, op.angle, op.bendDirection);
-        }
-        else if (op.type == Operation::ROTATE)
-        {
-            pipe().addRotate(op.angle, op.rotationDirection);
-        }
-    }
-
-    // =====================================================
-    // ADD PARTIAL CURRENT OPERATION
-    // =====================================================
-
-    const Operation* currentOp = operationQueue.getCurrent();
-
-    if (currentOp)
-    {
-        if (currentOp->type == Operation::FEED)
-        {
-            if (accumulatedDistance > 0.0)
-            {
-                pipe().addFeed(accumulatedDistance);
-            }
-        }
-        else if (currentOp->type == Operation::BEND)
-        {
-            if (accumulatedAngle > 0.0)
-            {
-                pipe().addBend(currentOp->R, accumulatedAngle);
-            }
-        }
-        else if (currentOp->type == Operation::ROTATE)
-        {
-            if (accumulatedRotation > 0.0)
-            {
-                pipe().addRotate(accumulatedRotation);
-            }
-        }
-    }
-
-    pipe().build();
-
-    std::cout << "[CAD GEOM AFTER] nodes: "
-        << pipe().getNodes().size()
+    std::cout << "[CAD PREVIEW] GeometricPipeModel nodes: "
+        << cadNodes.size()
         << std::endl;
 }
 
@@ -500,21 +436,6 @@ void SimulationController::updatePipeGeometryCAD()
 
 void SimulationController::updatePipeGeometryManufacturing()
 {
-    // =====================================================
-    // MANUFACTURING MODE
-    //
-    // Do NOT recreate PipeAxis3D here.
-    // Do NOT addFeed/addBend/addRotate here.
-    // Do NOT rebuild CAD history here.
-    //
-    // PipeAxis3D already owns:
-    // - incoming stock
-    // - active zone
-    // - frozen geometry
-    //
-    // We only ask it to assemble visible render nodes.
-    // =====================================================
-
     pipe().reconstructVisiblePipe();
 
     std::cout << "[MFG GEOM AFTER] nodes: "
@@ -613,10 +534,8 @@ void SimulationController::executeRotate(double angleIncrement)
    
 
 //Helpers for refactoring
-    const OperationQueue& SimulationController::getQueue() const
-    {
-        return operationQueue;
-    }
+
+
 
     // =====================================================
     // Helpers for PipeSystem refactor
@@ -625,22 +544,33 @@ void SimulationController::executeRotate(double angleIncrement)
    
     
 
-    PipeSystem& SimulationController::getPipeSystem()
-    {
-        return pipeSystem;
-    }
+OperationQueue& SimulationController::getQueue()
+{
+    return operationQueue;
+}
 
-    const PipeSystem& SimulationController::getPipeSystem() const
-    {
-        return pipeSystem;
-    }
+const OperationQueue& SimulationController::getQueue() const
+{
+    return operationQueue;
+}
 
-    PipeAxis3D& SimulationController::pipe()
-    {
-        return pipeSystem.manufacturingPipe();
-    }
+PipeSystem& SimulationController::getPipeSystem()
+{
+    return pipeSystem;
+}
 
-    const PipeAxis3D& SimulationController::pipe() const
-    {
-        return pipeSystem.manufacturingPipe();
-    }
+const PipeSystem& SimulationController::getPipeSystem() const
+{
+    return pipeSystem;
+}
+
+ManufacturingPipeSimulator& SimulationController::pipe()
+{
+    return pipeSystem.manufacturingPipe();
+}
+
+const ManufacturingPipeSimulator& SimulationController::pipe() const
+{
+    return pipeSystem.manufacturingPipe();
+}
+    

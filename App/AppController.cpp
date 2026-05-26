@@ -38,14 +38,14 @@ AppController::AppController()
 
 
     sim.setMode(
-    SimulationController::SimulationMode::ManufacturingPlayback
+   SimulationController::SimulationMode::ManufacturingPlayback
     );
 
     // Or for CAD preview:
     //
     // sim.setMode(
-    //   SimulationController::SimulationMode::CADPreview
-    // );
+    //  SimulationController::SimulationMode::CADPreview
+    //   );
 
     
 

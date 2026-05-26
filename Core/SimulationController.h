@@ -1,32 +1,35 @@
 #pragma once
 
+#include <vector>
+
 #include "OperationQueue.h"
 #include "PipeAxis3D.h"
 #include "Machine/MachineState.h"
 #include "Core/PipeSystem.h"
-#include <vector>
 
 class SimulationController
 {
 public:
-   
     enum class SimulationMode
     {
         CADPreview,
         ManufacturingPlayback
     };
-    // =========================================
-    // PUBLIC INTERFACE (unchanged from Phase 3A)
-    // =========================================
-    
+
+public:
     SimulationController();
+
     void loadProgram(const std::vector<Operation>& ops);
+
     void play();
     void pause();
     void step();
     void reset();
     void update(double deltaTime);
 
+    // =====================================================
+    // Rotation kinematic mode
+    // =====================================================
 
     void setRotationKinematicMode(
         PipeAxis3D::RotationKinematicMode mode)
@@ -39,14 +42,24 @@ public:
     {
         return rotationKinematicMode;
     }
-    void setMode(SimulationMode newMode) 
+
+    // =====================================================
+    // Simulation mode
+    // =====================================================
+
+    void setMode(SimulationMode newMode)
     {
         mode = newMode;
     }
+
     SimulationMode getMode() const
     {
         return mode;
     }
+
+    // =====================================================
+    // Machine state
+    // =====================================================
 
     const MachineState& getState() const
     {
@@ -58,15 +71,54 @@ public:
         return machineState;
     }
 
+    // =====================================================
+    // Manufacturing legacy pipe access
+    //
+    // Used by GLView / old renderer code.
+    // Returns old PipeAxis3D through ManufacturingPipeSimulator.
+    // =====================================================
+
     const PipeAxis3D& getPipeGeometry() const
     {
-        return pipeSystem.manufacturingPipe();
+        return pipeSystem.legacyPipeAxis();
     }
 
     PipeAxis3D& getPipeGeometry()
     {
+        return pipeSystem.legacyPipeAxis();
+    }
+
+    // =====================================================
+    // CAD pipe access
+    // =====================================================
+
+    GeometricPipeModel& getCadPipeGeometry()
+    {
+        return pipeSystem.cadPipe();
+    }
+
+    const GeometricPipeModel& getCadPipeGeometry() const
+    {
+        return pipeSystem.cadPipe();
+    }
+
+    // =====================================================
+    // Manufacturing simulator access
+    // =====================================================
+
+    ManufacturingPipeSimulator& getManufacturingPipe()
+    {
         return pipeSystem.manufacturingPipe();
     }
+
+    const ManufacturingPipeSimulator& getManufacturingPipe() const
+    {
+        return pipeSystem.manufacturingPipe();
+    }
+
+    // =====================================================
+    // Playback state
+    // =====================================================
 
     bool isPlaying() const
     {
@@ -77,14 +129,21 @@ public:
     {
         return paused;
     }
-    double getSpeed() const { return speed; }
-    void setSpeed(double speedMmPerSec) { speed = speedMmPerSec; }
+
+    double getSpeed() const
+    {
+        return speed;
+    }
+
+    void setSpeed(double speedMmPerSec)
+    {
+        speed = speedMmPerSec;
+    }
+
     void setRotationSpeedRadPerSec(double value)
     {
         if (value > 0.0)
-        {
             rotationSpeedRadPerSec = value;
-        }
     }
 
     double getRotationSpeedRadPerSec() const
@@ -94,109 +153,84 @@ public:
 
     double getCurrentOperationProgress() const;
     double getOverallProgress() const;
-    size_t getCurrentOperationIndex() const { return operationQueue.getCurrentIndex(); }
-    size_t getTotalOperations() const { return operationQueue.getTotalOperations(); }
-    OperationQueue& getQueue();              // ? non-const (for writing)
-    const OperationQueue& getQueue() const;  // ? const (for reading)
-   
-    //PipeAxis3D& getPipeGeometry();
-    //const PipeAxis3D& getPipeGeometry() const;
+
+    size_t getCurrentOperationIndex() const
+    {
+        return operationQueue.getCurrentIndex();
+    }
+
+    size_t getTotalOperations() const
+    {
+        return operationQueue.getTotalOperations();
+    }
+
+    OperationQueue& getQueue();
+    const OperationQueue& getQueue() const;
 
     PipeSystem& getPipeSystem();
     const PipeSystem& getPipeSystem() const;
 
 private:
-    double rotationSpeedRadPerSec = PI;//180 degrees per second
-	SimulationMode mode =SimulationMode::ManufacturingPlayback;                  
-    // =========================================================================
-    // PLAYBACK STATE
-    // =========================================================================
-    bool playing;              // Currently executing
-    bool paused;               // Paused mid-execution
-    double speed;              // mm/second
+    // =====================================================
+    // Internal helper
+    //
+    // After Phase 4D this returns ManufacturingPipeSimulator,
+    // not PipeAxis3D.
+    // =====================================================
 
-    // =========================================================================
-    // PROGRESS TRACKING
-    // =========================================================================
-    //
-    // These variables track progress within the CURRENT operation
-    // They are reset to 0 when moving to the next operation
-    //
+    ManufacturingPipeSimulator& pipe();
+    const ManufacturingPipeSimulator& pipe() const;
 
-    double accumulatedDistance;  // mm done in current FEED
-    double accumulatedAngle;     // radians done in current BEND
-    double accumulatedRotation = 0.0;  // radians
-    // =========================================================================
-    // ROTATION TRACKING (NEW FOR PHASE 3B)
-    // =========================================================================
-    //
-    // PURPOSE: Track twist rotation during ROTATE operations
-    //
-    // HOW IT WORKS:
-    //   When executing ROTATE operation:
-    //   • accumulatedRotation starts at 0.0
-    //   • Increases by angleIncrement each frame
-    //   • When >= operation.angle, operation completes
-    //   • Reset to 0.0 when advancing to next operation
-    //
-    // EXAMPLE:
-    //   Operation: ROTATE 90° (?/2 radians)
-    //   Frame 1: accumulatedRotation = 0.5 rad (32%)
-    //   Frame 2: accumulatedRotation = 1.0 rad (64%)
-    //   Frame 3: accumulatedRotation = 1.57 rad (100% - DONE!)
-    //
+private:
+    // =====================================================
+    // Mode / speed
+    // =====================================================
+
+    double rotationSpeedRadPerSec = PI;
+
+    SimulationMode mode =
+        SimulationMode::ManufacturingPlayback;
+
     PipeAxis3D::RotationKinematicMode rotationKinematicMode =
         PipeAxis3D::RotationKinematicMode::PipeRoll;
 
-    // =========================================================================
-    // CORE COMPONENTS
-    // =========================================================================
-    OperationQueue operationQueue;    // Queue of operations to execute
-    MachineState machineState;        // Current machine state
-   // PipeAxis3D pipeGeometry;          // Pipe geometry (segments + nodes)
-    PipeSystem pipeSystem;
- 
-     PipeAxis3D& pipe();
-     const PipeAxis3D& pipe() const;
-    // =========================================================================
-    // LOCAL OPERATION STORAGE (for geometry accumulation)
-    // =========================================================================
-    std::vector<Operation> loadedOperations;  // Copy of all operations
+    // =====================================================
+    // Playback state
+    // =====================================================
 
-    // =========================================================================
-    // INTERNAL EXECUTION METHODS
-    // =========================================================================
+    bool playing = false;
+    bool paused = false;
+
+    double speed = 40.0;
+
+    double accumulatedDistance = 0.0;
+    double accumulatedAngle = 0.0;
+    double accumulatedRotation = 0.0;
+
+    // =====================================================
+    // Core components
+    // =====================================================
+
+    OperationQueue operationQueue;
+    MachineState machineState;
+    PipeSystem pipeSystem;
+
+    // Full loaded program copy
+    std::vector<Operation> loadedOperations;
+
+private:
+    // =====================================================
+    // Internal execution
+    // =====================================================
 
     void executeOperation(double deltaTime);
+
     void executeFeed(double distance);
     void executeBend(double angleIncrement);
     void executeRotate(double angleIncrement);
 
     void advanceToNextOperation();
-    // =========================================================================
-    // ROTATION EXECUTION (NEW FOR PHASE 3B)
-    // =========================================================================
-    //
-    // Executes a ROTATE operation - twists pipe around longitudinal axis
-    //
-    // CONCEPT: Imagine twisting a rubber tube around its centerline
-    //
-    //   Before:        During:        After:
-    //   ????           /|\           ????
-    //   ????    ?      / \    ?        ????
-    //   ????           \ /           ????
-    //                   \|/
-    //
-    // KEY INSIGHT:
-    //   • Position (P) doesn't change
-    //   • Only frame orientation changes
-    //   • Normal and Binormal vectors rotate
-    //   • Tangent stays the same
-    //
-    
 
-    
     void updatePipeGeometryCAD();
-	void updatePipeGeometryManufacturing();
-    
-}; 
+    void updatePipeGeometryManufacturing();
+};

@@ -82,6 +82,9 @@ set(CORE_HEADERS
     Core/Geometry/PipeNode.h
     Core/Geometry/PipeSegment.h
     Core/PipeSystem.h
+    Core/Geometry/GeometricPipeModel.h
+    Core/Manufacturing/ManufacturingPipeSimulator.h
+
 )
 
 set(MACHINE_HEADERS
@@ -95,7 +98,7 @@ set(MACHINE_HEADERS
 #OpenGL functions are NOT linked directly on Windows
 add_library(glad STATIC
     external/glad/src/gl.c
-  )
+   )
 
 # Make GLAD headers visible to all users of this library
 target_include_directories(glad PUBLIC

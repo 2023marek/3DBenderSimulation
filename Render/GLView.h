@@ -76,6 +76,7 @@ private:
     // Reason:
     // Only GLView needs these helpers during rendering.
     // =====================================================
+    void uploadCadPipeGeometry();
 
     void nodesToCenterlineAndTangents(
         const std::vector<PipeAxis3D::Node>& nodes,

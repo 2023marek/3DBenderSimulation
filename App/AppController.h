@@ -25,6 +25,18 @@ public:
     }
 
     const PipeAxis3D& getPipeGeometry() const;
+	// ===== SIMULATION MODE CADPreview vs ManufacturingPlayback API =====
+
+    void setSimulationMode(
+        SimulationController::SimulationMode newMode)
+    {
+        sim.setMode(newMode);
+    }
+
+    SimulationController::SimulationMode getSimulationMode() const
+    {
+        return sim.getMode();
+    }
 
     // NEW
     HUDData buildHUDData() const;
@@ -35,10 +47,19 @@ public:
     void step() { sim.step(); }
    
     void handleAction(UserAction action);
-    SimulationController::SimulationMode getSimulationMode() const
+   
+
+    GeometricPipeModel& getCadPipeGeometry()
     {
-        return sim.getMode();
+        return sim.getCadPipeGeometry();
     }
+
+    const GeometricPipeModel& getCadPipeGeometry() const
+    {
+        return sim.getCadPipeGeometry();
+    }
+
+    
 private:
 	RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;
