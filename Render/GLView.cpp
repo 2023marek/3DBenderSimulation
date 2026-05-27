@@ -5,6 +5,7 @@
 #include "Render/ControlCamera.h"
 #include "GLView.h"
 #include "App/AppController.h"
+#include "Core/Manufacturing/ManufacturingPipeSimulator.h"
 //#include "Render/ShaderGL.h"
 #include <QOpenGLContext>
 #include <iostream>
@@ -449,11 +450,11 @@ void GLView::paintGL()
     // =====================================================
     else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
     {
-        const PipeAxis3D& pipe =
-            app->getPipeGeometry();
+        const ManufacturingPipeSimulator& mfgPipe =
+            app->getManufacturingPipe();
 
         const auto& data =
-            pipe.getManufacturingRenderData();
+            mfgPipe.getManufacturingRenderData();
 
         pipeRenderer.setMode(renderMode);
 
@@ -486,28 +487,24 @@ void GLView::paintGL()
 
 void GLView::uploadPipeGeometry()
 {
-    if (!pipe)
+    if (!app)
         return;
 
     // =====================================================
     // MANUFACTURING MODE
     //
-    // Draw zones as separate line strips:
-    //
-    // Zone 1: Incoming stock
-    // Zone 2: Positioned straight
-    // Zone 3: Active bend zone
-    // Zone 4: Frozen geometry
-    //
-    // This removes false connector lines.
+    // Render data now belongs to ManufacturingPipeSimulator.
+    // PipeAxis3D is legacy here.
     // =====================================================
 
-    if (app &&
-        app->getSimulationMode()
+    if (app->getSimulationMode()
         == SimulationController::SimulationMode::ManufacturingPlayback)
     {
+        const ManufacturingPipeSimulator& mfgPipe =
+            app->getManufacturingPipe();
+
         const auto& data =
-            pipe->getManufacturingRenderData();
+            mfgPipe.getManufacturingRenderData();
 
         std::vector<std::vector<float>> strips;
 
@@ -533,38 +530,17 @@ void GLView::uploadPipeGeometry()
 
         pipeRenderer.uploadLineStrips(strips);
 
-        // For now, mesh mode still uses flattened getNodes().
-        // We will improve multi-zone mesh later.
-        if (renderMode == RenderMode::MESH)
-        {
-            const auto& nodes = pipe->getNodes();
-
-            std::vector<Vec3D> C;
-            std::vector<Vec3D> T;
-
-            for (const auto& n : nodes)
-            {
-                C.push_back(n.pos);
-                T.push_back(n.T);
-            }
-
-            tubeMesh.generate(C, T, 5.0, 12);
-
-            pipeRenderer.uploadMesh(
-                tubeMesh.getVertices(),
-                tubeMesh.getIndices()
-            );
-        }
-
         return;
     }
 
     // =====================================================
-    // CAD PREVIEW MODE
+    // CAD / LEGACY MODE
     //
-    // CAD pipe is one continuous designed centerline.
-    // One line strip is correct here.
+    // This part can still use old pipe pointer for now.
     // =====================================================
+
+    if (!pipe)
+        return;
 
     const auto& nodes =
         pipe->getNodes();
@@ -576,26 +552,25 @@ void GLView::uploadPipeGeometry()
         nodesToFloatLine(nodes)
     );
 
-    if (renderMode == RenderMode::MESH)
-    {
-        std::vector<Vec3D> C;
-        std::vector<Vec3D> T;
+    //if (renderMode == RenderMode::MESH)
+    //{
+     //   std::vector<Vec3D> C;
+     //   std::vector<Vec3D> T;
 
-        for (const auto& n : nodes)
-        {
-            C.push_back(n.pos);
-            T.push_back(n.T);
-        }
+      //  for (const auto& n : nodes)
+      //  {
+       //     C.push_back(n.pos);
+        //    T.push_back(n.T);
+       // }
 
-        tubeMesh.generate(C, T, 5.0, 12);
+       // tubeMesh.generate(C, T, 5.0, 12);
 
-        pipeRenderer.uploadMesh(
-            tubeMesh.getVertices(),
-            tubeMesh.getIndices()
-        );
-    }
+       // pipeRenderer.uploadMesh(
+        //    tubeMesh.getVertices(),
+        //    tubeMesh.getIndices()
+       // );
+   
 }
-
 void GLView::mousePressEvent(QMouseEvent* event)
 {
     lastMousePos = event->pos();

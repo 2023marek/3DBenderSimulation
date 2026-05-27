@@ -285,7 +285,62 @@ private:
         RotationKinematicMode::PipeRoll;
 	public:
 
+        // =====================================================
+        // TEMPORARY MANUFACTURING BEND BRIDGE
+        //
+        // Used during Phase 5B-3D.
+        // ManufacturingPipeSimulator owns processBend(),
+        // but PipeAxis3D still owns the bend helper logic.
+        // =====================================================
 
+        void mfgBeginBendFromFrame(
+            const Frame& frame,
+            double radius,
+            double targetAngle,
+            BendDirection bendDirection)
+        {
+            beginBendFromFrame(
+                frame,
+                radius,
+                targetAngle,
+                bendDirection
+            );
+        }
+
+        Frame mfgMakePositionedStraightEndFrame(
+            const Frame& startFrame,
+            double length) const
+        {
+            return makePositionedStraightEndFrame(
+                startFrame,
+                length
+            );
+        }
+
+        void mfgUpdateActiveZone(double stepAngle)
+        {
+            updateActiveZone(stepAngle);
+        }
+
+        void mfgTransformFrozenGeometryBetweenFrames(
+            const Frame& oldFrame,
+            const Frame& newFrame)
+        {
+            transformFrozenGeometryBetweenFrames(
+                oldFrame,
+                newFrame
+            );
+        }
+
+        void mfgFreezeActiveZone()
+        {
+            freezeActiveZone();
+        }
+
+        void mfgMarkDirty()
+        {
+            markDirty();
+        }
     
 
 
@@ -337,6 +392,34 @@ public:
         {
             initialize();
         }
+
+
+// temporary bridge frame accessorsm later for moveout
+        const Frame& getMachineEntryFrame() const
+        {
+            return machineEntryFrame;
+        }
+
+        Frame& getMachineEntryFrame()
+        {
+            return machineEntryFrame;
+        }
+
+        const Frame& getCurrentFrame() const
+        {
+            return currentFrame;
+        }
+
+        Frame& getCurrentFrame()
+        {
+            return currentFrame;
+        }
+
+        void setCurrentFrame(const Frame& frame)
+        {
+            currentFrame = frame;
+        }
+
     //Helper for Bend direction
     double bendDirectionSign(BendDirection dir) const
     {
@@ -458,11 +541,11 @@ public:
 
 	// =====================================================================
 	//GETTERS  
-    Frame getMachineEntryFrame() const
-    {
-        return machineEntryFrame;
-    }
+    
 
+   
+
+    
     double getIncomingStockRemainingLength() const
     {
         return mfg.incomingStock.remainingLength;

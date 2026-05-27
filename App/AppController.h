@@ -1,8 +1,12 @@
 #pragma once
+
+#include <iostream>
+
 #include "Common/UserAction.h"
 #include "Render/RenderMode.h"
 #include "Core/SimulationController.h"
-#include "Render/HUDData.h"   
+#include "Core/Manufacturing/ManufacturingPipeSimulator.h"
+#include "Render/HUDData.h"
 
 class AppController
 {
@@ -10,12 +14,20 @@ public:
     AppController();
 
     void update(double dt);
-    // ===== RENDER MODE API =====
-    RenderMode getRenderMode() const { return renderMode; }
+
+    // =====================================================
+    // RENDER MODE API
+    // =====================================================
+
+    RenderMode getRenderMode() const
+    {
+        return renderMode;
+    }
 
     void toggleRenderMode()
     {
-        renderMode = (renderMode == RenderMode::LINE)
+        renderMode =
+            (renderMode == RenderMode::LINE)
             ? RenderMode::MESH
             : RenderMode::LINE;
 
@@ -24,8 +36,45 @@ public:
             << std::endl;
     }
 
+    // =====================================================
+    // MANUFACTURING PIPE API
+    // =====================================================
+
+    ManufacturingPipeSimulator& getManufacturingPipe()
+    {
+        return sim.getManufacturingPipe();
+    }
+
+    const ManufacturingPipeSimulator& getManufacturingPipe() const
+    {
+        return sim.getManufacturingPipe();
+    }
+
+    // =====================================================
+    // LEGACY PIPE API
+    // Still needed temporarily during refactor.
+    // =====================================================
+
+    PipeAxis3D& getPipeGeometry();
     const PipeAxis3D& getPipeGeometry() const;
-	// ===== SIMULATION MODE CADPreview vs ManufacturingPlayback API =====
+
+    // =====================================================
+    // CAD PIPE API
+    // =====================================================
+
+    GeometricPipeModel& getCadPipeGeometry()
+    {
+        return sim.getCadPipeGeometry();
+    }
+
+    const GeometricPipeModel& getCadPipeGeometry() const
+    {
+        return sim.getCadPipeGeometry();
+    }
+
+    // =====================================================
+    // SIMULATION MODE API
+    // =====================================================
 
     void setSimulationMode(
         SimulationController::SimulationMode newMode)
@@ -38,34 +87,36 @@ public:
         return sim.getMode();
     }
 
-    // NEW
-    HUDData buildHUDData() const;
-public:
-    void play() { sim.play(); }
-    void pause() { sim.pause(); }
-    void reset() { sim.reset(); }
-    void step() { sim.step(); }
-   
+    // =====================================================
+    // PLAYBACK API
+    // =====================================================
+
+    void play()
+    {
+        sim.play();
+    }
+
+    void pause()
+    {
+        sim.pause();
+    }
+
+    void reset()
+    {
+        sim.reset();
+    }
+
+    void step()
+    {
+        sim.step();
+    }
+
     void handleAction(UserAction action);
-   
 
-    GeometricPipeModel& getCadPipeGeometry()
-    {
-        return sim.getCadPipeGeometry();
-    }
+    HUDData buildHUDData() const;
 
-    const GeometricPipeModel& getCadPipeGeometry() const
-    {
-        return sim.getCadPipeGeometry();
-    }
-
-    
 private:
-	RenderMode renderMode = RenderMode::LINE;
+    RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;
-
-
-
-};
-
+}; 
       

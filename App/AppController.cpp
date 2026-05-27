@@ -71,8 +71,11 @@ void AppController::update(double dt)
 const PipeAxis3D& AppController::getPipeGeometry() const
 {
     return sim.getPipeGeometry();
-    
+}
 
+PipeAxis3D& AppController::getPipeGeometry()
+{
+    return sim.getPipeGeometry();
 }
 
 // =====================================
