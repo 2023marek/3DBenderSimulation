@@ -147,7 +147,7 @@ public:
 
         if (remainingAngle <= 0.0)
         {
-            axis.mfgFreezeActiveZone();
+            freezeActiveZone();
             axis.mfgMarkDirty();
             return;
         }
@@ -178,12 +178,12 @@ public:
        updateActiveZone(stepAngle);
 
         Frame newFrozenAttachFrame =
-            axis.mfgMakePositionedStraightEndFrame(
+            makePositionedStraightEndFrame(
                 state.activeZone.frame,
                 state.positionedStraight.length
             );
 
-        axis.mfgTransformFrozenGeometryBetweenFrames(
+        transformFrozenGeometryBetweenFrames(
             previousFrozenAttachFrame,
             newFrozenAttachFrame
         );
@@ -191,7 +191,7 @@ public:
         if (state.activeZone.accumulatedAngle
             >= state.activeZone.targetAngle)
         {
-            axis.mfgFreezeActiveZone();
+            freezeActiveZone();
         }
 
         std::cout << "[MFG SIM BEND] arcStep="
@@ -295,6 +295,256 @@ public:
     }
 
 private:
+
+
+
+
+    void freezeActiveZone()
+    {
+        std::vector<PipeNode> oldFrozen =
+            state.frozenNodes;
+
+        std::vector<PipeNode> newFrozen;
+
+        // =====================================================
+        // 1. Current bend trace becomes frozen geometry.
+        // =====================================================
+
+        for (const auto& node : state.currentBendTraceNodes)
+        {
+            appendNodeNoDuplicate(
+                newFrozen,
+                node
+            );
+        }
+
+        // =====================================================
+        // 2. Remaining positioned straight becomes frozen too.
+        // =====================================================
+
+        std::vector<PipeNode> positionedFrozen =
+            buildPositionedStraightFrozenNodes(
+                state.activeZone.frame,
+                state.positionedStraight.length
+            );
+
+        for (const auto& node : positionedFrozen)
+        {
+            appendNodeNoDuplicate(
+                newFrozen,
+                node
+            );
+        }
+
+        // =====================================================
+        // 3. Existing frozen body follows after that.
+        // =====================================================
+
+        for (const auto& node : oldFrozen)
+        {
+            appendNodeNoDuplicate(
+                newFrozen,
+                node
+            );
+        }
+
+        state.frozenNodes =
+            newFrozen;
+
+        // =====================================================
+        // Sync legacy currentFrame while PipeAxis3D still owns it.
+        // =====================================================
+
+        if (!state.frozenNodes.empty())
+        {
+            const PipeNode& last =
+                state.frozenNodes.back();
+
+            Frame frame;
+
+            frame.P = last.pos;
+            frame.T = last.T;
+            frame.N = last.N;
+            frame.B = last.B;
+
+            axis.setCurrentFrame(frame);
+        }
+        else
+        {
+            axis.setCurrentFrame(
+                state.activeZone.frame
+            );
+        }
+
+        state.currentBendTraceNodes.clear();
+
+        state.positionedStraight.length = 0.0;
+        state.positionedStraight.nodes.clear();
+
+        state.activeZone.localNodes.clear();
+        state.activeZone.active = false;
+
+        std::cout << "[MFG SIM FREEZE ACTIVE ZONE] frozenNodes="
+            << state.frozenNodes.size()
+            << std::endl;
+    }
+
+
+
+    std::vector<PipeNode> buildPositionedStraightFrozenNodes(
+        const Frame& startFrame,
+        double length) const
+    {
+        std::vector<PipeNode> result;
+
+        if (length <= 0.0)
+            return result;
+
+        if (ds <= 1e-9)
+            return result;
+
+        int stepCount =
+            std::max(
+                1,
+                static_cast<int>(std::ceil(length / ds))
+            );
+
+        double stepLength =
+            length / static_cast<double>(stepCount);
+
+        Vec3D dir =
+            startFrame.T.normalized();
+
+        for (int i = 1; i <= stepCount; ++i)
+        {
+            double s =
+                stepLength * static_cast<double>(i);
+
+            PipeNode node;
+
+            node.pos =
+                startFrame.P + dir * s;
+
+            node.T = startFrame.T;
+            node.N = startFrame.N;
+            node.B = startFrame.B;
+
+            result.push_back(node);
+        }
+
+        return result;
+    }
+
+
+    void transformFrozenGeometryBetweenFrames(
+        const Frame& oldFrame,
+        const Frame& newFrame)
+    {
+        for (auto& node : state.frozenNodes)
+        {
+            transformNodeBetweenFrames(
+                node,
+                oldFrame,
+                newFrame
+            );
+        }
+    }
+
+    void transformNodeBetweenFrames(
+        PipeNode& node,
+        const Frame& oldFrame,
+        const Frame& newFrame)
+    {
+        node.pos =
+            transformPointBetweenFrames(
+                node.pos,
+                oldFrame,
+                newFrame
+            );
+
+        node.T =
+            transformDirectionBetweenFrames(
+                node.T,
+                oldFrame,
+                newFrame
+            );
+
+        node.N =
+            transformDirectionBetweenFrames(
+                node.N,
+                oldFrame,
+                newFrame
+            );
+
+        node.B =
+            transformDirectionBetweenFrames(
+                node.B,
+                oldFrame,
+                newFrame
+            );
+    }
+
+    Vec3D transformDirectionBetweenFrames(
+        const Vec3D& dir,
+        const Frame& oldFrame,
+        const Frame& newFrame) const
+    {
+        double x =
+            dot(dir, oldFrame.T.normalized());
+
+        double y =
+            dot(dir, oldFrame.N.normalized());
+
+        double z =
+            dot(dir, oldFrame.B.normalized());
+
+        return (
+            newFrame.T.normalized() * x
+            + newFrame.N.normalized() * y
+            + newFrame.B.normalized() * z
+            ).normalized();
+    }
+
+    Vec3D transformPointBetweenFrames(
+        const Vec3D& point,
+        const Frame& oldFrame,
+        const Frame& newFrame) const
+    {
+        Vec3D r =
+            point - oldFrame.P;
+
+        double x =
+            dot(r, oldFrame.T.normalized());
+
+        double y =
+            dot(r, oldFrame.N.normalized());
+
+        double z =
+            dot(r, oldFrame.B.normalized());
+
+        return newFrame.P
+            + newFrame.T.normalized() * x
+            + newFrame.N.normalized() * y
+            + newFrame.B.normalized() * z;
+    }
+    void appendNodeNoDuplicate(
+        std::vector<PipeNode>& dst,
+        const PipeNode& node)
+    {
+        if (!dst.empty() && nearlySamePoint(dst.back(), node))
+            return;
+
+        dst.push_back(node);
+    }
+
+    bool nearlySamePoint(
+        const PipeNode& a,
+        const PipeNode& b,
+        double eps = 1e-6) const
+    {
+        Vec3D d = a.pos - b.pos;
+        return d.lengthSquared() < eps * eps;
+    }
     void moveFrozenGeometryDuringFeed(double distance)
     {
         if (distance <= 0.0)

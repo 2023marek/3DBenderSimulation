@@ -293,49 +293,7 @@ private:
         // but PipeAxis3D still owns the bend helper logic.
         // =====================================================
 
-        void mfgBeginBendFromFrame(
-            const Frame& frame,
-            double radius,
-            double targetAngle,
-            BendDirection bendDirection)
-        {
-            beginBendFromFrame(
-                frame,
-                radius,
-                targetAngle,
-                bendDirection
-            );
-        }
-
-        Frame mfgMakePositionedStraightEndFrame(
-            const Frame& startFrame,
-            double length) const
-        {
-            return makePositionedStraightEndFrame(
-                startFrame,
-                length
-            );
-        }
-
-        void mfgUpdateActiveZone(double stepAngle)
-        {
-            updateActiveZone(stepAngle);
-        }
-
-        void mfgTransformFrozenGeometryBetweenFrames(
-            const Frame& oldFrame,
-            const Frame& newFrame)
-        {
-            transformFrozenGeometryBetweenFrames(
-                oldFrame,
-                newFrame
-            );
-        }
-
-        void mfgFreezeActiveZone()
-        {
-            freezeActiveZone();
-        }
+        
 
         void mfgMarkDirty()
         {
