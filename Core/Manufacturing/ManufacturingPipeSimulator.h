@@ -1,51 +1,38 @@
 #pragma once
 
 #include "Core/PipeAxis3D.h"
-
-// =====================================================
-// MANUFACTURING PIPE SIMULATOR
-//
-// PHASE 4D BRIDGE WRAPPER
-//
-// Current purpose:
-//     Own the old PipeAxis3D manufacturing implementation.
-//
-// Future purpose:
-//     Own real manufacturing state directly:
-//
-//         IncomingStock
-//         PositionedStraight
-//         ActiveZone
-//         CurrentBendTrace
-//         FrozenGeometry
-//         ManufacturingRenderData
-//
-// Important:
-//     This class should not change behavior yet.
-//     It only prepares architecture.
-// =====================================================
+#include "Core/Manufacturing/ManufacturingState.h"
 
 class ManufacturingPipeSimulator
 {
 public:
     ManufacturingPipeSimulator()
-        : axis(0.5)
+        : state(),
+        axis(0.5, state)
     {
     }
 
     explicit ManufacturingPipeSimulator(double sampleStep)
-        : axis(sampleStep)
+        : state(),
+        axis(sampleStep, state)
     {
     }
 
     void reset()
     {
-        axis = PipeAxis3D(0.5);
+        state.clear();
+        axis.clear();
     }
 
-    // -----------------------------------------------------
-    // Manufacturing commands
-    // -----------------------------------------------------
+    ManufacturingState& getState()
+    {
+        return state;
+    }
+
+    const ManufacturingState& getState() const
+    {
+        return state;
+    }
 
     void processFeed(double distance)
     {
@@ -76,10 +63,6 @@ public:
         axis.reconstructVisiblePipe();
     }
 
-    // -----------------------------------------------------
-    // Machine kinematic mode
-    // -----------------------------------------------------
-
     void setRotationKinematicMode(
         PipeAxis3D::RotationKinematicMode mode)
     {
@@ -90,10 +73,6 @@ public:
     {
         return axis.getRotationKinematicMode();
     }
-
-    // -----------------------------------------------------
-    // Render data
-    // -----------------------------------------------------
 
     const PipeAxis3D::ManufacturingRenderData&
         getManufacturingRenderData() const
@@ -106,13 +85,6 @@ public:
         return axis.getNodes();
     }
 
-    // -----------------------------------------------------
-    // Temporary legacy access
-    //
-    // Needed while GLView/AppController still expect PipeAxis3D.
-    // Later we remove this.
-    // -----------------------------------------------------
-
     PipeAxis3D& legacyAxis()
     {
         return axis;
@@ -124,5 +96,6 @@ public:
     }
 
 private:
+    ManufacturingState state;
     PipeAxis3D axis;
 };

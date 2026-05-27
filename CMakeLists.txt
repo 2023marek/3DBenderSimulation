@@ -84,6 +84,10 @@ set(CORE_HEADERS
     Core/PipeSystem.h
     Core/Geometry/GeometricPipeModel.h
     Core/Manufacturing/ManufacturingPipeSimulator.h
+    Core/Manufacturing/RotationKinematicMode.h
+    Core/Manufacturing/ManufacturingTypes.h
+    Core/Manufacturing/ManufacturingState.h
+
 
 )
 
