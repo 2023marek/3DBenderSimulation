@@ -157,7 +157,10 @@ public:
             //return angle / std::abs(curvature);
         //}
     //};
-
+    void markGeometryDirty()
+    {
+        markDirty();
+    }
       
  struct GeometricSegment
     {
@@ -295,11 +298,7 @@ private:
 
         
 
-        void mfgMarkDirty()
-        {
-            markDirty();
-        }
-    
+       
 
 
     // ======================================
@@ -548,42 +547,7 @@ public:
     // ====================================================
     // FUNCTION MANUFACTURING
     // 
-     void updatePipeGeometryManufacturing()
-    {
-        // =====================================================
-        // MANUFACTURING MODE
-        //
-        // Do NOT recreate PipeAxis3D.
-        // Do NOT addFeed/addBend/addRotate here.
-        // Do NOT call CAD build().
-        //
-        // PipeAxis3D already owns:
-        // - incomingStock
-        // - activeZone
-        // - frozenNodes
-        //
-        // This function only asks it to rebuild visible nodes
-        // from current manufacturing state.
-        // =====================================================
-
-        reconstructVisiblePipe();
-    }
-
-     void reconstructVisiblePipe()
-     {
-         // =====================================================
-         // MANUFACTURING RENDER RECONSTRUCTION
-         //
-         // This does NOT execute CNC program.
-         // This does NOT rebuild CAD history.
-         //
-         // It only converts current manufacturing state into
-         // renderable zone groups.
-         // =====================================================
-
-         
-         buildNodes();
-     }
+   
     // =====================================================================
     // BUILD (Reconstruct geometry from operations)
     // =====================================================================
@@ -623,282 +587,14 @@ public:
     }
     // MANUFACTURING API
 	//=====================================================================
-    void processFeed(double distance)
-    {
-        // =====================================================
-        // FOUR-ZONE FEED PIPEFLOW
-        //
-        // IncomingStock  --->  PositionedStraight
-        //
-        // FEED:
-        // - does NOT bend
-        // - does NOT create active curvature
-        // - does NOT directly create frozen bend geometry
-        // - moves material from Zone 1 into Zone 2
-        // =====================================================
-
-        if (distance <= 0.0)
-            return;
-
-        double actualFeed =
-            std::min(distance, mfg.incomingStock.remainingLength);
-
-        if (actualFeed <= 0.0)
-            return;
-
-        // =====================================================
-        // ZONE 1 — incoming stock becomes shorter
-        // =====================================================
-
-        mfg.incomingStock.remainingLength -= actualFeed;
-        mfg.incomingStock.consumedLength += actualFeed;
-
-        if (mfg.incomingStock.remainingLength < 0.0)
-            mfg.incomingStock.remainingLength = 0.0;
-
-        // =====================================================
-        // ZONE 2 — positioned straight becomes longer
-        // =====================================================
-
-        mfg.positionedStraight.length += actualFeed;
-
-        // =====================================================
-        // ZONE 4 — already finished geometry is pushed forward
-        //
-        // Keep this if you already implemented rigid translation
-        // of frozen geometry during feed.
-        // =====================================================
-
-        moveFrozenGeometryDuringFeed(actualFeed);
-
-        std::cout << "[FEED 4Z] incomingRemaining="
-            << mfg.incomingStock.remainingLength
-            << " positionedStraight="
-            << mfg.positionedStraight.length
-            << " consumed="
-            << mfg.incomingStock.consumedLength
-            << std::endl;
-
-        markDirty();
-    } 
+   
 
 
-    void processBend(
-        double radius,
-        double targetAngle,
-        double angleIncrement,
-        BendDirection bendDirection)
-    {
-        if (radius <= 1e-9)
-        {
-            std::cerr << "[processBend ERROR] radius <= 0\n";
-            return;
-        }
+    
 
-        if (targetAngle <= 0.0)
-            return;
 
-        if (angleIncrement <= 0.0)
-            return;
 
-        if (mfg.positionedStraight.length <= 0.0)
-        {
-            std::cerr << "[processBend WARNING] No positioned straight material available.\n";
-            return;
-        }
-
-        // =====================================================
-        // Start active bend once.
-        // =====================================================
-
-        if (!mfg.activeZone.active)
-        {
-            beginBendFromFrame(
-                machineEntryFrame,
-                radius,
-                targetAngle,
-                bendDirection
-            );
-        }
-
-        // =====================================================
-        // Previous downstream attachment frame.
-        //
-        // This is where old frozen geometry is currently attached:
-        //
-        // active bend output frame
-        //        +
-        // remaining positioned straight
-        // =====================================================
-
-        Frame previousFrozenAttachFrame =
-            makePositionedStraightEndFrame(
-                mfg.activeZone.frame,
-                mfg.positionedStraight.length
-            );
-
-        // =====================================================
-        // Clamp angle by:
-        // - remaining target bend angle
-        // - available positioned straight material
-        // =====================================================
-
-        double remainingAngle =
-            mfg.activeZone.targetAngle
-            - mfg.activeZone.accumulatedAngle;
-
-        if (remainingAngle <= 0.0)
-        {
-            freezeActiveZone();
-            markDirty();
-            return;
-        }
-
-        double maxAngleByMaterial =
-            mfg.positionedStraight.length / radius;
-
-        double stepAngle =
-            std::min(
-                angleIncrement,
-                std::min(remainingAngle, maxAngleByMaterial)
-            );
-
-        if (stepAngle <= 0.0)
-            return;
-
-        double arcStepLength =
-            radius * stepAngle;
-
-        // =====================================================
-        // ZONE 2 -> ZONE 3
-        //
-        // Bending consumes positioned straight material.
-        // =====================================================
-
-        mfg.positionedStraight.length -= arcStepLength;
-
-        if (mfg.positionedStraight.length < 0.0)
-            mfg.positionedStraight.length = 0.0;
-
-        // =====================================================
-        // Update active bend geometry.
-        //
-        // This updates activeZone.frame and adds trace nodes.
-        // =====================================================
-
-        updateActiveZone(stepAngle);
-
-        // =====================================================
-        // New downstream attachment frame.
-        //
-        // Old frozen body must follow the END of the remaining
-        // positioned straight, not the active zone itself.
-        // =====================================================
-
-        Frame newFrozenAttachFrame =
-            makePositionedStraightEndFrame(
-                mfg.activeZone.frame,
-                mfg.positionedStraight.length
-            );
-
-        // =====================================================
-        // Move old frozen geometry as rigid body.
-        //
-        // Shape does not deform.
-        // It only follows the downstream attachment frame.
-        // =====================================================
-
-        transformFrozenGeometryBetweenFrames(
-            previousFrozenAttachFrame,
-            newFrozenAttachFrame
-        );
-
-        // =====================================================
-        // Finish bend if target reached.
-        // =====================================================
-
-        if (mfg.activeZone.accumulatedAngle
-            >= mfg.activeZone.targetAngle)
-        {
-            freezeActiveZone();
-        }
-
-        std::cout << "[BEND 4Z] arcStep="
-            << arcStepLength
-            << " positionedStraightLeft="
-            << mfg.positionedStraight.length
-            << std::endl;
-
-        markDirty();
-    }
-    public:
-        void processRotate(double signedAngle)
-        {
-            // =====================================================
-            // ROTATE OPERATION
-            //
-            // OWNER SPLIT:
-            //
-            // SimulationController:
-            //     decides time and signed rotation amount
-            //
-            // PipeAxis3D:
-            //     applies machine-specific kinematics
-            //
-            // TWO MODES:
-            //
-            // 1. PipeRoll
-            //      pipe body rotates
-            //      bend plane stays fixed
-            //
-            // 2. ToolHeadRotate
-            //      pipe body stays fixed
-            //      bend plane rotates
-            //
-            // =====================================================
-
-            if (std::abs(signedAngle) < 1e-12)
-                return;
-
-            if (rotationMode == RotationKinematicMode::PipeRoll)
-            {
-                // =================================================
-                // Typical CNC tube bender:
-                //
-                // Pipe rotates around the machine feed axis.
-                // Machine bend plane does NOT rotate.
-                //
-                // This is what produces 3D multi-bend geometry.
-                // =================================================
-
-                rotatePipeBodyAroundMachineAxis(
-                    signedAngle
-                );
-
-                std::cout << "[ROTATE MODE] PipeRoll angleDeg="
-                    << signedAngle * 180.0 / PI
-                    << std::endl;
-            }
-            else if (rotationMode == RotationKinematicMode::ToolHeadRotate)
-            {
-                // =================================================
-                // Alternative machine:
-                //
-                // Pipe remains fixed.
-                // Tool / bend plane rotates around pipe axis.
-                // =================================================
-
-                rotateToolPlaneAroundMachineAxis(
-                    signedAngle
-                );
-
-                std::cout << "[ROTATE MODE] ToolHeadRotate angleDeg="
-                    << signedAngle * 180.0 / PI
-                    << std::endl;
-            }
-
-            markDirty();
-        }
+  
 
 
 
@@ -1261,50 +957,7 @@ void buildLineCAD(Frame& frame, double length)
 
     //MANUFACTURING PATH
     //=========================================
-    void beginBendFromFrame(
-        const Frame& startFrame,
-        double radius,
-        double targetAngle,
-        BendDirection bendDirection)
-    {
-        if (radius <= 1e-9)
-        {
-            std::cerr << "[BEND ERROR] Invalid radius: "
-                << radius << std::endl;
-            return;
-        }
-
-        mfg.activeZone.frame = startFrame;
-        mfg.activeZone.curvature = 1.0 / radius;
-        mfg.activeZone.targetAngle = targetAngle;
-        mfg.activeZone.accumulatedAngle = 0.0;
-		mfg.activeZone.direction = bendDirection;
-        mfg.activeZone.localNodes.clear();
-        mfg.activeZone.active = true;
-
-        mfg.activeZone.frozenCountAtBendStart =
-         mfg.frozenNodes.size();
-
-        Node startNode{
-    mfg.activeZone.frame.P,
-    mfg.activeZone.frame.T,
-    mfg.activeZone.frame.N,
-    mfg.activeZone.frame.B
-};
-
-mfg.activeZone.localNodes.push_back(startNode);
-
-mfg.currentBendTraceNodes.clear();
-mfg.currentBendTraceNodes.push_back(startNode);
-
-std::cout << "[ACTIVE ZONE BEGIN] radius="
-<< radius
-<< " targetAngle="
-<< targetAngle
-<< " direction="
-<< bendDirectionToString(bendDirection)
-<< std::endl;
-    }
+    
 
 
 
@@ -1428,506 +1081,23 @@ std::cout << "[ACTIVE ZONE BEGIN] radius="
 
 
 
-    void updateActiveZone(double stepAngle)
-    {
-        // ==========================================================
-        // ACTIVE ZONE PIPE FLOW — FOUR-ZONE MODEL
-        //
-        // PositionedStraight
-        //        ?
-        // ActiveZone.localNodes
-        //        ?
-        // currentBendTraceNodes
-        //        ?
-        // FrozenGeometry after bend completion
-        //
-        // IMPORTANT:
-        // activeZone.localNodes is only the local deformation window.
-        // currentBendTraceNodes is the visible arc being formed.
-        // frozenNodes is completed geometry from previous bends.
-        // ==========================================================
-
-        // ==========================================================
-        // STEP 1
-        // Validate active bend state
-        // ==========================================================
-
-        if (!mfg.activeZone.active)
-            return;
-
-        if (std::abs(mfg.activeZone.curvature) < 1e-12)
-            return;
-
-        if (stepAngle <= 0.0)
-            return;
-
-        if (mfg.activeZone.accumulatedAngle >= mfg.activeZone.targetAngle)
-            return;
-
-        if (ds <= 1e-9)
-            return;
-
-        // ==========================================================
-        // STEP 2
-        // Clamp angular increment
-        // ==========================================================
-
-        double remaining =
-            mfg.activeZone.targetAngle
-            - mfg.activeZone.accumulatedAngle;
-
-        double dA =
-            std::min(stepAngle, remaining);
-
-        if (dA <= 0.0)
-            return;
-
-        // ==========================================================
-        // STEP 3
-        // Save previous tangent
-        // ==========================================================
-
-        Vec3D prevT =
-            mfg.activeZone.frame.T;
-
-        // ==========================================================
-        // STEP 4
-        // Curvature propagation
-        //
-        // Rotate tangent around current bend axis.
-        // ==========================================================
-
-        double signedDA =
-            dA * bendDirectionSign(mfg.activeZone.direction);
-
-        mfg.activeZone.frame.T =
-            rotateAroundAxis(
-                mfg.activeZone.frame.T,
-                mfg.activeZone.frame.B,
-                signedDA
-            ).normalized();
-
-        // ==========================================================
-        // STEP 5
-        // Frame transport
-        // ==========================================================
-
-        transportFrame(
-            prevT,
-            mfg.activeZone.frame.T,
-            mfg.activeZone.frame
-        );
-
-        // ==========================================================
-        // STEP 6
-        // Midpoint integration
-        //
-        // stepLength = R * dA
-        // curvature = 1 / R
-        // therefore stepLength = dA / curvature
-        // ==========================================================
-
-        Vec3D midT =
-            normalize(prevT + mfg.activeZone.frame.T);
-
-        if (midT.lengthSquared() < 1e-12)
-        {
-            midT = mfg.activeZone.frame.T;
-        }
-
-        double stepLength =
-            std::abs(dA / mfg.activeZone.curvature);
-
-        mfg.activeZone.frame.P =
-            mfg.activeZone.frame.P
-            + midT * stepLength;
-
-        // ==========================================================
-        // STEP 7
-        // Create new sample node
-        //
-        // 1. activeZone.localNodes:
-        //    local deformation window
-        //
-        // 2. currentBendTraceNodes:
-        //    full visible arc trace
-        // ==========================================================
-
-        Node newNode{
-            mfg.activeZone.frame.P,
-            mfg.activeZone.frame.T,
-            mfg.activeZone.frame.N,
-            mfg.activeZone.frame.B
-        };
-
-        mfg.activeZone.localNodes.push_back(newNode);
-
-        mfg.currentBendTraceNodes.push_back(newNode);
-
-        // ==========================================================
-        // STEP 8
-        // Accumulate bend progress
-        // ==========================================================
-
-        mfg.activeZone.accumulatedAngle += dA;
-
-        if (mfg.activeZone.accumulatedAngle > mfg.activeZone.targetAngle)
-        {
-            mfg.activeZone.accumulatedAngle =
-             mfg.activeZone.targetAngle;
-        }
-
-        // ==========================================================
-        // STEP 9
-        // Keep active window short
-        //
-        // This removes old nodes from activeZone.localNodes only.
-        // It does NOT push them to frozenNodes.
-        // ==========================================================
-
-        maintainActiveWindow();
-
-        // ==========================================================
-        // DEBUG
-        // ==========================================================
-
-        std::cout << "[ACTIVE ZONE] angle="
-            << mfg.activeZone.accumulatedAngle
-            << " / "
-            << mfg.activeZone.targetAngle
-            << " activeNodes="
-            << mfg.activeZone.localNodes.size()
-            << " traceNodes="
-            << mfg.currentBendTraceNodes.size()
-            << " frozenNodes="
-            << mfg.frozenNodes.size()
-            << std::endl;
-    }
+    
 
     
     // freezeActive zone
    //order
     
-    void freezeActiveZone()
-    {
-        // =====================================================
-        // FREEZE ACTIVE BEND — CORRECT CENTERLINE ORDER
-        //
-        // Physical order from machine entry outward:
-        //
-        // current bend trace
-        //      ?
-        // remaining positioned straight
-        //      ?
-        // old frozen body
-        //
-        // This prevents line-strip jump artifacts.
-        // =====================================================
-
-        std::vector<Node> oldFrozen =
-            mfg.frozenNodes;
-
-        std::vector<Node> newFrozen;
-
-        // =====================================================
-        // STEP 1
-        // Add current bend trace first.
-        // This starts at machineEntryFrame.
-        // =====================================================
-
-        for (const auto& node : mfg.currentBendTraceNodes)
-        {
-            appendNodeNoDuplicate(
-                newFrozen,
-                node
-            );
-        }
-
-        // =====================================================
-        // STEP 2
-        // Add remaining positioned straight after bend trace.
-        //
-        // It starts from activeZone.frame, which is the bend
-        // output frame.
-        // =====================================================
-
-        std::vector<Node> positionedFrozen =
-            buildPositionedStraightFrozenNodes(
-                mfg.activeZone.frame,
-                mfg.positionedStraight.length
-            );
-
-        for (const auto& node : positionedFrozen)
-        {
-            appendNodeNoDuplicate(
-                newFrozen,
-                node
-            );
-        }
-
-        // =====================================================
-        // STEP 3
-        // Add old frozen body last.
-        //
-        // During bending, oldFrozen should already have been
-        // moved so its first node is attached to the end of
-        // positioned straight.
-        // =====================================================
-
-        for (const auto& node : oldFrozen)
-        {
-            appendNodeNoDuplicate(
-                newFrozen,
-                node
-            );
-        }
-
-        // =====================================================
-        // STEP 4
-        // Commit new frozen geometry.
-        // =====================================================
-
-        mfg.frozenNodes =
-            newFrozen;
-
-        // =====================================================
-        // STEP 5
-        // Update current frame to end of complete pipe.
-        // =====================================================
-
-        if (!mfg.frozenNodes.empty())
-        {
-            const Node& last =
-                mfg.frozenNodes.back();
-
-            currentFrame.P = last.pos;
-            currentFrame.T = last.T;
-            currentFrame.N = last.N;
-            currentFrame.B = last.B;
-        }
-        else
-        {
-            currentFrame =
-                mfg.activeZone.frame;
-        }
-
-        // =====================================================
-        // STEP 6
-        // Clear temporary bend state.
-        // =====================================================
-
-        mfg.currentBendTraceNodes.clear();
-
-        mfg.positionedStraight.length = 0.0;
-        mfg.positionedStraight.nodes.clear();
-
-        mfg.activeZone.localNodes.clear();
-        mfg.activeZone.active = false;
-
-        std::cout << "[FREEZE ACTIVE ZONE ORDERED] frozenNodes="
-            << mfg.frozenNodes.size()
-            << std::endl;
-    }
+    
 
 
-
-    void buildIncomingStock()
-    {
-        // =====================================================
-        // OWNER:
-        // PipeAxis3D owns incoming stock render reconstruction.
-        //
-        // OUTPUT:
-        // manufacturingRender.incomingStockNodes
-        //
-        // IMPORTANT:
-        // This function does NOT simulate FEED.
-        // It only draws current incoming stock state.
-        // =====================================================
-
-        mfg.renderData.incomingStockNodes.clear();
-
-        if (!mfg.incomingStock.visible)
-            return;
-
-        if (mfg.incomingStock.remainingLength <= 0.0)
-            return;
-
-        if (ds <= 1e-9)
-            return;
-
-        // =====================================================
-        // MACHINE ENTRY REFERENCE
-        //
-        // machineEntryFrame is the fixed die / entry point.
-        //
-        // Incoming stock is always drawn behind it.
-        // =====================================================
-
-        const Frame& entry =
-            machineEntryFrame;
-
-        double visibleLength =
-            mfg.incomingStock.remainingLength;
-
-        int stepCount =
-            std::max(
-                1,
-                static_cast<int>(std::ceil(visibleLength / ds))
-            );
-
-        double stepLength =
-            visibleLength / static_cast<double>(stepCount);
-
-        // =====================================================
-        // Stock tail is behind the machine entry.
-        //
-        // entry.P = machine entry / die location
-        // entry.T = feed direction
-        //
-        // tail = entry.P - entry.T * remainingLength
-        // =====================================================
-
-        Vec3D tailPoint =
-            entry.P - entry.T * visibleLength;
-
-        // =====================================================
-        // Build stock from tail toward machine entry.
-        //
-        // tail ---------------------> machine entry
-        // =====================================================
-
-        for (int i = 0; i <= stepCount; ++i)
-        {
-            double s =
-                stepLength * static_cast<double>(i);
-
-            Vec3D p =
-                tailPoint + entry.T * s;
-
-            mfg.renderData.incomingStockNodes.push_back({
-                p,
-                entry.T,
-                entry.N,
-                entry.B
-                });
-        }
-    }
-
+  
 
 	//=================================================
     // POSITIONING HELPER
     // HELPER FUNCTION
     
-    std::vector<Node> buildPositionedStraightFrozenNodes(
-        const Frame& startFrame,
-        double length) const
-    {
-        // =====================================================
-        // BUILD REMAINING POSITIONED STRAIGHT AS FROZEN NODES
-        //
-        // This does NOT modify frozenNodes directly.
-        // It only returns nodes in correct local order.
-        // =====================================================
-
-        std::vector<Node> result;
-
-        if (length <= 0.0)
-            return result;
-
-        if (ds <= 1e-9)
-            return result;
-
-        int stepCount =
-            std::max(
-                1,
-                static_cast<int>(std::ceil(length / ds))
-            );
-
-        double stepLength =
-            length / static_cast<double>(stepCount);
-
-        for (int i = 1; i <= stepCount; ++i)
-        {
-            double s =
-                stepLength * static_cast<double>(i);
-
-            Vec3D p =
-                startFrame.P
-                + startFrame.T.normalized() * s;
-
-            result.push_back({
-                p,
-                startFrame.T,
-                startFrame.N,
-                startFrame.B
-                });
-        }
-
-        return result;
-    }
-
-
-    // POSITIONING
-
-
-    void buildPositionedStraight()
-    {
-        // =====================================================
-        // OWNER:
-        // PipeAxis3D owns positioned-straight visualization.
-        //
-        // This does NOT simulate feed or bend.
-        // It only draws Zone 2 from current state.
-        // =====================================================
-
-        mfg.renderData.positionedStraightNodes.clear();
-        mfg.positionedStraight.nodes.clear();
-
-        if (!mfg.positionedStraight.visible)
-            return;
-
-        if (mfg.positionedStraight.length <= 0.0)
-            return;
-
-        if (ds <= 1e-9)
-            return;
-
-        Frame startFrame =
-            getPositionedStraightStartFrame();
-
-        double visibleLength =
-            mfg.positionedStraight.length;
-
-        int stepCount =
-            std::max(
-                1,
-                static_cast<int>(std::ceil(visibleLength / ds))
-            );
-
-        double stepLength =
-            visibleLength / static_cast<double>(stepCount);
-
-        for (int i = 0; i <= stepCount; ++i)
-        {
-            double s =
-                stepLength * static_cast<double>(i);
-
-            Vec3D p =
-                startFrame.P + startFrame.T * s;
-
-            Node node{
-                p,
-                startFrame.T,
-                startFrame.N,
-                startFrame.B
-            };
-
-            mfg.positionedStraight.nodes.push_back(node);
-
-            mfg.renderData.positionedStraightNodes.push_back(node);
-        }
-    }
+   
+    
 
 //POSTIONONG HELPER
    // bake positioned stright into frozen geometry 
@@ -1995,134 +1165,14 @@ std::cout << "[ACTIVE ZONE BEGIN] radius="
 
 	//Positionin Helper
 
-    Frame makePositionedStraightEndFrame(
-        const Frame& startFrame,
-        double length) const
-    {
-        // =====================================================
-        // POSITIONED STRAIGHT END FRAME
-        //
-        // startFrame:
-        //   usually activeZone.frame during bending
-        //
-        // length:
-        //   remaining positioned straight length
-        //
-        // The old frozen body should attach here.
-        // =====================================================
-
-        Frame endFrame = startFrame;
-
-        if (length > 0.0)
-        {
-            endFrame.P =
-                startFrame.P
-                + startFrame.T.normalized() * length;
-        }
-
-        return endFrame;
-    }
+           
 
 
 
 
-    void buildManufacturingRenderData()
-    {
-       mfg.renderData.clear();
+    
 
-        // =====================================================
-        // ZONE 1 — Incoming Stock
-        // =====================================================
-
-        buildIncomingStock();
-
-        // =====================================================
-        // ZONE 2 — Positioned Straight
-        // =====================================================
-
-        buildPositionedStraight();
-
-        // =====================================================
-        // CURRENT BEND TRACE
-        //
-        // This is the visible arc currently being formed.
-        // It is NOT the same as activeZone.localNodes.
-        // =====================================================
-
-        mfg.renderData.currentBendTraceNodes =
-            mfg.currentBendTraceNodes;
-
-        // =====================================================
-        // ZONE 3 — Active Bend Window
-        //
-        // Small moving/local deformation window.
-        // =====================================================
-
-        mfg.renderData.activeZoneNodes =
-            mfg.activeZone.localNodes;
-
-        // =====================================================
-        // ZONE 4 — Frozen Geometry
-        // =====================================================
-
-        mfg.renderData.frozenNodes =
-            mfg.frozenNodes;
-
-        std::cout << "[MFG RENDER DATA] "
-            << "incoming=" << mfg.renderData.incomingStockNodes.size()
-            << " positioned=" << mfg.renderData.positionedStraightNodes.size()
-            << " trace=" << mfg.renderData.currentBendTraceNodes.size()
-            << " active=" << mfg.renderData.activeZoneNodes.size()
-            << " frozen=" << mfg.renderData.frozenNodes.size()
-            << std::endl;
-    }
-
-
-    void flattenManufacturingRenderData()
-    {
-        // =====================================================
-        // TEMPORARY LEGACY OUTPUT
-        //
-        // This is only for getNodes() compatibility/debugging.
-        // Renderer should eventually draw zones separately.
-        // =====================================================
-
-        nodes.clear();
-
-        // ZONE 1 — Incoming Stock
-        for (const auto& node : mfg.renderData.incomingStockNodes)
-        {
-            nodes.push_back(node);
-        }
-
-        // ZONE 2 — Positioned Straight
-        for (const auto& node : mfg.renderData.positionedStraightNodes)
-        {
-            nodes.push_back(node);
-        }
-
-        // CURRENT BEND TRACE
-        //
-        // Full visible arc currently being formed.
-        for (const auto& node : mfg.renderData.currentBendTraceNodes)
-        {
-            nodes.push_back(node);
-        }
-
-        // ZONE 4 — Frozen Geometry
-        for (const auto& node : mfg.renderData.frozenNodes)
-        {
-            nodes.push_back(node);
-        }
-
-        // ZONE 3 — Active Bend Window
-        //
-        // Draw last in flattened order because it is the working zone.
-        for (const auto& node : mfg.renderData.activeZoneNodes)
-        {
-            nodes.push_back(node);
-        }
-    }
+    
 
    
 
@@ -2136,15 +1186,13 @@ std::cout << "[ACTIVE ZONE BEGIN] radius="
         // Zone 3: Frozen Geometry
         // =====================================================
 
-        buildManufacturingRenderData();
-
         // =====================================================
         // TEMPORARY LEGACY OUTPUT
         //
         // Current renderer still expects one nodes vector.
         // =====================================================
 
-        flattenManufacturingRenderData();
+        
     }
 
 
@@ -2184,46 +1232,15 @@ std::cout << "[ACTIVE ZONE BEGIN] radius="
         );
     }
 
-    void releaseOldestActiveNode()
-    {
-        // =====================================================
-        // Active window remains local.
-        //
-        // The old node is NOT pushed into frozenNodes here.
-        // It is already preserved in currentBendTraceNodes.
-        // =====================================================
-
-        if (mfg.activeZone.localNodes.empty())
-            return;
-
-            mfg.activeZone.localNodes.erase(
-            mfg.activeZone.localNodes.begin()
-        );
-    }
+    
 
     //HELPER AVOID DUPLICATE NODES
 
-    bool nearlySamePoint(
-        const Node& a,
-        const Node& b,
-        double eps = 1e-6) const
-    {
-        Vec3D d = a.pos - b.pos;
-        return d.lengthSquared() < eps * eps;
-    }
+    
 
 
 
-    void appendNodeNoDuplicate(
-        std::vector<Node>& dst,
-        const Node& node)
-    {
-        if (!dst.empty() && nearlySamePoint(dst.back(), node))
-            return;
-
-        dst.push_back(node);
-    }
-
+   
 
 
     //=========
@@ -2233,25 +1250,7 @@ std::cout << "[ACTIVE ZONE BEGIN] radius="
 	// It's connected with freezeOldestActiveNode
     // 
 
-    void maintainActiveWindow()
-    {
-        if (ds <= 1e-9)
-            return;
-
-        size_t maxActiveNodes =
-            static_cast<size_t>(
-                std::ceil(mfg.activeZone.activeLength / ds)
-                );
-
-        maxActiveNodes =
-            std::max<size_t>(2, maxActiveNodes);
-
-        while (mfg.activeZone.localNodes.size() > maxActiveNodes)
-        {
-            releaseOldestActiveNode();
-        }
-    }
-    
+   
 
 	// =====================================================
 	// TRANSLATE
@@ -2407,98 +1406,11 @@ std::cout << "[ACTIVE ZONE BEGIN] radius="
     }
 //NODE TRANSFORM HELPER
 
-    void transformNodeBetweenFrames(
-        Node& node,
-        const Frame& fromFrame,
-        const Frame& toFrame)
-    {
-        // =====================================================
-        // RIGID BODY TRANSFORM
-        //
-        // Shape does not deform.
-        //
-        // We convert node position/orientation into old frame,
-        // then rebuild it in the new frame.
-        // =====================================================
-
-        Vec3D localPos =
-            pointToLocal(
-                node.pos,
-                fromFrame
-            );
-
-        Vec3D localT =
-            vectorToLocal(
-                node.T,
-                fromFrame
-            );
-
-        Vec3D localN =
-            vectorToLocal(
-                node.N,
-                fromFrame
-            );
-
-        Vec3D localB =
-            vectorToLocal(
-                node.B,
-                fromFrame
-            );
-
-        node.pos =
-            pointFromLocal(
-                localPos,
-                toFrame
-            );
-
-        node.T =
-            vectorFromLocal(
-                localT,
-                toFrame
-            ).normalized();
-
-        node.N =
-            vectorFromLocal(
-                localN,
-                toFrame
-            ).normalized();
-
-        node.B =
-            vectorFromLocal(
-                localB,
-                toFrame
-            ).normalized();
-    }
+   
 
 //FROZEN GEOMETRY TRANSFORM
 
-    void transformFrozenGeometryBetweenFrames(
-        const Frame& fromFrame,
-        const Frame& toFrame)
-    {
-        // =====================================================
-        // ZONE 3 — RIGID BODY FOLLOW
-        //
-        // Frozen geometry does NOT deform.
-        // But during active bending it must follow the outgoing
-        // active zone frame.
-        //
-        // This makes old completed geometry stay attached
-        // to the active bend.
-        // =====================================================
-
-        if (mfg.frozenNodes.empty())
-            return;
-
-        for (auto& node : mfg.frozenNodes)
-        {
-            transformNodeBetweenFrames(
-                node,
-                fromFrame,
-                toFrame
-            );
-        }
-    }
+    
 
     // ADDITIONALLY NEED Update updateActiveZone()
     // IT WAS DONE

@@ -148,7 +148,7 @@ public:
         if (remainingAngle <= 0.0)
         {
             freezeActiveZone();
-            axis.mfgMarkDirty();
+            axis.markGeometryDirty();
             return;
         }
 
@@ -163,7 +163,7 @@ public:
                     maxAngleByMaterial
                 )
             );
-
+         
         if (stepAngle <= 0.0)
             return;
 
@@ -200,7 +200,7 @@ public:
             << state.positionedStraight.length
             << std::endl;
 
-        axis.mfgMarkDirty();
+        axis.markGeometryDirty();
     }
 
 
