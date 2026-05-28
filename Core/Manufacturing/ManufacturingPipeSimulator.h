@@ -5,6 +5,7 @@
 
 #include "Core/PipeAxis3D.h"
 #include "Core/Manufacturing/ManufacturingState.h"
+#include "Core/Manufacturing/RotationKinematicMode.h"
 #include "Core/BendDirection.h"
 
 class ManufacturingPipeSimulator
@@ -12,24 +13,55 @@ class ManufacturingPipeSimulator
 public:
     ManufacturingPipeSimulator()
         : ds(0.5),
+        rotationMode(RotationKinematicMode::PipeRoll),
         state(),
         axis(0.5, state)
     {
+        resetFrames();
     }
 
     explicit ManufacturingPipeSimulator(double sampleStep)
         : ds(sampleStep),
+        rotationMode(RotationKinematicMode::PipeRoll),
         state(),
         axis(sampleStep, state)
     {
+        resetFrames();
     }
 
+
+    //Getters/Setters
+
+    const Frame& getMachineEntryFrame() const
+    {
+        return machineEntryFrame;
+    }
+
+    const Frame& getCurrentFrame() const
+    {
+        return currentFrame;
+    }
+
+    Frame& getMachineEntryFrame()
+    {
+        return machineEntryFrame;
+    }
+
+    Frame& getCurrentFrame()
+    {
+        return currentFrame;
+    }
+
+	//=====================================================
     void reset()
     {
         state.clear();
         renderNodes.clear();
 
+        resetFrames();
+
         axis.clear();
+        axis.markGeometryDirty();
     }
 
     ManufacturingState& getState()
@@ -124,7 +156,7 @@ public:
         if (!state.activeZone.active)
         {
             beginBendFromFrame(
-                axis.getMachineEntryFrame(),
+                machineEntryFrame,
                 radius,
                 targetAngle,
                 bendDirection
@@ -207,33 +239,11 @@ public:
 
     void processRotate(double signedAngle)
     {
-        // =====================================================
-        // ROTATE OPERATION
-        //
-        // OWNER:
-        // ManufacturingPipeSimulator now owns manufacturing
-        // rotate-state logic.
-        //
-        // PipeAxis3D still temporarily owns:
-        // - machineEntryFrame
-        // - currentFrame
-        //
-        // TWO MODES:
-        //
-        // PipeRoll:
-        //     Pipe body rotates.
-        //     Machine bend plane stays fixed.
-        //
-        // ToolHeadRotate:
-        //     Pipe body stays fixed.
-        //     Machine bend plane rotates.
-        // =====================================================
-
         if (std::abs(signedAngle) < 1e-12)
             return;
 
         RotationKinematicMode mode =
-            axis.getRotationKinematicMode();
+            rotationMode;
 
         if (mode == RotationKinematicMode::PipeRoll)
         {
@@ -251,6 +261,8 @@ public:
                 << signedAngle * 180.0 / PI
                 << std::endl;
         }
+
+        axis.markGeometryDirty();
     }
 
     void reconstructVisiblePipe()
@@ -263,15 +275,14 @@ public:
             << std::endl;
     }
 
-    void setRotationKinematicMode(
-        PipeAxis3D::RotationKinematicMode mode)
+    void setRotationKinematicMode(RotationKinematicMode mode)
     {
-        axis.setRotationKinematicMode(mode);
+        rotationMode = mode;
     }
 
-    PipeAxis3D::RotationKinematicMode getRotationKinematicMode() const
+    RotationKinematicMode getRotationKinematicMode() const
     {
-        return axis.getRotationKinematicMode();
+        return rotationMode;
     }
 
     const ManufacturingRenderData& getManufacturingRenderData() const
@@ -295,7 +306,28 @@ public:
     }
 
 private:
+    void resetFrames()
+    {
+        // =====================================================
+        // MACHINE ENTRY FRAME
+        //
+        // Fixed machine entry / die reference.
+        // Incoming stock is behind this frame.
+        // =====================================================
 
+        machineEntryFrame.P = { 0.0, 0.0, 0.0 };
+        machineEntryFrame.T = { 1.0, 0.0, 0.0 };
+        machineEntryFrame.N = { 0.0, 1.0, 0.0 };
+        machineEntryFrame.B = { 0.0, 0.0, 1.0 };
+
+        // =====================================================
+        // CURRENT MATERIAL FRAME
+        //
+        // At reset, material frame starts at machine entry.
+        // =====================================================
+
+        currentFrame = machineEntryFrame;
+    }
 
 
 
@@ -367,13 +399,12 @@ private:
             frame.N = last.N;
             frame.B = last.B;
 
-            axis.setCurrentFrame(frame);
+            currentFrame = frame;
         }
         else
         {
-            axis.setCurrentFrame(
-                state.activeZone.frame
-            );
+            currentFrame =
+                state.activeZone.frame;
         }
 
         state.currentBendTraceNodes.clear();
@@ -551,7 +582,7 @@ private:
             return;
 
         const auto& entryFrame =
-            axis.getMachineEntryFrame();
+            machineEntryFrame;
 
         Vec3D offset =
             entryFrame.T.normalized() * distance;
@@ -740,18 +771,27 @@ private:
     }
 
 	//===================================================== 
-    double ds = 0.5;
-    ManufacturingState state;
-    PipeAxis3D axis;
-    std::vector<PipeNode> renderNodes;
-//Helpers
-    Frame getPositionedStraightStartFrame() const
-    {
-        if (state.activeZone.active)
-            return state.activeZone.frame;
+    private:
+        double ds = 0.5;
 
-        return axis.getMachineEntryFrame();
-    }
+        RotationKinematicMode rotationMode =
+            RotationKinematicMode::PipeRoll;
+
+        Frame machineEntryFrame;
+        Frame currentFrame;
+
+        ManufacturingState state;
+        PipeAxis3D axis;
+
+        std::vector<PipeNode> renderNodes;
+//Helpers
+        Frame getPositionedStraightStartFrame() const
+        {
+            if (state.activeZone.active)
+                return state.activeZone.frame;
+
+            return machineEntryFrame;
+        }
 
     Vec3D rotateAroundAxis(
         const Vec3D& v,
@@ -785,14 +825,11 @@ private:
         const Vec3D& point,
         double angle) const
     {
-        const Frame& entry =
-            axis.getMachineEntryFrame();
-
         Vec3D axisPoint =
-            entry.P;
+            machineEntryFrame.P;
 
         Vec3D axisDir =
-            entry.T.normalized();
+            machineEntryFrame.T.normalized();
 
         Vec3D relative =
             point - axisPoint;
@@ -811,11 +848,8 @@ private:
         PipeNode& node,
         double angle)
     {
-        const Frame& entry =
-            axis.getMachineEntryFrame();
-
         Vec3D axisDir =
-            entry.T.normalized();
+            machineEntryFrame.T.normalized();
 
         node.pos =
             rotatePointAroundMachineAxis(
@@ -863,11 +897,8 @@ private:
         Frame& frame,
         double angle)
     {
-        const Frame& entry =
-            axis.getMachineEntryFrame();
-
         Vec3D axisDir =
-            entry.T.normalized();
+            machineEntryFrame.T.normalized();
 
         frame.P =
             rotatePointAroundMachineAxis(
@@ -906,100 +937,74 @@ private:
             const PipeNode& last =
                 state.frozenNodes.back();
 
-            Frame frame;
-
-            frame.P = last.pos;
-            frame.T = last.T;
-            frame.N = last.N;
-            frame.B = last.B;
-
-            axis.setCurrentFrame(frame);
+            currentFrame.P = last.pos;
+            currentFrame.T = last.T;
+            currentFrame.N = last.N;
+            currentFrame.B = last.B;
         }
     }
 
     void rotatePipeBodyAroundMachineAxis(double angle)
+{
+    rotateNodeListAroundMachineAxis(
+        state.frozenNodes,
+        angle
+    );
+
+    rotateNodeListAroundMachineAxis(
+        state.currentBendTraceNodes,
+        angle
+    );
+
+    rotateNodeListAroundMachineAxis(
+        state.activeZone.localNodes,
+        angle
+    );
+
+    rotateNodeListAroundMachineAxis(
+        state.positionedStraight.nodes,
+        angle
+    );
+
+    rotateFrameAroundMachineAxis(
+        currentFrame,
+        angle
+    );
+
+    if (state.activeZone.active)
     {
-        // =====================================================
-        // PIPE ROLL MODE
-        //
-        // Pipe body rotates around machineEntryFrame.T.
-        // Machine bend plane stays fixed.
-        // =====================================================
-
-        rotateNodeListAroundMachineAxis(
-            state.frozenNodes,
-            angle
-        );
-
-        rotateNodeListAroundMachineAxis(
-            state.currentBendTraceNodes,
-            angle
-        );
-
-        rotateNodeListAroundMachineAxis(
-            state.activeZone.localNodes,
-            angle
-        );
-
-        rotateNodeListAroundMachineAxis(
-            state.positionedStraight.nodes,
-            angle
-        );
-
-        Frame current =
-            axis.getCurrentFrame();
-
         rotateFrameAroundMachineAxis(
-            current,
+            state.activeZone.frame,
             angle
         );
-
-        axis.setCurrentFrame(current);
-
-        if (state.activeZone.active)
-        {
-            rotateFrameAroundMachineAxis(
-                state.activeZone.frame,
-                angle
-            );
-        }
-
-        syncCurrentFrameFromFrozen();
     }
+
+    syncCurrentFrameFromFrozen();
+}
 
     void rotateToolPlaneAroundMachineAxis(double angle)
     {
-        // =====================================================
-        // TOOL HEAD ROTATION MODE
-        //
-        // Pipe body stays fixed.
-        // Machine bend plane rotates.
-        // =====================================================
-
-        Frame& entry =
-            axis.getMachineEntryFrame();
-
         Vec3D axisDir =
-            entry.T.normalized();
+            machineEntryFrame.T.normalized();
 
         if (axisDir.lengthSquared() < 1e-12)
             return;
 
-        entry.N =
+        machineEntryFrame.N =
             rotateAroundAxis(
-                entry.N,
+                machineEntryFrame.N,
                 axisDir,
                 angle
             ).normalized();
 
-        entry.B =
+        machineEntryFrame.B =
             rotateAroundAxis(
-                entry.B,
+                machineEntryFrame.B,
                 axisDir,
                 angle
             ).normalized();
 
-        orthonormalizeFrame(entry);
+        orthonormalizeFrame(machineEntryFrame);
     }
 
     void buildIncomingStock()
@@ -1014,7 +1019,7 @@ private:
             return;
 
         const Frame& entry =
-            axis.getMachineEntryFrame();
+            machineEntryFrame;
 
         int steps =
             std::max(

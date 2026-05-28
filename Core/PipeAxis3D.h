@@ -61,7 +61,7 @@ public:
     using Frame = ::Frame;
     using Node = ::PipeNode;
     using Segment = ::PipeSegment;
-	using RotationKinematicMode = ::RotationKinematicMode;
+	//using RotationKinematicMode = ::RotationKinematicMode;
     using IncomingStock = ::ManufacturingIncomingStock;
     using PositionedStraight = ::ManufacturingPositionedStraight;
     using ActiveZone = ::ManufacturingActiveZone;
@@ -284,8 +284,7 @@ private:
     }
 	
 
-    RotationKinematicMode rotationMode =
-        RotationKinematicMode::PipeRoll;
+    
 	public:
 
         // =====================================================
@@ -352,30 +351,11 @@ public:
 
 
 // temporary bridge frame accessorsm later for moveout
-        const Frame& getMachineEntryFrame() const
-        {
-            return machineEntryFrame;
-        }
+       
 
-        Frame& getMachineEntryFrame()
-        {
-            return machineEntryFrame;
-        }
+       
 
-        const Frame& getCurrentFrame() const
-        {
-            return currentFrame;
-        }
-
-        Frame& getCurrentFrame()
-        {
-            return currentFrame;
-        }
-
-        void setCurrentFrame(const Frame& frame)
-        {
-            currentFrame = frame;
-        }
+        
 
     //Helper for Bend direction
     double bendDirectionSign(BendDirection dir) const
@@ -518,10 +498,7 @@ public:
         return mfg.incomingStock.totalLength;
     }
 
-    RotationKinematicMode getRotationKinematicMode() const
-    {
-        return rotationMode;
-    }
+   
 
 	// =====================================================================
     //SETTERRS
@@ -537,10 +514,7 @@ public:
         markDirty();
     }
 
-    void setRotationKinematicMode(RotationKinematicMode mode)
-    {
-        rotationMode = mode;
-    }
+   
 
    
 
@@ -679,7 +653,7 @@ private:
    // IncomingStock incomingStock;
 	
     //PositionedStraight positionedStraight;
-    Frame machineEntryFrame;//fixed machine/die entry frame
+   // !!!!!!Frame machineEntryFrame;//fixed machine/die entry frame
     Frame currentFrame;//current pipe/material frame
     // Manufacturing render grouping
     //ManufacturingRenderData manufacturingRender;
@@ -709,17 +683,7 @@ private:
      }
 
 	// GETTERS PRIVATE 
-    Frame getPositionedStraightStartFrame() const
-    {
-        if (mfg.activeZone.active)
-        {
-            return mfg.activeZone.frame;
-        }
-
-        // During FEED, new positioned straight is created
-        // from the machine entry.
-        return machineEntryFrame;
-    }
+   
 
 
 
@@ -1043,36 +1007,10 @@ void buildLineCAD(Frame& frame, double length)
 
     void resetFrames()
     {
-        // =====================================================
-        // MACHINE ENTRY FRAME
-        //
-        // OWNER:
-        // PipeAxis3D owns the machine entry reference.
-        //
-        // Meaning:
-        // P = fixed die / entry position
-        // T = feed direction
-        // N/B = current roll orientation around pipe axis
-        // =====================================================
-
-        machineEntryFrame.P = { 0,0,0 };
-        machineEntryFrame.T = { 1,0,0 };
-        machineEntryFrame.N = { 0,1,0 };
-        machineEntryFrame.B = { 0,0,1 };
-
-        // =====================================================
-        // CURRENT MATERIAL FRAME
-        //
-        // At reset, material frame starts at machine entry.
-        // =====================================================
-
-        currentFrame = machineEntryFrame;
-
-        // =====================================================
-        // Incoming stock is visualized behind machine entry.
-        // =====================================================
-
-       
+        currentFrame.P = { 0.0, 0.0, 0.0 };
+        currentFrame.T = { 1.0, 0.0, 0.0 };
+        currentFrame.N = { 0.0, 1.0, 0.0 };
+        currentFrame.B = { 0.0, 0.0, 1.0 };
     }
 
     
@@ -1175,7 +1113,7 @@ void buildLineCAD(Frame& frame, double length)
     
 
    
-
+     
     void buildNodes()
     {
         // =====================================================
@@ -1237,12 +1175,6 @@ void buildLineCAD(Frame& frame, double length)
     //HELPER AVOID DUPLICATE NODES
 
     
-
-
-
-   
-
-
     //=========
 
     //HELPER
@@ -1304,39 +1236,7 @@ void buildLineCAD(Frame& frame, double length)
     }
 }
 
-    void moveFrozenGeometryDuringFeed(double feedDistance)
-    {
-        // =====================================================
-        // FEED EFFECT ON ZONE 3
-        //
-        // During FEED, finished pipe is pushed forward.
-        //
-        // Machine entry stays fixed.
-        // Incoming stock shortens.
-        // Frozen geometry translates rigidly.
-        // =====================================================
-
-        if (feedDistance <= 0.0)
-            return;
-
-        if (mfg.frozenNodes.empty())
-            return;
-
-        Vec3D feedDirection =
-            machineEntryFrame.T.normalized();
-
-        Vec3D delta =
-            feedDirection * feedDistance;
-
-        translateFrozenGeometry(delta);
-
-        // Keep current material frame consistent with moved geometry.
-        translateFrame(currentFrame, delta);
-
-        std::cout << "[ZONE 3 MOVE] frozen geometry translated by "
-            << feedDistance
-            << std::endl;
-    }
+    
 	//=============================
     // ATTACH  RIGIDLY ZONE 3  TO ACTIVE ZONE 2
 	//==============================
@@ -1404,310 +1304,8 @@ void buildLineCAD(Frame& frame, double length)
             frame.N * p.y +
             frame.B * p.z;
     }
-//NODE TRANSFORM HELPER
 
+      
    
-
-//FROZEN GEOMETRY TRANSFORM
-
     
-
-    // ADDITIONALLY NEED Update updateActiveZone()
-    // IT WAS DONE
-
-    // END -ATTACH  RIGIDLY ZONE 3  TO ACTIVE ZONE 2
-//==============================
-
-
-    //ROTATE RIGID MODULE
-    //============================
-
-    //Point rotation around machine axis
-
-    Vec3D rotatePointAroundAxisLine(
-        const Vec3D& point,
-        const Vec3D& axisPoint,
-        const Vec3D& axisDir,
-        double angle) const
-    {
-        // =====================================================
-        // OWNER:
-        // PipeAxis3D owns geometric transforms.
-        //
-        // PURPOSE:
-        // Rotate a WORLD POINT around a WORLD AXIS LINE.
-        //
-        // Axis line:
-        //     axisPoint + axisDir * t
-        //
-        // Used for rigid-body ROTATE operation.
-        // =====================================================
-
-        Vec3D local =
-            point - axisPoint;
-
-        Vec3D rotatedLocal =
-            rotateAroundAxis(
-                local,
-                axisDir,
-                angle
-            );
-
-        return axisPoint + rotatedLocal;
-    }
-
-    //Rigid Node Rotation
-     
-    void rotateNodeAroundMachineAxis(
-        Node& node,
-        double angle)
-    {
-        // =====================================================
-        // RIGID BODY ROTATION OF ONE PIPE NODE
-        //
-        // Position rotates around machine feed axis.
-        // Frame vectors rotate around same axis.
-        //
-        // Shape is not recalculated.
-        // This is rigid-body motion.
-        // =====================================================
-
-        const Vec3D axisPoint =
-            machineEntryFrame.P;
-
-        const Vec3D axisDir =
-            machineEntryFrame.T.normalized();
-
-        node.pos =
-            rotatePointAroundAxisLine(
-                node.pos,
-                axisPoint,
-                axisDir,
-                angle
-            );
-
-        node.T =
-            rotateAroundAxis(
-                node.T,
-                axisDir,
-                angle
-            ).normalized();
-
-        node.N =
-            rotateAroundAxis(
-                node.N,
-                axisDir,
-                angle
-            ).normalized();
-
-        node.B =
-            rotateAroundAxis(
-                node.B,
-                axisDir,
-                angle
-            ).normalized();
-    }
-
-    //Rigid frame Rotation
-
-
-    void rotateFrameAroundMachineAxis(
-        Frame& frame,
-        double angle)
-    {
-        // =====================================================
-        // RIGID BODY ROTATION OF FRAME
-        //
-        // Used for:
-        // - currentFrame
-        // - activeZone.frame
-        //
-        // Position rotates around machine axis.
-        // Orientation rotates with the body.
-        // =====================================================
-
-        const Vec3D axisPoint =
-            machineEntryFrame.P;
-
-        const Vec3D axisDir =
-            machineEntryFrame.T.normalized();
-
-        frame.P =
-            rotatePointAroundAxisLine(
-                frame.P,
-                axisPoint,
-                axisDir,
-                angle
-            );
-
-        frame.T =
-            rotateAroundAxis(
-                frame.T,
-                axisDir,
-                angle
-            ).normalized();
-
-        frame.N =
-            rotateAroundAxis(
-                frame.N,
-                axisDir,
-                angle
-            ).normalized();
-
-        frame.B =
-            rotateAroundAxis(
-                frame.B,
-                axisDir,
-                angle
-            ).normalized();
-
-        orthonormalizeFrame(frame);
-    }
-
-    //Helper for node vector
-
-    void rotateNodeListAroundMachineAxis(
-        std::vector<Node>& list,
-        double angle)
-    {
-        // =====================================================
-        // Rotate one manufacturing zone as rigid body.
-        // =====================================================
-
-        for (auto& node : list)
-        {
-            rotateNodeAroundMachineAxis(
-                node,
-                angle
-            );
-        }
-    }
-
-    //HELPER
-
-    void syncCurrentFrameFromFrozen()
-    {
-        // =====================================================
-        // Keep currentFrame aligned with final frozen node.
-        // =====================================================
-
-        if (mfg.frozenNodes.empty())
-            return;
-
-        const Node& last =
-            mfg.frozenNodes.back();
-
-        currentFrame.P = last.pos;
-        currentFrame.T = last.T;
-        currentFrame.N = last.N;
-        currentFrame.B = last.B;
-    }
-
-	//HELPER
-	//=====================================================
-    //Rotate Tool Only
-
-    void rotateToolPlaneAroundMachineAxis(double angle)
-    {
-        // =====================================================
-        // TOOL-HEAD ROTATION MODE
-        //
-        // OWNER:
-        // PipeAxis3D owns machine/bend-plane frame state.
-        //
-        // Meaning:
-        // - machineEntryFrame.P stays fixed
-        // - machineEntryFrame.T stays fixed
-        // - N/B rotate around T
-        //
-        // This changes the next bend plane WITHOUT moving
-        // already manufactured pipe geometry.
-        // =====================================================
-
-        Vec3D axis =
-            machineEntryFrame.T.normalized();
-
-        if (axis.lengthSquared() < 1e-12)
-            return;
-
-        machineEntryFrame.N =
-            rotateAroundAxis(
-                machineEntryFrame.N,
-                axis,
-                angle
-            ).normalized();
-
-        machineEntryFrame.B =
-            rotateAroundAxis(
-                machineEntryFrame.B,
-                axis,
-                angle
-            ).normalized();
-
-        orthonormalizeFrame(machineEntryFrame);
-    }
-    //Helper 
-    // Rotate Pipe Only Default
-    void rotatePipeBodyAroundMachineAxis(double angle)
-    {
-        // =====================================================
-        // PIPE-ROLL MODE
-        //
-        // OWNER:
-        // PipeAxis3D owns pipe manufacturing geometry.
-        //
-        // Meaning:
-        // The already-fed / manufactured pipe rotates as
-        // a rigid body around machineEntryFrame.T.
-        //
-        // IMPORTANT:
-        // This function does NOT rotate machineEntryFrame.N/B.
-        // The machine bend plane stays fixed.
-        //
-        // PIPEFLOW:
-        //
-        // frozen geometry
-        // positioned straight
-        // active bend trace
-        // active window
-        //        ?
-        // rigid rotation around machineEntryFrame.T
-        // =====================================================
-
-        rotateNodeListAroundMachineAxis(
-            mfg.frozenNodes,
-            angle
-        );
-
-        rotateNodeListAroundMachineAxis(
-            mfg.currentBendTraceNodes,
-            angle
-        );
-
-        rotateNodeListAroundMachineAxis(
-            mfg.activeZone.localNodes,
-            angle
-        );
-
-        rotateNodeListAroundMachineAxis(
-            mfg.positionedStraight.nodes,
-            angle
-        );
-
-        // currentFrame belongs to downstream pipe body.
-        rotateFrameAroundMachineAxis(
-            currentFrame,
-            angle
-        );
-
-        if (mfg.activeZone.active)
-        {
-            rotateFrameAroundMachineAxis(
-                mfg.activeZone.frame,
-                angle
-            );
-        }
-
-        syncCurrentFrameFromFrozen();
-    }
 };  

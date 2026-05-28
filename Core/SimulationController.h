@@ -5,6 +5,7 @@
 #include "OperationQueue.h"
 #include "PipeAxis3D.h"
 #include "Machine/MachineState.h"
+#include "Core/Manufacturing/RotationKinematicMode.h"
 #include "Core/PipeSystem.h"
 
 class SimulationController
@@ -31,14 +32,13 @@ public:
     // Rotation kinematic mode
     // =====================================================
 
-    void setRotationKinematicMode(
-        PipeAxis3D::RotationKinematicMode mode)
+    void setRotationKinematicMode(RotationKinematicMode mode)
     {
         rotationKinematicMode = mode;
-        pipeSystem.manufacturingPipe().setRotationKinematicMode(mode);
+        pipe().setRotationKinematicMode(mode);
     }
 
-    PipeAxis3D::RotationKinematicMode getRotationKinematicMode() const
+    RotationKinematicMode getRotationKinematicMode() const
     {
         return rotationKinematicMode;
     }
@@ -191,8 +191,8 @@ private:
     SimulationMode mode =
         SimulationMode::ManufacturingPlayback;
 
-    PipeAxis3D::RotationKinematicMode rotationKinematicMode =
-        PipeAxis3D::RotationKinematicMode::PipeRoll;
+    RotationKinematicMode rotationKinematicMode =
+        RotationKinematicMode::PipeRoll;
 
     // =====================================================
     // Playback state
