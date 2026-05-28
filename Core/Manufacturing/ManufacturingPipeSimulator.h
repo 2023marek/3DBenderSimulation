@@ -15,7 +15,7 @@ public:
         : ds(0.5),
         rotationMode(RotationKinematicMode::PipeRoll),
         state(),
-        axis(0.5, state)
+        axis(0.5)
     {
         resetFrames();
     }
@@ -24,13 +24,46 @@ public:
         : ds(sampleStep),
         rotationMode(RotationKinematicMode::PipeRoll),
         state(),
-        axis(sampleStep, state)
+        axis(sampleStep)
     {
         resetFrames();
     }
 
-
+    bool isBendActive() const
+    {
+        return state.activeZone.active;
+    }
     //Getters/Setters
+
+    double getIncomingStockRemainingLength() const
+    {
+        return state.incomingStock.remainingLength;
+    }
+
+    double getIncomingStockConsumedLength() const
+    {
+        return state.incomingStock.consumedLength;
+    }
+
+    double getIncomingStockTotalLength() const
+    {
+        return state.incomingStock.totalLength;
+    }
+
+    void setIncomingStockLength(double length)
+    {
+        if (length <= 0.0)
+            return;
+
+        state.incomingStock.totalLength = length;
+        state.incomingStock.remainingLength = length;
+        state.incomingStock.consumedLength = 0.0;
+
+        renderNodes.clear();
+
+        axis.markGeometryDirty();
+    }
+
 
     const Frame& getMachineEntryFrame() const
     {

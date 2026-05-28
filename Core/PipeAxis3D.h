@@ -24,9 +24,7 @@
 // FUTURE:
 // PipeAxis3D -> GeometricPipeSimulator
 
-// =========================================================================
-// PHASE 5: CNC-COMPLIANT PIPE AXIS 3D
-// =========================================================================
+
 //
 // KEY PRINCIPLE:
 //   "Never mutate geometry directly. Store operations, rebuild from scratch."
@@ -37,13 +35,24 @@
 //   ? Realistic (matches real CNC machine behavior)
 //   ? Scalable (handles unlimited operations)
 //
-// =========================================================================
 
 class PipeAxis3D
 {
 public:
+    PipeAxis3D()
+        : PipeAxis3D(0.5)
+    {
+    }
 
+    explicit PipeAxis3D(double stepSize)
+        : ds(stepSize),
+        dirty(true)
+        
+    {
+        initialize();
+    }
 
+    
 
     // =====================================================
    // TEMPORARY COMPATIBILITY ALIASES
@@ -62,101 +71,9 @@ public:
     using Node = ::PipeNode;
     using Segment = ::PipeSegment;
 	//using RotationKinematicMode = ::RotationKinematicMode;
-    using IncomingStock = ::ManufacturingIncomingStock;
-    using PositionedStraight = ::ManufacturingPositionedStraight;
-    using ActiveZone = ::ManufacturingActiveZone;
-	using ManufacturingRenderData = ::ManufacturingRenderData;
-    using ManufacturingState = ::ManufacturingState;
-    //====================================================
-	// Temporary compatibility aliases
-    // 
-
-    // =====================================================================
-    // FRAME (3D coordinate system along pipe)
-    // =====================================================================
-  //  struct Frame
-  //  {
-  //      Vec3D P;  // Position
-  //      Vec3D T;  // Tangent (direction pipe is pointing)
-  //      Vec3D N;  // Normal (perpendicular to tangent)
-  //      Vec3D B;  // Binormal (perpendicular to both)
- //   };
-    //======================================================================
-    // OPERATION (User input for pipe construction)
-    // INPUT LAYER 
-    // =======================================================================
-    // 
     
-    // =====================================================================
-    // NODE (Point on pipe centerline)
-    // =====================================================================
-   // struct Node
-   // {
-   //     Vec3D pos;
-
- //       Vec3D T;
-  //      Vec3D N;
-  //      Vec3D B;
-
- //       glm::vec3 getPosition() const
-  //      {
-  //          return glm::vec3(
-  //              (float)pos.x,
-   //             (float)pos.y,
-  //              (float)pos.z
-  //          );
-  //      }
-  //  };
-
-  //  struct ManufacturingRenderData
-   // {
-   //     std::vector<Node> incomingStockNodes;
-   //     std::vector<Node> positionedStraightNodes;
-   //     std::vector<Node> activeZoneNodes;
-   //     std::vector<Node> currentBendTraceNodes;
-    //    std::vector<Node> frozenNodes;
-
-       // void clear()
-       // {
-       //     incomingStockNodes.clear();
-       //     positionedStraightNodes.clear();
-       //     activeZoneNodes.clear();
-       //     currentBendTraceNodes.clear();
-       //     frozenNodes.clear();
-       // }
-   // };
-  
-  //  struct Segment
-   // {
-     //   enum Type
-     //   {
-     //       LINE,
-     //       ARC,
-     //       ROTATE
-      //  };
-
-        //Type type = LINE;
-
-        // LINE
-        //double length = 0.0;
-
-        // ARC
-        //double curvature = 0.0;
-        //double angle = 0.0;
-        //BendDirection bendDirection = BendDirection::CCW;
-
-        // ROTATE
-        //double rotAngle = 0.0;
-        //RotationDirection rotationDirection = RotationDirection::CCW;
-
-        //double arcLength() const
-        //{
-          //  if (std::abs(curvature) < 1e-12)
-            //    return 0.0;
-
-            //return angle / std::abs(curvature);
-        //}
-    //};
+    //====================================================
+	
     void markGeometryDirty()
     {
         markDirty();
@@ -203,44 +120,7 @@ public:
 
 
 private:
-   // struct ActiveZone
-  //  {
-    //    Frame frame;
-
-   //     double curvature = 0.0;
-    //    double accumulatedAngle = 0.0;
-    //    double targetAngle = 0.0;
-
-    //    BendDirection direction = BendDirection::CCW;
-
-    //    double activeLength = 5.0;
-
-    //    std::vector<Node> localNodes;
-
-    //    bool active = false;
-
-    //    size_t frozenCountAtBendStart = 0;
-   // };
-
- // struct IncomingStock
-   // {
-        // =====================================================
-        // OWNER:
-        // PipeAxis3D owns incoming stock geometry state.
-        //
-        // SimulationController only calls processFeed(distance).
-        // It does NOT build stock geometry.
-        // =====================================================
-
-      //  double totalLength = 300.0;      // full raw stock length
-      //  double remainingLength = 300.0;  // stock not yet consumed by machine
-
-		// Material already fed into machine     
-       // double consumedLength=0.0;
-
-       // bool visible = true;
-    //};
-	
+  
 
      struct LocalFrame
     {
@@ -253,36 +133,12 @@ private:
        
     };
 
-    // struct PositionedStraight
-    // {
-         // =====================================================
-         // OWNER:
-         // PipeAxis3D owns material already fed through machine
-         // but not currently bending.
-         //
-         // Meaning:
-         // - straight
-         // - rigid
-         // - not incoming anymore
-         // - not active deformation
-         // - not frozen bend geometry
-         // =====================================================
-
-       //  double length = 0.0;
-
-       //  bool visible = true;
-
-       //  std::vector<Node> nodes;
-    // };
+   
    
     
       
 
-    bool isBendActive() const
-    {
-        return mfg.activeZone.active;
-    }
-	
+    
 
     
 	public:
@@ -319,39 +175,9 @@ public:
     // =====================================================================
     // CONSTRUCTOR
     // =====================================================================
-    public:
-        // =====================================================
-        // CONSTRUCTORS
-        // =====================================================
+   
+     
 
-        PipeAxis3D()
-            : PipeAxis3D(0.5)
-        {
-        }
-
-        explicit PipeAxis3D(double stepSize)
-            : ds(stepSize),
-            dirty(true),
-            ownedMfg(),
-            mfg(ownedMfg)
-        {
-            initialize();
-        }
-
-        PipeAxis3D(
-            double stepSize,
-            ManufacturingState& externalState)
-            : ds(stepSize),
-            dirty(true),
-            ownedMfg(),
-            mfg(externalState)
-        {
-            initialize();
-        }
-
-
-// temporary bridge frame accessorsm later for moveout
-       
 
        
 
@@ -442,39 +268,17 @@ public:
         }
     }
 
-    void clear()
-    {
-        // =====================================================
-        // CAD / operation-history data
-        // =====================================================
+   void clear()
+{
+    ops.clear();
+    segments.clear();
+    nodes.clear();
+    cadNodes.clear();
 
-        ops.clear();
-        segments.clear();
-        nodes.clear();
-        cadNodes.clear();
+    resetFrames();
 
-        // =====================================================
-        // Manufacturing state
-        //
-        // ManufacturingState::clear() resets:
-        // - incomingStock
-        // - positionedStraight
-        // - activeZone
-        // - currentBendTraceNodes
-        // - frozenNodes
-        // - renderData
-        // =====================================================
-
-        mfg.clear();
-
-        // =====================================================
-        // Frames
-        // =====================================================
-
-        resetFrames();
-
-        markDirty();
-    }
+    markDirty();
+}
 
 	// =====================================================================
 	//GETTERS  
@@ -483,37 +287,16 @@ public:
    
 
     
-    double getIncomingStockRemainingLength() const
-    {
-        return mfg.incomingStock.remainingLength;
-    }
+    
 
-    double getIncomingStockConsumedLength() const
-    {
-        return mfg.incomingStock.consumedLength;
-    }
+    
 
-    double getIncomingStockTotalLength() const
-    {
-        return mfg.incomingStock.totalLength;
-    }
-
+   
    
 
 	// =====================================================================
     //SETTERRS
-    void setIncomingStockLength(double length)
-    {
-        if (length <= 0.0)
-            return;
-
-        mfg.incomingStock.totalLength = length;
-        mfg.incomingStock.remainingLength = length;
-        mfg.incomingStock.consumedLength = 0.0;
-
-        markDirty();
-    }
-
+    
    
 
    
@@ -526,39 +309,31 @@ public:
     // BUILD (Reconstruct geometry from operations)
     // =====================================================================
 
-    void build()
-    {
-        if (!dirty)
-            return;
+   void build()
+   {
+       if (!dirty)
+           return;
 
-        std::cout << "\n=== BUILD START ===\n";
+       std::cout << "\n=== BUILD START ===\n";
 
-        buildSegments();
+       buildSegments();
 
-        executeSegments();
+       executeSegments();
 
-        std::cout << "ops: "
-            << ops.size()
-            << std::endl;
+       std::cout << "ops: "
+           << ops.size()
+           << std::endl;
 
-        std::cout << "segments: "
-            << segments.size()
-            << std::endl;
+       std::cout << "segments: "
+           << segments.size()
+           << std::endl;
 
-        std::cout << "nodes: "
-            << nodes.size()
-            << std::endl;
+       std::cout << "nodes: "
+           << nodes.size()
+           << std::endl;
 
-        std::cout << "frozenNodes: "
-            << mfg.frozenNodes.size()
-            << std::endl;
-
-        std::cout << "activeNodes: "
-            << mfg.activeZone.localNodes.size()
-            << std::endl;
-
-        dirty = false;
-    }
+       dirty = false;
+   }
     // MANUFACTURING API
 	//=====================================================================
    
@@ -591,10 +366,7 @@ public:
     // =====================================================================
     // PROPERTIES
     // =====================================================================
-    const ManufacturingRenderData& getManufacturingRenderData() const
-    {
-        return mfg.renderData;
-    }
+  
 
     double getTotalLength() const
     {
@@ -638,8 +410,7 @@ private:
     // DATA
     // =====================================================================
     //CAD /History data
-    ManufacturingState ownedMfg;
-    ManufacturingState& mfg;
+   
     std::vector<Operation> ops;     // INPUT
     std::vector<Segment> segments;  // SIMULATION Operations to execute
     //Render output
@@ -676,8 +447,6 @@ private:
      void initialize()
      {
          resetFrames();
-
-         mfg.clear();
 
          dirty = true;
      }
@@ -825,8 +594,8 @@ private:
 
         // Do not use manufacturing containers here.
         // frozenNodes belongs to ManufacturingPlayback.
-        mfg.activeZone.localNodes.clear();
-        mfg.activeZone.active = false;
+        //mfg.activeZone.localNodes.clear();
+       // mfg.activeZone.active = false;
 
         Frame frame;
 
@@ -1040,66 +809,7 @@ void buildLineCAD(Frame& frame, double length)
 //POSTIONONG HELPER
    // bake positioned stright into frozen geometry 
 
-    void freezePositionedStraight()
-    {
-        // =====================================================
-        // ZONE 2 -> ZONE 4 TRANSFER
-        //
-        // When a bend operation finishes, any remaining
-        // positioned straight section is no longer a temporary
-        // feed buffer.
-        //
-        // It becomes completed pipe geometry and should move
-        // later as part of frozen geometry.
-        // =====================================================
-
-        if (mfg.positionedStraight.length <= 0.0)
-            return;
-
-        if (ds <= 1e-9)
-            return;
-
-        // Start from the current bend output frame.
-        Frame frame = currentFrame;
-
-        int stepCount =
-            std::max(
-                1,
-                static_cast<int>(std::ceil(mfg.positionedStraight.length / ds))
-            );
-
-        double stepLength =
-            mfg.positionedStraight.length / static_cast<double>(stepCount);
-
-        for (int i = 1; i <= stepCount; ++i)
-        {
-            double s =
-                stepLength * static_cast<double>(i);
-
-            Vec3D p =
-                frame.P + frame.T * s;
-
-               mfg.frozenNodes.push_back({
-                p,
-                frame.T,
-                frame.N,
-                frame.B
-                });
-        }
-
-        // Move currentFrame to the end of this straight section.
-        currentFrame.P =
-            frame.P + frame.T * mfg.positionedStraight.length;
-
-        currentFrame.T = frame.T;
-        currentFrame.N = frame.N;
-        currentFrame.B = frame.B;
-
-        mfg.positionedStraight.length = 0.0;
-        mfg.positionedStraight.nodes.clear();
-
-        std::cout << "[FREEZE POSITIONED STRAIGHT]\n";
-    }
+   
 
 	//Positionin Helper
 
@@ -1140,36 +850,7 @@ void buildLineCAD(Frame& frame, double length)
   
 
 
-    void freezeOldestActiveNode()
-    {
-        // =====================================================
-        // OWNER:
-        // PipeAxis3D owns transfer from active deformation
-        // state into frozen manufactured geometry.
-        //
-        // PIPEFLOW:
-        //
-        // activeZone.localNodes.front()
-        //        ?
-        // frozenNodes
-        //
-        // Meaning:
-        // oldest material has exited bend window.
-        // It no longer deforms.
-        // =====================================================
-
-        if (mfg.activeZone.localNodes.empty())
-            return;
-
-        mfg.frozenNodes.push_back(
-            mfg.activeZone.localNodes.front()
-        );
-
-        mfg.activeZone.localNodes.erase(
-         mfg.activeZone.localNodes.begin()
-        );
-    }
-
+    
     
 
     //HELPER AVOID DUPLICATE NODES
@@ -1217,24 +898,7 @@ void buildLineCAD(Frame& frame, double length)
     
 
 
-    void translateFrozenGeometry(const Vec3D& delta)
-{
-    // =====================================================
-    // ZONE 3 — FROZEN GEOMETRY RIGID MOTION
-    //
-    // OWNER:
-    // PipeAxis3D owns frozen geometry state.
-    //
-    // Meaning:
-    // Finished geometry moves through space,
-    // but its shape is not recalculated.
-    // =====================================================
-
-    for (auto& node : mfg.frozenNodes)
-    {
-        translateNode(node, delta);
-    }
-}
+  
 
     
 	//=============================
