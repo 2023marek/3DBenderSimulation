@@ -107,19 +107,19 @@ public:
         return operations;
     }
 
-    const std::vector<Node>& getNodes()
+    const std::vector<Node>& getNodes() const
     {
         buildIfDirty();
         return nodes;
     }
 
-    const std::vector<Segment>& getSegments()
+    const std::vector<Segment>& getSegments() const
     {
         buildIfDirty();
         return segments;
     }
 
-    void build()
+    void build() const
     {
         segments.clear();
         nodes.clear();
@@ -134,22 +134,24 @@ public:
 
 private:
     double ds = 0.5;
-    bool dirty = true;
 
     std::vector<Operation> operations;
-    std::vector<Segment> segments;
-    std::vector<Node> nodes;
 
-    Frame currentFrame;
+    // Cached rebuild data.
+    // These may change even inside const getters.
+    mutable bool dirty = true;
+    mutable std::vector<Segment> segments;
+    mutable std::vector<Node> nodes;
+    mutable Frame currentFrame;
 
 private:
-    void buildIfDirty()
+    void buildIfDirty() const
     {
         if (dirty)
             build();
     }
 
-    void resetFrame()
+    void resetFrame() const
     {
         currentFrame.P = { 0.0, 0.0, 0.0 };
         currentFrame.T = { 1.0, 0.0, 0.0 };
@@ -158,7 +160,7 @@ private:
 
     }
 
-    void buildSegments()
+    void buildSegments() const
     {
         for (const auto& op : operations)
         {
@@ -192,7 +194,7 @@ private:
         }
     }
 
-    void buildNodes()
+    void buildNodes() const
     {
         nodes.push_back({
             currentFrame.P,
@@ -223,7 +225,7 @@ private:
 
 
 
-    void buildLine(double length)
+    void buildLine(double length) const
     {
         if (length <= 0.0 || ds <= 1e-9)
             return;
@@ -249,7 +251,7 @@ private:
         }
     }
 
-    void buildArc(const Segment& s)
+    void buildArc(const Segment& s) const
     {
         if (std::abs(s.curvature) < 1e-12)
             return;
@@ -303,7 +305,7 @@ private:
         }
     }
 
-    void buildRotate(const Segment& s)
+    void buildRotate(const Segment& s) const
     {
         double signedAngle =
             s.rotAngle * rotationDirectionSign(s.rotationDirection);

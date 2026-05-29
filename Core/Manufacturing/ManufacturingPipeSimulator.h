@@ -2,11 +2,13 @@
 
 #include <algorithm>
 #include <iostream>
-
-#include "Core/PipeAxis3D.h"
+#include "Core/BendDirection.h"
+#include "Core/Geometry/Frame.h"
+#include "Core/Geometry/PipeNode.h"
+#include "Core/Math/Vec3D.h"
 #include "Core/Manufacturing/ManufacturingState.h"
 #include "Core/Manufacturing/RotationKinematicMode.h"
-#include "Core/BendDirection.h"
+
 
 class ManufacturingPipeSimulator
 {
@@ -14,8 +16,8 @@ public:
     ManufacturingPipeSimulator()
         : ds(0.5),
         rotationMode(RotationKinematicMode::PipeRoll),
-        state(),
-        axis(0.5)
+        state()
+        
     {
         resetFrames();
     }
@@ -23,8 +25,8 @@ public:
     explicit ManufacturingPipeSimulator(double sampleStep)
         : ds(sampleStep),
         rotationMode(RotationKinematicMode::PipeRoll),
-        state(),
-        axis(sampleStep)
+        state()
+        
     {
         resetFrames();
     }
@@ -60,8 +62,7 @@ public:
         state.incomingStock.consumedLength = 0.0;
 
         renderNodes.clear();
-
-        axis.markGeometryDirty();
+        state.renderData.clear();
     }
 
 
@@ -85,6 +86,13 @@ public:
         return currentFrame;
     }
 
+
+    //=====================================
+    //Legacy
+   
+
+
+
 	//=====================================================
     void reset()
     {
@@ -93,8 +101,8 @@ public:
 
         resetFrames();
 
-        axis.clear();
-        axis.markGeometryDirty();
+        //axis.clear();
+       // axis.markGeometryDirty();
     }
 
     ManufacturingState& getState()
@@ -213,7 +221,7 @@ public:
         if (remainingAngle <= 0.0)
         {
             freezeActiveZone();
-            axis.markGeometryDirty();
+           
             return;
         }
 
@@ -264,8 +272,6 @@ public:
             << " positionedStraightLeft="
             << state.positionedStraight.length
             << std::endl;
-
-        axis.markGeometryDirty();
     }
 
 
@@ -294,8 +300,6 @@ public:
                 << signedAngle * 180.0 / PI
                 << std::endl;
         }
-
-        axis.markGeometryDirty();
     }
 
     void reconstructVisiblePipe()
@@ -328,15 +332,7 @@ public:
         return renderNodes;
     }
 
-    PipeAxis3D& legacyAxis()
-    {
-        return axis;
-    }
-
-    const PipeAxis3D& legacyAxis() const
-    {
-        return axis;
-    }
+   
 
 private:
     void resetFrames()
@@ -814,7 +810,7 @@ private:
         Frame currentFrame;
 
         ManufacturingState state;
-        PipeAxis3D axis;
+       //PipeAxis3D axis;
 
         std::vector<PipeNode> renderNodes;
 //Helpers

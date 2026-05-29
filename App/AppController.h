@@ -55,8 +55,7 @@ public:
     // Still needed temporarily during refactor.
     // =====================================================
 
-    PipeAxis3D& getPipeGeometry();
-    const PipeAxis3D& getPipeGeometry() const;
+    
 
     // =====================================================
     // CAD PIPE API

@@ -66,15 +66,8 @@ public:
     // Existing render/app code may still need PipeAxis3D.
     // -----------------------------------------------------
 
-    PipeAxis3D& legacyPipeAxis()
-    {
-        return manufacturing.legacyAxis();
-    }
+    
 
-    const PipeAxis3D& legacyPipeAxis() const
-    {
-        return manufacturing.legacyAxis();
-    }
 
     void reset()
     {

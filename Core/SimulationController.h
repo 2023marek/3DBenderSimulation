@@ -78,15 +78,7 @@ public:
     // Returns old PipeAxis3D through ManufacturingPipeSimulator.
     // =====================================================
 
-    const PipeAxis3D& getPipeGeometry() const
-    {
-        return pipeSystem.legacyPipeAxis();
-    }
-
-    PipeAxis3D& getPipeGeometry()
-    {
-        return pipeSystem.legacyPipeAxis();
-    }
+    
 
     // =====================================================
     // CAD pipe access

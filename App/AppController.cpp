@@ -51,7 +51,9 @@ AppController::AppController()
 
     std::cout << "Playing: " << sim.isPlaying() << std::endl;
     std::cout << "Progress: " << sim.getOverallProgress() << std::endl;
-    std::cout << "nodes: " << sim.getPipeGeometry().getNodes().size() << std::endl;
+    std::cout << "nodes: "
+        << sim.getManufacturingPipe().getNodes().size()
+        << std::endl;
     std::cout << "CurrentIdx: " << sim.getCurrentOperationIndex() << std::endl;
 }
 // =====================================
@@ -68,15 +70,7 @@ void AppController::update(double dt)
 // =====================================
 // GEOMETRY ACCESS
 // =====================================
-const PipeAxis3D& AppController::getPipeGeometry() const
-{
-    return sim.getPipeGeometry();
-}
 
-PipeAxis3D& AppController::getPipeGeometry()
-{
-    return sim.getPipeGeometry();
-}
 
 // =====================================
 // HUD DATA BUILDER (translator layer)
@@ -105,7 +99,22 @@ HUDData AppController::buildHUDData() const
     data.overallProgress = sim.getOverallProgress();
 
     // ===== GEOMETRY =====
-    data.nodeCount = sim.getPipeGeometry().getNodes().size();
+   if (sim.getMode()
+    == SimulationController::SimulationMode::ManufacturingPlayback)
+{
+    data.nodeCount =
+        sim.getManufacturingPipe().getNodes().size();
+}
+else if (sim.getMode()
+    == SimulationController::SimulationMode::CADPreview)
+{
+    data.nodeCount =
+        sim.getCadPipeGeometry().getNodes().size();
+}
+else
+{
+    data.nodeCount = 0;
+}
     
     //
 
