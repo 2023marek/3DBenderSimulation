@@ -1,21 +1,7 @@
 #pragma once
 
-#include "Core/PipeAxis3D.h"
 #include "Core/Geometry/GeometricPipeModel.h"
 #include "Core/Manufacturing/ManufacturingPipeSimulator.h"
-
-// =====================================================
-// PIPESYSTEM
-//
-// Owns pipe-related subsystems.
-//
-// Phase 4 status:
-// - GeometricPipeModel = CAD preview / ideal geometry
-// - ManufacturingPipeSimulator = manufacturing playback
-//
-// ManufacturingPipeSimulator still wraps old PipeAxis3D.
-// Later PipeAxis3D manufacturing state will move into it.
-// =====================================================
 
 class PipeSystem
 {
@@ -32,10 +18,6 @@ public:
     {
     }
 
-    // -----------------------------------------------------
-    // CAD / ideal geometric pipe
-    // -----------------------------------------------------
-
     GeometricPipeModel& cadPipe()
     {
         return cadModel;
@@ -46,10 +28,6 @@ public:
         return cadModel;
     }
 
-    // -----------------------------------------------------
-    // Manufacturing simulator
-    // -----------------------------------------------------
-
     ManufacturingPipeSimulator& manufacturingPipe()
     {
         return manufacturing;
@@ -59,15 +37,6 @@ public:
     {
         return manufacturing;
     }
-
-    // -----------------------------------------------------
-    // Temporary legacy access
-    //
-    // Existing render/app code may still need PipeAxis3D.
-    // -----------------------------------------------------
-
-    
-
 
     void reset()
     {

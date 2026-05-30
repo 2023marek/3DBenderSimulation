@@ -7,8 +7,10 @@
 //
 // Sample point on a pipe centerline.
 //
-// This is not only a point.
-// It also stores the local frame orientation at that point.
+// pos = centerline point
+// T   = tangent
+// N   = normal
+// B   = binormal
 //
 // Used by:
 // - pipe rendering
@@ -18,17 +20,6 @@
 // - collision later
 // =====================================================
 
-// =====================================================
-// PIPE NODE
-//
-// Sample point on a pipe centerline.
-//
-// pos = centerline point
-// T   = tangent
-// N   = normal
-// B   = binormal
-// =====================================================
-
 struct PipeNode
 {
     Vec3D pos;
@@ -36,13 +27,4 @@ struct PipeNode
     Vec3D T;
     Vec3D N;
     Vec3D B;
-
-    glm::vec3 getPosition() const
-    {
-        return glm::vec3(
-            static_cast<float>(pos.x),
-            static_cast<float>(pos.y),
-            static_cast<float>(pos.z)
-        );
-    }
 };

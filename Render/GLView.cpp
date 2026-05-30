@@ -7,6 +7,7 @@
 #include "App/AppController.h"
 #include "Core/Manufacturing/ManufacturingPipeSimulator.h"
 //#include "Render/ShaderGL.h"
+#include "Core/Geometry/PipeNode.h"
 #include <QOpenGLContext>
 #include <iostream>
 
@@ -69,7 +70,7 @@ void main()
 )";
 //HELPER
 static std::vector<float> nodesToFloatLine(
-    const std::vector<PipeAxis3D::Node>& nodes)
+    const std::vector<PipeNode>& nodes)
 {
     std::vector<float> data;
     data.reserve(nodes.size() * 3);
@@ -86,10 +87,7 @@ static std::vector<float> nodesToFloatLine(
 // =========================
 // CONNECT PIPE DATA
 // =========================
-void GLView::setPipe(const PipeAxis3D* p)
-{
-    pipe = p;
-}
+
 
 
 // =========================
@@ -230,7 +228,7 @@ void main()
 //RENDER HELPER
 
 void GLView::nodesToCenterlineAndTangents(
-    const std::vector<PipeAxis3D::Node>& nodes,
+    const std::vector<PipeNode>& nodes,
     std::vector<Vec3D>& centers,
     std::vector<Vec3D>& tangents)
 {
@@ -266,34 +264,11 @@ void GLView::nodesToCenterlineAndTangents(
 //Helper Draw TUBE ZONE
 
 void GLView::drawTubeZone(
-    const std::vector<PipeAxis3D::Node>& nodes,
+    const std::vector<PipeNode>& nodes,
     double radius,
     int radialSegments)
 {
-    // =====================================================
-    // OWNER:
-    // GLView owns per-zone mesh drawing.
-    //
-    // ACCESS:
-    // private GLView helper.
-    //
-    // PIPEFLOW:
-    //
-    // one manufacturing zone
-    //        ?
-    // nodesToCenterlineAndTangents()
-    //        ?
-    // TubeMesh.generate()
-    //        ?
-    // PipeRenderer.uploadMesh()
-    //        ?
-    // PipeRenderer.draw()
-    //
-    // IMPORTANT:
-    // Draw one zone at a time.
-    // Never merge zones into one tube mesh.
-    // =====================================================
-
+    
     if (nodes.size() < 2)
         return;
 
@@ -349,7 +324,7 @@ void GLView::paintGL()
     // Runs once to place camera around pipe.
     // =====================================================
 
-    if (pipe && autoFrame)
+    if (app && autoFrame)
     {
         float size = 100.0f;
         glm::vec3 center = computePipeCenterAndSize(size);
@@ -490,86 +465,35 @@ void GLView::uploadPipeGeometry()
     if (!app)
         return;
 
-    // =====================================================
-    // MANUFACTURING MODE
-    //
-    // Render data now belongs to ManufacturingPipeSimulator.
-    // PipeAxis3D is legacy here.
-    // =====================================================
+    const ManufacturingPipeSimulator& mfgPipe =
+        app->getManufacturingPipe();
 
-    if (app->getSimulationMode()
-        == SimulationController::SimulationMode::ManufacturingPlayback)
-    {
-        const ManufacturingPipeSimulator& mfgPipe =
-            app->getManufacturingPipe();
+    const auto& data =
+        mfgPipe.getManufacturingRenderData();
 
-        const auto& data =
-            mfgPipe.getManufacturingRenderData();
+    std::vector<std::vector<float>> strips;
 
-        std::vector<std::vector<float>> strips;
-
-        strips.push_back(
-            nodesToFloatLine(data.incomingStockNodes)
-        );
-
-        strips.push_back(
-            nodesToFloatLine(data.positionedStraightNodes)
-        );
-
-        strips.push_back(
-            nodesToFloatLine(data.currentBendTraceNodes)
-        );
-
-        strips.push_back(
-            nodesToFloatLine(data.frozenNodes)
-        );
-
-        strips.push_back(
-            nodesToFloatLine(data.activeZoneNodes)
-        );
-
-        pipeRenderer.uploadLineStrips(strips);
-
-        return;
-    }
-
-    // =====================================================
-    // CAD / LEGACY MODE
-    //
-    // This part can still use old pipe pointer for now.
-    // =====================================================
-
-    if (!pipe)
-        return;
-
-    const auto& nodes =
-        pipe->getNodes();
-
-    if (nodes.empty())
-        return;
-
-    pipeRenderer.uploadLine(
-        nodesToFloatLine(nodes)
+    strips.push_back(
+        nodesToFloatLine(data.incomingStockNodes)
     );
 
-    //if (renderMode == RenderMode::MESH)
-    //{
-     //   std::vector<Vec3D> C;
-     //   std::vector<Vec3D> T;
+    strips.push_back(
+        nodesToFloatLine(data.positionedStraightNodes)
+    );
 
-      //  for (const auto& n : nodes)
-      //  {
-       //     C.push_back(n.pos);
-        //    T.push_back(n.T);
-       // }
+    strips.push_back(
+        nodesToFloatLine(data.currentBendTraceNodes)
+    );
 
-       // tubeMesh.generate(C, T, 5.0, 12);
+    strips.push_back(
+        nodesToFloatLine(data.frozenNodes)
+    );
 
-       // pipeRenderer.uploadMesh(
-        //    tubeMesh.getVertices(),
-        //    tubeMesh.getIndices()
-       // );
-   
+    strips.push_back(
+        nodesToFloatLine(data.activeZoneNodes)
+    );
+
+    pipeRenderer.uploadLineStrips(strips);
 }
 void GLView::mousePressEvent(QMouseEvent* event)
 {
@@ -621,9 +545,51 @@ void GLView::wheelEvent(QWheelEvent* event)
 
 glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
 {
-    const auto& nodes = pipe->getNodes();
+    if (!app)
+    {
+        outSize = 100.0f;
+        return glm::vec3(0.0f);
+    }
 
-    if (nodes.empty())
+    std::vector<PipeNode> combinedNodes;
+
+    auto mode =
+        app->getSimulationMode();
+
+    if (mode == SimulationController::SimulationMode::CADPreview)
+    {
+        const auto& cadNodes =
+            app->getCadPipeGeometry().getNodes();
+
+        combinedNodes.insert(
+            combinedNodes.end(),
+            cadNodes.begin(),
+            cadNodes.end()
+        );
+    }
+    else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
+    {
+        const auto& data =
+            app->getManufacturingPipe().getManufacturingRenderData();
+
+        auto append =
+            [&combinedNodes](const std::vector<PipeNode>& nodes)
+            {
+                combinedNodes.insert(
+                    combinedNodes.end(),
+                    nodes.begin(),
+                    nodes.end()
+                );
+            };
+
+        append(data.incomingStockNodes);
+        append(data.positionedStraightNodes);
+        append(data.currentBendTraceNodes);
+        append(data.frozenNodes);
+        append(data.activeZoneNodes);
+    }
+
+    if (combinedNodes.empty())
     {
         outSize = 100.0f;
         return glm::vec3(0.0f);
@@ -632,18 +598,29 @@ glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
     glm::vec3 minP(1e9f);
     glm::vec3 maxP(-1e9f);
 
-    for (const auto& n : nodes)
+    for (const auto& n : combinedNodes)
     {
-        glm::vec3 p(n.pos.x, n.pos.y, n.pos.z);
+        glm::vec3 p(
+            static_cast<float>(n.pos.x),
+            static_cast<float>(n.pos.y),
+            static_cast<float>(n.pos.z)
+        );
 
         minP = glm::min(minP, p);
         maxP = glm::max(maxP, p);
     }
 
-    glm::vec3 center = (minP + maxP) * 0.5f;
+    glm::vec3 center =
+        (minP + maxP) * 0.5f;
 
-    glm::vec3 sizeVec = maxP - minP;
-    outSize = glm::length(sizeVec);
+    glm::vec3 sizeVec =
+        maxP - minP;
+
+    outSize =
+        glm::length(sizeVec);
+
+    if (outSize < 1.0f)
+        outSize = 100.0f;
 
     return center;
 }

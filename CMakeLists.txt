@@ -68,9 +68,8 @@ set(CORE_SOURCES
 
 set(CORE_HEADERS
     Core/SimulationController.h
-    Core/PipeAxis3D.h
+    
     Core/PipeAxis2D.h
-    Core/PipeAxis3D_v2.h
     Core/Operations.h
     Core/OperationQueue.h
     Core/ProgramLoader.h

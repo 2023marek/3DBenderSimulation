@@ -4,12 +4,11 @@
 #include <QOpenGLWidget>
 class AppController;
 #include "Render/HUDPanel.h"  
-#include "Core/PipeAxis3D.h"
 #include "Render/ShaderGL.h"
 #include "Render/ControlCamera.h"
 #include "Render/TubeMesh.h"
 #include "Render/PipeRenderer.h"
-
+#include "Core/Geometry/PipeNode.h"
 
 
 
@@ -26,7 +25,7 @@ public:
 		
     }
   
-    void setPipe(const PipeAxis3D* pipe);
+   
     
 protected:
     void initializeGL() override;
@@ -48,8 +47,7 @@ private:
     // =========================
     // DATA SOURCE
     // =========================
-    const PipeAxis3D* pipe = nullptr;
-
+   
     // =========================
     // SHADER
     // =========================
@@ -79,12 +77,12 @@ private:
     void uploadCadPipeGeometry();
 
     void nodesToCenterlineAndTangents(
-        const std::vector<PipeAxis3D::Node>& nodes,
+        const std::vector<PipeNode>& nodes,
         std::vector<Vec3D>& centers,
         std::vector<Vec3D>& tangents);
 
     void drawTubeZone(
-        const std::vector<PipeAxis3D::Node>& nodes,
+        const std::vector<PipeNode>& nodes,
         double radius,
         int radialSegments);
 

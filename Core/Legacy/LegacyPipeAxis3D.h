@@ -36,15 +36,15 @@
 //   ? Scalable (handles unlimited operations)
 //
 
-class PipeAxis3D
+class LegacyPipeAxis3D
 {
 public:
-    PipeAxis3D()
-        : PipeAxis3D(0.5)
-    {
+    LegacyPipeAxis3D()
+        : LegacyPipeAxis3D(0.5)
+    { 
     }
 
-    explicit PipeAxis3D(double stepSize)
+    explicit LegacyPipeAxis3D(double stepSize)
         : ds(stepSize),
         dirty(true)
         
