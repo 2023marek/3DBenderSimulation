@@ -3,8 +3,7 @@
 #include <vector>
 
 #include "OperationQueue.h"
-
-#include "Machine/MachineState.h"
+#include "Core/Machine/MachineSystem.h"
 #include "Core/Manufacturing/RotationKinematicMode.h"
 #include "Core/PipeSystem.h"
 
@@ -42,7 +41,38 @@ public:
     {
         return rotationKinematicMode;
     }
+    //=====================================================
+    // Public accessors
+    // ===================================================
+    //read access for UI/debug
+    const MachineRuntimeState& getMachineRuntimeState() const
+    {
+        return machineSystem.getRuntimeState();
+    }
+    //=====================================================
+    ManufacturingPipeSimulator& pipe();
+    const ManufacturingPipeSimulator& pipe() const;
 
+    MachineController& machine()
+    {
+        return machineSystem.getController();
+    }
+
+    const MachineController& machine() const
+    {
+        return machineSystem.getController();
+    }
+  
+	//=====================================================
+    MachineSystem& getMachineSystem()
+    {
+        return machineSystem;
+    }
+
+    const MachineSystem& getMachineSystem() const
+    {
+        return machineSystem;
+    }
     // =====================================================
     // Simulation mode
     // =====================================================
@@ -61,15 +91,7 @@ public:
     // Machine state
     // =====================================================
 
-    const MachineState& getState() const
-    {
-        return machineState;
-    }
-
-    MachineState& getState()
-    {
-        return machineState;
-    }
+    
 
     // =====================================================
     // Manufacturing legacy pipe access
@@ -162,16 +184,7 @@ public:
     PipeSystem& getPipeSystem();
     const PipeSystem& getPipeSystem() const;
 
-private:
-    // =====================================================
-    // Internal helper
-    //
-    // After Phase 4D this returns ManufacturingPipeSimulator,
-    // not PipeAxis3D.
-    // =====================================================
 
-    ManufacturingPipeSimulator& pipe();
-    const ManufacturingPipeSimulator& pipe() const;
 
 private:
     // =====================================================
@@ -204,9 +217,9 @@ private:
     // =====================================================
 
     OperationQueue operationQueue;
-    MachineState machineState;
+    //MachineState machineState;
     PipeSystem pipeSystem;
-
+    MachineSystem machineSystem;
     // Full loaded program copy
     std::vector<Operation> loadedOperations;
 

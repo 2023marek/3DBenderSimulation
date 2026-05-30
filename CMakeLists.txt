@@ -68,7 +68,6 @@ set(CORE_SOURCES
 
 set(CORE_HEADERS
     Core/SimulationController.h
-    
     Core/PipeAxis2D.h
     Core/Operations.h
     Core/OperationQueue.h
@@ -86,14 +85,15 @@ set(CORE_HEADERS
     Core/Manufacturing/RotationKinematicMode.h
     Core/Manufacturing/ManufacturingTypes.h
     Core/Manufacturing/ManufacturingState.h
-
-
+    Core/Machine/MachineModel.h
+    Core/Machine/MachineState.h
+    Core/Machine/MachineRuntimeState.h
+    Core/Machine/MachineController.h
+    Core/Machine/MachineSystem.h
 )
 
-set(MACHINE_HEADERS
-    Machine/MachineModel.h
-    Machine/MachineState.h
-)
+    
+
 
 # =========================================================
 # GLAD (OpenGL loader - compiled library)
@@ -123,7 +123,7 @@ qt_add_executable(pipe_bender_repo
     ${RENDER_HEADERS}
     ${CORE_SOURCES}
     ${CORE_HEADERS}
-    ${MACHINE_HEADERS}
+    
 )
 
 # =========================================================

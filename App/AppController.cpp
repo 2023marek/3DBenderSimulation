@@ -37,15 +37,15 @@ AppController::AppController()
     sim.loadProgram(ops);
 
 
-    sim.setMode(
-   SimulationController::SimulationMode::ManufacturingPlayback
-    );
+   // sim.setMode(
+   //SimulationController::SimulationMode::ManufacturingPlayback
+   // );
 
     // Or for CAD preview:
     //
-    // sim.setMode(
-    //  SimulationController::SimulationMode::CADPreview
-    //   );
+     sim.setMode(
+     SimulationController::SimulationMode::CADPreview
+     );
 
     
 
@@ -82,12 +82,16 @@ HUDData AppController::buildHUDData() const
     // ===== BASIC STATE =====
     data.isPlaying = sim.isPlaying();
 
-    data.isPaused = sim.isPaused();
     data.speed = sim.getSpeed();
 
-    const MachineState& state = sim.getState();
-    data.time = state.currentTime;
-    data.rotationDeg = state.rotation * 180.0 / 3.141592653589793;
+    const MachineRuntimeState& state =
+        sim.getMachineRuntimeState();
+
+    data.time =
+        state.currentTime;
+
+    data.rotationDeg =
+        state.rotationAngle * 180.0 / 3.141592653589793;
 
     // ===== OPERATIONS =====
     data.currentOpIndex = sim.getCurrentOperationIndex();

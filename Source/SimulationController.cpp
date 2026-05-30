@@ -29,8 +29,6 @@ void SimulationController::loadProgram(const std::vector<Operation>& ops)
     // ===================================================================
     operationQueue.load(ops);
 
-    machineState.reset();
-
     accumulatedDistance = 0.0;
     accumulatedAngle = 0.0;
     accumulatedRotation = 0.0;
@@ -39,12 +37,17 @@ void SimulationController::loadProgram(const std::vector<Operation>& ops)
     paused = false;
 
     // ===================================================================
-    // Reset pipe systems
+    // Reset systems
     // ===================================================================
     pipeSystem.reset();
+    machineSystem.reset();
 
     // Preserve selected rotation kinematic mode
     pipe().setRotationKinematicMode(rotationKinematicMode);
+
+    machineSystem
+        .getRuntimeState()
+        .rotationMode = rotationKinematicMode;
 
     // ===================================================================
     // Give full program to CAD / GeometricPipeModel
@@ -62,19 +65,15 @@ void SimulationController::loadProgram(const std::vector<Operation>& ops)
         << ops.size()
         << " operations\n";
 
-   
-
     std::cout << "[DEBUG] loadedOperations now has: "
         << loadedOperations.size()
         << " ops\n";
 }
 
 
-
 void SimulationController::reset()
 {
     operationQueue.reset();
-    machineState.reset();
 
     accumulatedDistance = 0.0;
     accumulatedAngle = 0.0;
@@ -84,6 +83,7 @@ void SimulationController::reset()
     paused = false;
 
     pipeSystem.reset();
+    machineSystem.reset();
 
     pipe().setRotationKinematicMode(rotationKinematicMode);
 
@@ -96,6 +96,7 @@ void SimulationController::play()
 {
     std::cout << "[PLAY CALLED]\n";
     std::cout << "[PLAY CALLED] this=" << this << "\n";
+
     if (operationQueue.isComplete())
     {
         std::cout << "[PLAY BLOCKED] program complete\n";
@@ -106,18 +107,23 @@ void SimulationController::play()
 
     playing = true;
     paused = false;
-    machineState.setStatus(MachineState::Status::RUNNING);
+
+    machine().setStatus(MachineRuntimeState::Status::RUNNING);
 
     std::cout << "[PLAY STATE SET]\n";
-    std::cout << "??  Simulation PLAYING (speed: " << speed << " mm/s)\n";
+    std::cout << "Simulation PLAYING (speed: "
+        << speed
+        << " mm/s)\n";
 }
 
 void SimulationController::pause()
 {
     playing = false;
     paused = true;
-    machineState.setStatus(MachineState::Status::PAUSED);
-    std::cout << "??  Simulation PAUSED\n";
+
+    machine().setStatus(MachineRuntimeState::Status::PAUSED);
+
+    std::cout << "Simulation PAUSED\n";
 }
 
 void SimulationController::step()
@@ -173,9 +179,9 @@ void SimulationController::update(double deltaTime)
     if (!playing || operationQueue.isComplete())
         return;
 
-    executeOperation(deltaTime);
+    machine().advanceTime(deltaTime);
 
-    machineState.currentTime += deltaTime;
+    executeOperation(deltaTime);
 
     const Operation* op = operationQueue.getCurrent();
 
@@ -208,8 +214,26 @@ void SimulationController::update(double deltaTime)
     }
 
     updatePipeGeometryManufacturing();
-}
-void SimulationController::executeOperation(double deltaTime)
+
+    const auto& ms =
+        machineSystem.getRuntimeState();
+
+    std::cout << "[MACHINE STATE] feed="
+        << ms.feedPosition
+        << " rotDeg="
+        << ms.rotationAngle * 180.0 / PI
+        << " bendDeg="
+        << ms.bendAngle * 180.0 / PI
+        << " time="
+        << ms.currentTime
+        << " feeding="
+        << ms.feeding
+        << " rotating="
+        << ms.rotating
+        << " bending="
+        << ms.bending
+        << std::endl;
+}void SimulationController::executeOperation(double deltaTime)
 {
     const Operation* op =
         operationQueue.getCurrent();
@@ -295,21 +319,37 @@ void SimulationController::executeOperation(double deltaTime)
 
 void SimulationController::executeFeed(double distance)
 {
-    const Operation* op = operationQueue.getCurrent();
-    if (!op || op->type != Operation::FEED) return;
+    const Operation* op =
+        operationQueue.getCurrent();
 
-    double remaining = op->length - accumulatedDistance;
-    double toMove = std::min(distance, remaining);
+    if (!op || op->type != Operation::FEED)
+        return;
+
+    double remaining =
+        op->length - accumulatedDistance;
+
+    double toMove =
+        std::min(distance, remaining);
+
+    if (toMove <= 0.0)
+        return;
+
+    machine().beginFeed();
+
     pipe().processFeed(toMove);
-    //machineState.feedForward(toMove);
+    machine().addFeed(toMove);
+
     accumulatedDistance += toMove;
-   
-    // Update progress (0.0 to 1.0)
-    if (op->length > 0.0)
+
+    if (accumulatedDistance > op->length)
     {
-        accumulatedDistance = std::min(accumulatedDistance, op->length);
+        accumulatedDistance = op->length;
     }
-  
+
+    if (accumulatedDistance >= op->length - 1e-9)
+    {
+        machine().endFeed();
+    }
 }
 
 void SimulationController::executeBend(double angle)
@@ -326,6 +366,14 @@ void SimulationController::executeBend(double angle)
     double toBend =
         std::min(angle, remaining);
 
+    if (toBend <= 0.0)
+        return;
+
+    machine().beginBend(
+        op->R,
+        op->bendDirection
+    );
+
     pipe().processBend(
         op->R,
         op->angle,
@@ -333,21 +381,30 @@ void SimulationController::executeBend(double angle)
         op->bendDirection
     );
 
+    machine().addBendAngle(toBend);
+
     accumulatedAngle += toBend;
 
     if (accumulatedAngle > op->angle)
     {
         accumulatedAngle = op->angle;
     }
+
+    if (accumulatedAngle >= op->angle - 1e-9)
+    {
+        machine().endBend();
+    }
 }
 
 
 void SimulationController::advanceToNextOperation()
 {
-    const Operation* currentOp = operationQueue.getCurrent();
+    const Operation* currentOp =
+        operationQueue.getCurrent();
+
     if (currentOp)
     {
-        std::cout << "? Operation complete: ";
+        std::cout << "Operation complete: ";
         currentOp->print();
     }
 
@@ -357,8 +414,12 @@ void SimulationController::advanceToNextOperation()
     {
         playing = false;
         paused = false;
-        machineState.setStatus(MachineState::Status::COMPLETED);
-        std::cout << "?? Program COMPLETED!\n";
+
+        machine().setStatus(
+            MachineRuntimeState::Status::COMPLETE
+        );
+
+        std::cout << "Program COMPLETED!\n";
     }
 }
 
@@ -503,21 +564,27 @@ void SimulationController::executeRotate(double angleIncrement)
     // ROTATION SIGN
     //
     // accumulatedRotation stays positive.
-    // signedRotation is used for actual geometry motion.
+    // signedRotation is used for actual geometry/machine motion.
     // =====================================================
 
     double signedRotation =
         toRotate * rotationDirectionSign(op->rotationDirection);
 
-    pipe().processRotate(signedRotation);
+    machine().beginRotate();
 
-    machineState.rotation += signedRotation;
+    pipe().processRotate(signedRotation);
+    machine().addRotation(signedRotation);
 
     accumulatedRotation += toRotate;
 
     if (accumulatedRotation > op->angle)
     {
         accumulatedRotation = op->angle;
+    }
+
+    if (accumulatedRotation >= op->angle - 1e-9)
+    {
+        machine().endRotate();
     }
 
     std::cout << "[ROTATE] stepDeg="

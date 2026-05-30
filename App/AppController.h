@@ -7,6 +7,7 @@
 #include "Core/SimulationController.h"
 #include "Core/Manufacturing/ManufacturingPipeSimulator.h"
 #include "Render/HUDData.h"
+#include "Core/Machine/MachineRuntimeState.h"
 
 class AppController
 {
