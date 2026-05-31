@@ -46,7 +46,7 @@ struct MachineModel
         bendDie.geometryType = MachinePartGeometryType::MeshAsset;
         bendDie.frame = machineEntryFrame;
         bendDie.frame.P = bendDieCenter;
-        bendDie.meshPath = "Assets/Machine/bend_die.stl";
+        bendDie.meshPath = "C:/Users/marek/source/repos/pipe_bender_repo/Assets/Machine/bend_die.stl";
         bendDie.meshScale = 1.0;
         bendDie.radius = defaultBendRadius;
         bendDie.visible = true;
@@ -63,7 +63,7 @@ struct MachineModel
             - machineEntryFrame.N * 12.0;
         clamp.meshPath = "Assets/Machine/clamp_die.stl";
         clamp.meshScale = 1.0;
-        clamp.visible = true;
+        clamp.visible = false;
         parts.push_back(clamp);
 
         // Pressure die
@@ -77,7 +77,7 @@ struct MachineModel
             - machineEntryFrame.N * 12.0;
         pressure.meshPath = "Assets/Machine/pressure_die.stl";
         pressure.meshScale = 1.0;
-        pressure.visible = true;
+        pressure.visible = false;
         parts.push_back(pressure);
 
     }

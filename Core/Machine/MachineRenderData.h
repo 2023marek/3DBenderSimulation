@@ -1,18 +1,17 @@
 #pragma once
 
+#include <vector>
+
 #include "Core/Math/Vec3D.h"
 #include "Core/Geometry/Frame.h"
 #include "Core/BendDirection.h"
 #include "Core/Manufacturing/RotationKinematicMode.h"
+#include "Core/Machine/MachinePart.h"
 
 // =====================================================
 // MACHINE RENDER DATA
 //
 // Read-only snapshot for renderers.
-//
-// This is NOT simulation logic.
-// This is NOT pipe geometry.
-// This is only machine/tooling visualization data.
 // =====================================================
 
 struct MachineRenderData
@@ -36,4 +35,6 @@ struct MachineRenderData
     bool feeding = false;
     bool rotating = false;
     bool bending = false;
+
+    std::vector<MachinePart> parts;
 };

@@ -108,6 +108,10 @@ public:
             model.machineEntryFrame.P
             + model.machineEntryFrame.N * (data.bendDieRadius * bendSign);
 
+        // Copy static machine parts into render snapshot.
+        data.parts =
+            model.parts;
+
         return data;
     }
 

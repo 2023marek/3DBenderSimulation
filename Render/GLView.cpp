@@ -327,6 +327,21 @@ void GLView::drawMachineReference()
     MachineRenderData data =
         app->getMachineRenderData();
 
+    // =====================================================
+    // Draw imported STL machine parts
+    // =====================================================
+
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(0.45f, 0.45f, 0.48f)
+    );
+
+    machineRenderer.drawParts(data);
+
+    // =====================================================
+    // Draw simple reference overlay
+    // =====================================================
+
     shader->setVec3(
         "pipeColor",
         glm::vec3(0.8f, 0.8f, 0.8f)
@@ -336,6 +351,7 @@ void GLView::drawMachineReference()
 
     machineRenderer.drawReference(data);
 
+    // Restore pipe color for next frame safety.
     shader->setVec3(
         "pipeColor",
         glm::vec3(0.2f, 0.9f, 0.3f)

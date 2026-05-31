@@ -2,8 +2,7 @@
 #include <iostream>
 
 #include "AppController.h"
-#include "Core/Mesh/StlLoader.h"
-#include "Core/Mesh/TriangleMesh.h"
+
 
 // =====================================
 // CONSTRUCTOR
@@ -56,16 +55,7 @@ AppController::AppController()
     // SimulationController::SimulationMode::CADPreview
     // );
 //=========================================================
-    TriangleMesh testMesh;
-
-    StlLoader::load(
-        "C:/Users/marek/source/repos/pipe_bender_repo/Assets/Machine/bend_die.stl",
-        testMesh
-    );
-
-    std::cout << "[STL TEST] triangles="
-        << testMesh.triangleCount()
-        << std::endl;
+    
 
     // =====================================================
     // DEBUG
