@@ -9,6 +9,7 @@ class AppController;
 #include "Render/TubeMesh.h"
 #include "Render/PipeRenderer.h"
 #include "Core/Geometry/PipeNode.h"
+#include "Render/MachineRenderer.h"
 
 
 
@@ -108,7 +109,7 @@ private:
     HUDPanel* hud = nullptr;
     HUDData hudData;
     RenderMode renderMode = RenderMode::LINE;
-
+    MachineRenderer machineRenderer;
 public:
     void setRenderMode(RenderMode mode)
     {

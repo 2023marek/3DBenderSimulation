@@ -7,7 +7,7 @@
 #include "App/AppController.h"
 #include "Core/Manufacturing/ManufacturingPipeSimulator.h"
 #include "Core/Machine/MachineRenderData.h"
-#include "Render/MachineReferenceRenderer.h"
+
 #include "Core/BendDirection.h"
 //#include "Render/ShaderGL.h"
 #include "Core/Geometry/PipeNode.h"
@@ -143,6 +143,7 @@ void GLView::initializeGL()
     
 
     pipeRenderer.init();
+    machineRenderer.init();
     // =========================
     // CREATE SHADER (YOUR CLASS)
     // =========================
@@ -326,23 +327,14 @@ void GLView::drawMachineReference()
     MachineRenderData data =
         app->getMachineRenderData();
 
-    std::vector<std::vector<float>> strips =
-        MachineReferenceRenderer::buildLineStrips(data);
-
-    if (strips.empty())
-        return;
-
-    pipeRenderer.setMode(RenderMode::LINE);
-
     shader->setVec3(
         "pipeColor",
         glm::vec3(0.8f, 0.8f, 0.8f)
     );
 
-    pipeRenderer.uploadLineStrips(strips);
-
     glLineWidth(1.5f);
-    pipeRenderer.draw();
+
+    machineRenderer.drawReference(data);
 
     shader->setVec3(
         "pipeColor",

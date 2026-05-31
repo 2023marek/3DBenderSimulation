@@ -1,6 +1,9 @@
 #include <sstream>
-#include "AppController.h"
+#include <iostream>
 
+#include "AppController.h"
+#include "Core/Mesh/StlLoader.h"
+#include "Core/Mesh/TriangleMesh.h"
 
 // =====================================
 // CONSTRUCTOR
@@ -52,15 +55,39 @@ AppController::AppController()
     // sim.setMode(
     // SimulationController::SimulationMode::CADPreview
     // );
+//=========================================================
+    TriangleMesh testMesh;
 
-    
+    StlLoader::load(
+        "C:/Users/marek/source/repos/pipe_bender_repo/Assets/Machine/bend_die.stl",
+        testMesh
+    );
 
-    std::cout << "Playing: " << sim.isPlaying() << std::endl;
-    std::cout << "Progress: " << sim.getOverallProgress() << std::endl;
+    std::cout << "[STL TEST] triangles="
+        << testMesh.triangleCount()
+        << std::endl;
+
+    // =====================================================
+    // DEBUG
+    // =====================================================
+
+    std::cout << "Playing: "
+        << sim.isPlaying()
+        << std::endl;
+
+    std::cout << "Progress: "
+        << sim.getOverallProgress()
+        << std::endl;
+
     std::cout << "nodes: "
         << sim.getManufacturingPipe().getNodes().size()
         << std::endl;
-    std::cout << "CurrentIdx: " << sim.getCurrentOperationIndex() << std::endl;
+
+    std::cout << "CurrentIdx: "
+        << sim.getCurrentOperationIndex()
+        << std::endl;
+//====================================================
+  
 }
 // =====================================
 // UPDATE (called every frame)

@@ -59,6 +59,8 @@ set(RENDER_HEADERS
     Render/ShaderGL.h
     Render/ShaderManager.h
     Render/TubeMesh.h
+    Render/MachineRenderer.h
+    Render/MachineReferenceRenderer.h
 )
 
 set(CORE_SOURCES
@@ -91,7 +93,10 @@ set(CORE_HEADERS
     Core/Machine/MachineController.h
     Core/Machine/MachineSystem.h
     Core/Machine/MachineRenderData.h
-    Render/MachineReferenceRenderer.h
+    Core/Machine/MachinePart.h
+    Core/Mesh/TriangleMesh.h
+    Core/Mesh/StlLoader.h
+    
 )
 
     
