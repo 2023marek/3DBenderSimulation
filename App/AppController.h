@@ -8,6 +8,7 @@
 #include "Core/Manufacturing/ManufacturingPipeSimulator.h"
 #include "Render/HUDData.h"
 #include "Core/Machine/MachineRuntimeState.h"
+#include "Core/Machine/MachineRenderData.h"
 
 class AppController
 {
@@ -86,6 +87,12 @@ public:
     {
         return sim.getMode();
     }
+
+    //Machine getters/setters
+     MachineRuntimeState& getMachineRuntimeState()
+    {
+        return sim.getMachineSystem().getRuntimeState();
+	 }
 
     // =====================================================
     // PLAYBACK API

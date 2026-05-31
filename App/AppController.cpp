@@ -81,6 +81,7 @@ HUDData AppController::buildHUDData() const
 
     // ===== BASIC STATE =====
     data.isPlaying = sim.isPlaying();
+    data.isPaused = sim.isPaused();
 
     data.speed = sim.getSpeed();
 
@@ -90,36 +91,85 @@ HUDData AppController::buildHUDData() const
     data.time =
         state.currentTime;
 
+    data.feedPosition =
+        state.feedPosition;
+
     data.rotationDeg =
         state.rotationAngle * 180.0 / 3.141592653589793;
 
+    data.bendDeg =
+        state.bendAngle * 180.0 / 3.141592653589793;
+
+    data.feeding =
+        state.feeding;
+
+    data.rotating =
+        state.rotating;
+
+    data.bending =
+        state.bending;
+
+    // ===== MACHINE STATE NAME =====
+    data.machineStateName = "IDLE";
+
+    if (state.feeding)
+    {
+        data.machineStateName = "FEED";
+    }
+    else if (state.rotating)
+    {
+        data.machineStateName = "ROTATE";
+    }
+    else if (state.bending)
+    {
+        data.machineStateName = "BEND";
+    }
+
+    // ===== DISPLAY STATUS =====
+    if (data.isPlaying)
+    {
+        data.status = "PLAYING";
+    }
+    else if (data.isPaused)
+    {
+        data.status = "PAUSED";
+    }
+    else
+    {
+        data.status = "IDLE";
+    }
+
     // ===== OPERATIONS =====
-    data.currentOpIndex = sim.getCurrentOperationIndex();
-    data.totalOperations = sim.getTotalOperations();
-    
+    data.currentOpIndex =
+        sim.getCurrentOperationIndex();
+
+    data.totalOperations =
+        sim.getTotalOperations();
 
     // ===== PROGRESS =====
-    data.currentOpProgress = sim.getCurrentOperationProgress();
-    data.overallProgress = sim.getOverallProgress();
+    data.currentOpProgress =
+        sim.getCurrentOperationProgress();
+
+    data.overallProgress =
+        sim.getOverallProgress();
 
     // ===== GEOMETRY =====
-   if (sim.getMode()
-    == SimulationController::SimulationMode::ManufacturingPlayback)
-{
-    data.nodeCount =
-        sim.getManufacturingPipe().getNodes().size();
-}
-else if (sim.getMode()
-    == SimulationController::SimulationMode::CADPreview)
-{
-    data.nodeCount =
-        sim.getCadPipeGeometry().getNodes().size();
-}
-else
-{
-    data.nodeCount = 0;
-}
-    
+    if (sim.getMode()
+        == SimulationController::SimulationMode::ManufacturingPlayback)
+    {
+        data.nodeCount =
+            sim.getManufacturingPipe().getNodes().size();
+    }
+    else if (sim.getMode()
+        == SimulationController::SimulationMode::CADPreview)
+    {
+        data.nodeCount =
+            sim.getCadPipeGeometry().getNodes().size();
+    }
+    else
+    {
+        data.nodeCount = 0;
+    }
     //
 
     std::ostringstream oss; 

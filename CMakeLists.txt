@@ -90,6 +90,7 @@ set(CORE_HEADERS
     Core/Machine/MachineRuntimeState.h
     Core/Machine/MachineController.h
     Core/Machine/MachineSystem.h
+    Core/Machine/MachineRenderData.h
 )
 
     

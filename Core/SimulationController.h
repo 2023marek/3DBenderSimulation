@@ -184,6 +184,11 @@ public:
     PipeSystem& getPipeSystem();
     const PipeSystem& getPipeSystem() const;
 
+    // Machine Getters
+    MachineRenderData getMachineRenderData() const
+    {
+        return machineSystem.getRenderData();
+    }
 
 
 private:

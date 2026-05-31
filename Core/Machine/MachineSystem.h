@@ -3,6 +3,7 @@
 #include "Core/Machine/MachineModel.h"
 #include "Core/Machine/MachineRuntimeState.h"
 #include "Core/Machine/MachineController.h"
+#include "Core/Machine/MachineRenderData.h"
 
 // =====================================================
 // MACHINE SYSTEM
@@ -56,6 +57,53 @@ public:
     {
         model.reset();
         controller.reset();
+    }
+
+    //=========================================
+	// RENDER DATA
+    MachineRenderData getRenderData() const
+    {
+        MachineRenderData data;
+
+        data.machineEntryFrame =
+            model.machineEntryFrame;
+
+        data.bendDieCenter =
+            model.bendDieCenter;
+
+        data.bendDieRadius =
+            runtimeState.currentBendRadius > 0.0
+            ? runtimeState.currentBendRadius
+            : model.defaultBendRadius;
+
+        data.pipeOuterRadius =
+            model.pipeOuterRadius;
+
+        data.feedPosition =
+            runtimeState.feedPosition;
+
+        data.rotationAngle =
+            runtimeState.rotationAngle;
+
+        data.bendAngle =
+            runtimeState.bendAngle;
+
+        data.bendDirection =
+            runtimeState.bendDirection;
+
+        data.rotationMode =
+            runtimeState.rotationMode;
+
+        data.feeding =
+            runtimeState.feeding;
+
+        data.rotating =
+            runtimeState.rotating;
+
+        data.bending =
+            runtimeState.bending;
+
+        return data;
     }
 
 private:
