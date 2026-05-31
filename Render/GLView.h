@@ -85,7 +85,7 @@ private:
         const std::vector<PipeNode>& nodes,
         double radius,
         int radialSegments);
-
+    void drawMachineReference();
 
 public:
     

@@ -6,6 +6,9 @@
 #include "GLView.h"
 #include "App/AppController.h"
 #include "Core/Manufacturing/ManufacturingPipeSimulator.h"
+#include "Core/Machine/MachineRenderData.h"
+#include "Render/MachineReferenceRenderer.h"
+#include "Core/BendDirection.h"
 //#include "Render/ShaderGL.h"
 #include "Core/Geometry/PipeNode.h"
 #include <QOpenGLContext>
@@ -68,6 +71,25 @@ void main()
     FragColor = vec4(result, 1.0);
 }
 )";
+
+// =========================
+// Helper for machine reference (axes)
+// 
+//static std::vector<float> pointsToFloatLine(
+ //   const std::vector<Vec3D>& points)
+//{
+ //   std::vector<float> data;
+  //  data.reserve(points.size() * 3);
+
+  //  for (const auto& p : points)
+  //  {
+  //      data.push_back(static_cast<float>(p.x));
+  //      data.push_back(static_cast<float>(p.y));
+  //      data.push_back(static_cast<float>(p.z));
+   // }
+
+  //  return data;
+//}
 //HELPER
 static std::vector<float> nodesToFloatLine(
     const std::vector<PipeNode>& nodes)
@@ -295,6 +317,38 @@ void GLView::drawTubeZone(
 
     pipeRenderer.draw();
 }
+
+void GLView::drawMachineReference()
+{
+    if (!app)
+        return;
+
+    MachineRenderData data =
+        app->getMachineRenderData();
+
+    std::vector<std::vector<float>> strips =
+        MachineReferenceRenderer::buildLineStrips(data);
+
+    if (strips.empty())
+        return;
+
+    pipeRenderer.setMode(RenderMode::LINE);
+
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(0.8f, 0.8f, 0.8f)
+    );
+
+    pipeRenderer.uploadLineStrips(strips);
+
+    glLineWidth(1.5f);
+    pipeRenderer.draw();
+
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(0.2f, 0.9f, 0.3f)
+    );
+}
 // =========================
 // RENDER FRAME (RUNS EVERY FRAME)
 // =========================
@@ -449,7 +503,7 @@ void GLView::paintGL()
             drawTubeZone(data.activeZoneNodes, 5.0, 12);
         }
     }
-
+    drawMachineReference();
     if (hud)
     {
         hud->update(hudData, RenderMode::LINE);

@@ -22,30 +22,36 @@ AppController::AppController()
     Operation op3;
     op3.type = Operation::ROTATE;
     op3.angle = PI / 2.0;
-    op3.rotationDirection = RotationDirection::CW;
+    op3.rotationDirection = RotationDirection::CCW;
 
     Operation op4;
-    op4.type = Operation::BEND;
-    op4.R = 20;
-    op4.angle = PI / 2.0;
-    op4.bendDirection = BendDirection::CW;
+    op4.type = Operation::FEED;
+    op4.length = 120;
+
+
+    Operation op5;
+    op5.type = Operation::BEND;
+    op5.R = 20;
+    op5.angle = PI / 2.0;
+    op5.bendDirection = BendDirection::CW;
 
     ops.push_back(op1);
     ops.push_back(op2);
     ops.push_back(op3);
     ops.push_back(op4);
+	ops.push_back(op5);
     sim.loadProgram(ops);
 
 
-   // sim.setMode(
-   //SimulationController::SimulationMode::ManufacturingPlayback
-   // );
+    sim.setMode(
+   SimulationController::SimulationMode::ManufacturingPlayback
+    );
 
     // Or for CAD preview:
     //
-     sim.setMode(
-     SimulationController::SimulationMode::CADPreview
-     );
+    // sim.setMode(
+    // SimulationController::SimulationMode::CADPreview
+    // );
 
     
 

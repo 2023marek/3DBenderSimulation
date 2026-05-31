@@ -118,6 +118,11 @@ public:
         sim.step();
     }
 
+    MachineRenderData getMachineRenderData() const
+    {
+        return sim.getMachineRenderData();
+    }
+
     void handleAction(UserAction action);
 
     HUDData buildHUDData() const;

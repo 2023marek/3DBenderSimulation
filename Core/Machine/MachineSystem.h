@@ -21,6 +21,7 @@ public:
     MachineSystem()
         : controller(model, runtimeState)
     {
+        reset();
     }
 
     MachineModel& getModel()
@@ -68,9 +69,6 @@ public:
         data.machineEntryFrame =
             model.machineEntryFrame;
 
-        data.bendDieCenter =
-            model.bendDieCenter;
-
         data.bendDieRadius =
             runtimeState.currentBendRadius > 0.0
             ? runtimeState.currentBendRadius
@@ -102,6 +100,13 @@ public:
 
         data.bending =
             runtimeState.bending;
+
+        double bendSign =
+            bendDirectionSign(data.bendDirection);
+
+        data.bendDieCenter =
+            model.machineEntryFrame.P
+            + model.machineEntryFrame.N * (data.bendDieRadius * bendSign);
 
         return data;
     }
