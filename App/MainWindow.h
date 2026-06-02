@@ -16,7 +16,7 @@ public:
 protected:
     void keyPressEvent(QKeyEvent* event) override;
 private slots:
-    void onUpdate(); // wywo³ywane co frame
+    void onUpdate(); 
 
 private:
     AppController controller;

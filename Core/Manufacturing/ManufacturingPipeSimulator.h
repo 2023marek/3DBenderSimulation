@@ -739,6 +739,7 @@ private:
         releaseOldestActiveNode();
     }
 }
+
     void releaseOldestActiveNode()
     {
         if (state.activeZone.localNodes.empty())

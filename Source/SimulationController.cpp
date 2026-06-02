@@ -233,7 +233,9 @@ void SimulationController::update(double deltaTime)
         << " bending="
         << ms.bending
         << std::endl;
-}void SimulationController::executeOperation(double deltaTime)
+}
+
+void SimulationController::executeOperation(double deltaTime)
 {
     const Operation* op =
         operationQueue.getCurrent();

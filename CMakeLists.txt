@@ -96,6 +96,7 @@ set(CORE_HEADERS
     Core/Machine/MachinePart.h
     Core/Mesh/TriangleMesh.h
     Core/Mesh/StlLoader.h
+    Core/Assets/AssetPathResolver.h
     
 )
 

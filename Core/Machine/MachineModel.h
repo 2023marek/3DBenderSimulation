@@ -46,7 +46,7 @@ struct MachineModel
         bendDie.geometryType = MachinePartGeometryType::MeshAsset;
         bendDie.frame = machineEntryFrame;
         bendDie.frame.P = bendDieCenter;
-        bendDie.meshPath = "C:/Users/marek/source/repos/pipe_bender_repo/Assets/Machine/bend_die.stl";
+        bendDie.meshPath ="Assets/Machine/bend_die.stl";
         bendDie.meshScale = 1.0;
         bendDie.radius = defaultBendRadius;
         bendDie.visible = true;

@@ -15,7 +15,6 @@ MainWindow::MainWindow()
     setCentralWidget(view);
     view->setFocus();
     view->setAppController(&controller);
-    view->setAppController(&controller);
     view->setFocus(); // important for keyboard
 
     // =========================

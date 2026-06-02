@@ -16,8 +16,9 @@
 
 #include "Core/Mesh/TriangleMesh.h"
 #include "Core/Mesh/StlLoader.h"
-
+#include "Core/Assets/AssetPathResolver.h"
 #include "Core/Math/Vec3D.h"
+
 
 // =====================================================
 // MACHINE RENDERER
@@ -94,28 +95,40 @@ private:
     const TriangleMesh* getMesh(
         const std::string& path)
     {
-        auto found =
-            meshCache.find(path);
-
-        if (found != meshCache.end())
-            return &found->second;
-
-        if (failedPaths.find(path) != failedPaths.end())
+        if (path.empty())
             return nullptr;
 
-        TriangleMesh mesh;
+        std::string resolvedPath =
+            AssetPathResolver::resolve(path);
 
-        bool ok =
-            StlLoader::load(path, mesh);
-
-        if (!ok || mesh.empty())
+        if (resolvedPath.empty())
         {
             failedPaths.insert(path);
             return nullptr;
         }
 
+        auto found =
+            meshCache.find(resolvedPath);
+
+        if (found != meshCache.end())
+            return &found->second;
+
+        if (failedPaths.find(resolvedPath) != failedPaths.end())
+            return nullptr;
+
+        TriangleMesh mesh;
+
+        bool ok =
+            StlLoader::load(resolvedPath, mesh);
+
+        if (!ok || mesh.empty())
+        {
+            failedPaths.insert(resolvedPath);
+            return nullptr;
+        }
+
         auto inserted =
-            meshCache.emplace(path, std::move(mesh));
+            meshCache.emplace(resolvedPath, std::move(mesh));
 
         return &inserted.first->second;
     }
