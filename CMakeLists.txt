@@ -71,17 +71,24 @@ set(CORE_SOURCES
 set(CORE_HEADERS
     Core/SimulationController.h
     Core/PipeAxis2D.h
+    Core/PipeSystem.h
     Core/Operations.h
     Core/OperationQueue.h
     Core/ProgramLoader.h
     Core/Math/Vec2D.h
     Core/Math/Vec3D.h
+    Core/Assets/AssetPathResolver.h
     Core/BendDirection.h
+    Core/Curve/PipeCurveSegment.h
+    Core/Curve/PipeCurve.h
     Core/RotationDirection.h
+    Core/Forming/TubeFormingProcessType.h
+    Core/Forming/FormingOperation.h
+    Core/Forming/ManufacturingPass.h
+    Core/Forming/ManufacturingPlan.h
     Core/Geometry/Frame.h
     Core/Geometry/PipeNode.h
     Core/Geometry/PipeSegment.h
-    Core/PipeSystem.h
     Core/Geometry/GeometricPipeModel.h
     Core/Manufacturing/ManufacturingPipeSimulator.h
     Core/Manufacturing/RotationKinematicMode.h
@@ -96,7 +103,8 @@ set(CORE_HEADERS
     Core/Machine/MachinePart.h
     Core/Mesh/TriangleMesh.h
     Core/Mesh/StlLoader.h
-    Core/Assets/AssetPathResolver.h
+    Core/Sampling/PipeCurveSampler.h
+
     
 )
 

@@ -247,3 +247,183 @@ manual continuation
 restart from selected frame
 secondary machine pass
 helix bending machine
+=========================================================
+his is exactly why Phase 7A/7B was important. The shared rule:
+
+Operation -> Curve Segment -> Sampler -> Nodes
+
+is the correct foundation for many tube-forming systems.
+
+What we should do now is expand the architecture vocabulary before refactoring GeometricPipeModel.
+
+Key decision
+
+Do not make every forming process a different node generator.
+
+Instead:
+
+Different forming machines
+    ?
+produce different curve / curvature segments
+    ?
+same sampler
+    ?
+same render nodes
+
+So the architecture should become:
+
+TubeFormingProcess
+    ??? RotaryDrawBending
+    ??? ThreeRollForming
+    ??? TwoRollContinuousForming
+    ??? MultiAxisRollBending
+    ??? StretchBending
+    ??? HelixForming
+
+        ?
+
+PipeCurve / PipeCurveSegment
+
+        ?
+
+PipeCurveSampler
+
+        ?
+
+PipeNode
+
+This prevents models from falling apart.
+
+Your systems mapped to curvature model
+A. Rotary draw bending
+
+Already mostly done.
+
+FEED
+ROTATE
+BEND
+
+Produces:
+
+LineSegment
+RotationOnly
+CircularArcSegment
+
+This is your current manufacturing system.
+
+B. 3-roller forming section
+
+This is not a discrete bend. It is usually better represented as:
+
+VariableCurvatureSegment
+
+or approximately:
+
+long arc with curvature ?(s)
+
+Output:
+
+?(s)
+
+where curvature changes depending on roller positions.
+
+C. 2-roller continuous forming system
+
+Good for:
+
+arc
+spiral
+continuous curvature
+
+This should become:
+
+ConstantCurvatureSegment
+VariableCurvatureSegment
+HelixSegment
+
+Important: this should not be modeled as many tiny BEND operations. It should be one continuous segment.
+
+D. Multi-axis 3D roll bending
+
+Future.
+
+This becomes:
+
+VariableCurvatureTorsionSegment
+
+Meaning:
+
+curvature ?(s)
+torsion ?(s)
+
+This is exactly why PipeCurveSegment already has:
+
+curvature
+torsion
+curvatureSamples
+
+Good direction.
+
+E. Stretch bending
+
+Yes, this is different because it has mechanical tension.
+
+But geometrically, output can still be:
+
+ArcSegment / FormWrappedSegment / HelixSegment
+
+Physically, it needs:
+
+strain
+stretch ratio
+springback model
+clamp frames
+
+So it should eventually be:
+
+StretchBendingProcess
+    input:
+        clamp frames
+        form radius / form curve
+        tension
+    output:
+        PipeCurveSegment + physical metadata
+
+For heating elements / helix:
+
+HelixForming / StretchHelixForming
+
+should output:
+
+HelixSegment
+    curvature ?
+    torsion ?
+    length
+
+    ==============================================
+    ManufacturingPass is a container for one forming stage.
+
+It does not simulate anything yet. It only records:
+
+which forming process was used
+which operations belong to this pass
+what curve came out of this pass
+
+Example future flow:
+
+Pass 1:
+    RotaryDrawBending
+    FEED / BEND / ROTATE / FEED / BEND
+    output PipeCurve
+
+Pass 2:
+    StretchBending / HelixForming
+    helix parameters
+    output PipeCurve
+
+Pass 3:
+    ManualRework
+    extra manual correction bend
+    output PipeCurve
+
+So add a lightweight skeleton.

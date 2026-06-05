@@ -131,5 +131,6 @@ public:
 private:
     RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;
+  
 }; 
       

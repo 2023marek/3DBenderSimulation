@@ -1,8 +1,14 @@
 #include <sstream>
 #include <iostream>
+#include <vector>
 
 #include "AppController.h"
 
+#include "Core/Curve/PipeCurve.h"
+#include "Core/Curve/PipeCurveSegment.h"
+#include "Core/Sampling/PipeCurveSampler.h"
+#include "Core/Forming/ManufacturingPass.h"
+#include "Core/Forming/ManufacturingPlan.h"
 
 // =====================================
 // CONSTRUCTOR
@@ -13,11 +19,11 @@ AppController::AppController()
 
     Operation op1;
     op1.type = Operation::FEED;
-    op1.length = 120;
+    op1.length = 120.0;
 
     Operation op2;
     op2.type = Operation::BEND;
-    op2.R = 20;
+    op2.R = 20.0;
     op2.angle = PI / 2.0;
     op2.bendDirection = BendDirection::CCW;
 
@@ -28,174 +34,105 @@ AppController::AppController()
 
     Operation op4;
     op4.type = Operation::FEED;
-    op4.length = 120;
-
-
-    Operation op5;
-    op5.type = Operation::BEND;
-    op5.R = 20;
-    op5.angle = PI / 2.0;
-    op5.bendDirection = BendDirection::CW;
+    op4.length = 120.0;
 
     ops.push_back(op1);
     ops.push_back(op2);
     ops.push_back(op3);
     ops.push_back(op4);
-	ops.push_back(op5);
+
     sim.loadProgram(ops);
 
+    ManufacturingPass pass;
 
-    sim.setMode(
-   SimulationController::SimulationMode::ManufacturingPlayback
+    pass.name =
+        "Main rotary draw bending pass";
+
+    pass.processType =
+        TubeFormingProcessType::RotaryDrawBending;
+
+    pass.operations =
+        ops;
+
+    pass.outputCurve.addSegment(
+        PipeCurveSegment::makeLine(120.0)
     );
 
-    // Or for CAD preview:
-    //
-    // sim.setMode(
-    // SimulationController::SimulationMode::CADPreview
-    // );
-//=========================================================
-    
+    ManufacturingPlan plan;
+    plan.addPass(pass);
 
-    // =====================================================
-    // DEBUG
-    // =====================================================
-
-    std::cout << "Playing: "
-        << sim.isPlaying()
+    std::cout << "[PASS TEST] passes="
+        << plan.size()
+        << " firstPassOps="
+        << plan.passes.front().operations.size()
+        << " firstPassSegments="
+        << plan.passes.front().outputCurve.size()
         << std::endl;
 
-    std::cout << "Progress: "
-        << sim.getOverallProgress()
-        << std::endl;
 
-    std::cout << "nodes: "
-        << sim.getManufacturingPipe().getNodes().size()
-        << std::endl;
 
-    std::cout << "CurrentIdx: "
-        << sim.getCurrentOperationIndex()
-        << std::endl;
-//====================================================
-  
 }
-// =====================================
-// UPDATE (called every frame)
-// =====================================
+
 void AppController::update(double dt)
 {
     sim.update(dt);
-    std::cout << "Playing: " << sim.isPlaying() << std::endl;
-    std::cout << "Ops: " << sim.getTotalOperations() << std::endl;
-    std::cout << "CurrentIdx: " << sim.getCurrentOperationIndex() << std::endl;
 }
 
-// =====================================
-// GEOMETRY ACCESS
-// =====================================
-
-
-// =====================================
-// HUD DATA BUILDER (translator layer)
-// =====================================
 HUDData AppController::buildHUDData() const
 {
     HUDData data;
 
-    // ===== BASIC STATE =====
     data.isPlaying = sim.isPlaying();
     data.isPaused = sim.isPaused();
-
     data.speed = sim.getSpeed();
 
-    const MachineRuntimeState& state =
-        sim.getMachineRuntimeState();
+    const MachineRuntimeState& state = sim.getMachineRuntimeState();
 
-    data.time =
-        state.currentTime;
+    data.time = state.currentTime;
+    data.feedPosition = state.feedPosition;
+    data.rotationDeg = state.rotationAngle * 180.0 / PI;
+    data.bendDeg = state.bendAngle * 180.0 / PI;
 
-    data.feedPosition =
-        state.feedPosition;
+    data.feeding = state.feeding;
+    data.rotating = state.rotating;
+    data.bending = state.bending;
 
-    data.rotationDeg =
-        state.rotationAngle * 180.0 / 3.141592653589793;
-
-    data.bendDeg =
-        state.bendAngle * 180.0 / 3.141592653589793;
-
-    data.feeding =
-        state.feeding;
-
-    data.rotating =
-        state.rotating;
-
-    data.bending =
-        state.bending;
-
-    // ===== MACHINE STATE NAME =====
     data.machineStateName = "IDLE";
 
     if (state.feeding)
-    {
         data.machineStateName = "FEED";
-    }
     else if (state.rotating)
-    {
         data.machineStateName = "ROTATE";
-    }
     else if (state.bending)
-    {
         data.machineStateName = "BEND";
-    }
 
-    // ===== DISPLAY STATUS =====
     if (data.isPlaying)
-    {
         data.status = "PLAYING";
-    }
     else if (data.isPaused)
-    {
         data.status = "PAUSED";
-    }
     else
-    {
         data.status = "IDLE";
-    }
 
-    // ===== OPERATIONS =====
-    data.currentOpIndex =
-        sim.getCurrentOperationIndex();
+    data.currentOpIndex = sim.getCurrentOperationIndex();
+    data.totalOperations = sim.getTotalOperations();
 
-    data.totalOperations =
-        sim.getTotalOperations();
+    data.currentOpProgress = sim.getCurrentOperationProgress();
+    data.overallProgress = sim.getOverallProgress();
 
-    // ===== PROGRESS =====
-    data.currentOpProgress =
-        sim.getCurrentOperationProgress();
-
-    data.overallProgress =
-        sim.getOverallProgress();
-
-    // ===== GEOMETRY =====
-    if (sim.getMode()
-        == SimulationController::SimulationMode::ManufacturingPlayback)
+    if (sim.getMode() == SimulationController::SimulationMode::ManufacturingPlayback)
     {
-        data.nodeCount =
-            sim.getManufacturingPipe().getNodes().size();
+        data.nodeCount = sim.getManufacturingPipe().getNodes().size();
     }
-    else if (sim.getMode()
-        == SimulationController::SimulationMode::CADPreview)
+    else if (sim.getMode() == SimulationController::SimulationMode::CADPreview)
     {
-        data.nodeCount =
-            sim.getCadPipeGeometry().getNodes().size();
+        data.nodeCount = sim.getCadPipeGeometry().getNodes().size();
     }
     else
     {
         data.nodeCount = 0;
     }
-    //
 
-    std::ostringstream oss; 
+    std::ostringstream oss;
 
     const OperationQueue& queue = sim.getQueue();
     const Operation* currentOp = queue.getCurrent();
@@ -204,34 +141,29 @@ HUDData AppController::buildHUDData() const
     {
         if (currentOp->type == Operation::FEED)
         {
-            oss << "FEED " << currentOp->length << "mm";
+            oss << "FEED " << currentOp->length << " mm";
         }
         else if (currentOp->type == Operation::BEND)
         {
-            double angleDeg = currentOp->angle * 180.0 / 3.141592653589793;
-            oss << "BEND R=" << currentOp->R << "mm, angle=" << angleDeg << "deg";
+            double angleDeg = currentOp->angle * 180.0 / PI;
+            oss << "BEND R=" << currentOp->R << " mm, angle=" << angleDeg << " deg";
         }
         else if (currentOp->type == Operation::ROTATE)
         {
-            double angleDeg = currentOp->angle * 180.0 / 3.141592653589793;
-            oss << "ROTATE " << angleDeg << "deg";
+            double angleDeg = currentOp->angle * 180.0 / PI;
+            oss << "ROTATE " << angleDeg << " deg";
         }
+        else
+        {
+            oss << "UNKNOWN OPERATION";
+        }
+    }
+    else
+    {
+        oss << "NO OPERATION";
     }
 
     data.currentOpName = oss.str();
-
-
-
-
-    // ===== STATUS =====
-    if (data.isPlaying)
-        data.status = "PLAYING";
-    else if (data.isPaused)
-        data.status = "PAUSED";
-    else
-        data.status = "IDLE";
-
-   
 
     return data;
 }
@@ -255,6 +187,7 @@ void AppController::handleAction(UserAction action)
     case UserAction::Step:
         sim.step();
         break;
+
     case UserAction::ToggleRenderMode:
         toggleRenderMode();
         break;

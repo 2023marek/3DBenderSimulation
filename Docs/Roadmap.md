@@ -70,3 +70,10 @@ sampling/discretization
     ?
 render nodes
 ========================================================================
+
+Create common segment representation:
+    CAD and manufacturing can both use it later.
+
+Do not refactor GeometricPipeModel yet.
+Do not refactor ManufacturingPipeSimulator yet.
+No rendering changes.
