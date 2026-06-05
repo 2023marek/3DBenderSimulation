@@ -86,6 +86,8 @@ set(CORE_HEADERS
     Core/Forming/FormingOperation.h
     Core/Forming/ManufacturingPass.h
     Core/Forming/ManufacturingPlan.h
+    Core/Forming/HelixOperation.h
+    Core/Forming/HelixCurveBuilder.h
     Core/Geometry/Frame.h
     Core/Geometry/PipeNode.h
     Core/Geometry/PipeSegment.h

@@ -9,6 +9,8 @@
 #include "Core/Sampling/PipeCurveSampler.h"
 #include "Core/Forming/ManufacturingPass.h"
 #include "Core/Forming/ManufacturingPlan.h"
+#include "Core/Forming/HelixOperation.h"
+#include "Core/Forming/HelixCurveBuilder.h"
 
 // =====================================
 // CONSTRUCTOR
@@ -76,6 +78,50 @@ AppController::AppController()
         << plan.passes.front().outputCurve.size()
         << std::endl;
 
+	//=====================================================
+    HelixOperation helixOp;
+
+    helixOp.inputMode =
+        HelixOperation::InputMode::RadiusPitch;
+
+    helixOp.length = 200.0;
+    helixOp.helixRadius = 30.0;
+    helixOp.pitch = 20.0;
+    helixOp.feedSpeed = 40.0;
+
+    auto helixResult =
+        HelixCurveBuilder::build(helixOp);
+
+    if (helixResult.valid)
+    {
+        PipeCurve helixCurve;
+
+        helixCurve.addSegment(
+            helixResult.segment
+        );
+
+        auto helixNodes =
+            PipeCurveSampler::sample(
+                helixCurve,
+                0.5
+            );
+
+        std::cout << "[HELIX GEOMETRY TEST] radius="
+            << helixResult.helixRadius
+            << " pitch="
+            << helixResult.pitch
+            << " kappa="
+            << helixResult.curvature
+            << " tau="
+            << helixResult.torsion
+            << " turns="
+            << helixResult.numberOfTurns
+            << " omega="
+            << helixResult.angularSpeed
+            << " nodes="
+            << helixNodes.size()
+            << std::endl;
+    }
 
 
 }

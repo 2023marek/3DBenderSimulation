@@ -437,3 +437,47 @@ GeometricPipeModel:
     operations -> PipeCurve -> PipeCurveSampler -> nodes
     Phase 7C — Refactor GeometricPipeModel
 
+    ==========================================
+    Phase 7D — Add Helix segment test
+
+Goal:
+
+Prove the new curvature/torsion pipeline can generate a helix-like curve.
+
+PipeCurveSegment::Helix
+    ?
+PipeCurveSampler
+    ?
+PipeNode
+
+No manufacturing changes yet.
+
+=================================================
+Phase 7E — Add HelixOperation / helix curve producer skeleton
+
+Goal:
+
+Represent helix forming as a real forming command,
+not just a temporary test.
+
+=======================================================
+
+Phase 7F — Upgrade HelixOperation to radius/pitch input
+Upgrade HelixOperation to radius/pitch input
+
+Goal:
+
+HelixOperation
+    helix radius + pitch + length
+        ?
+HelixCurveBuilder
+        ?
+curvature ? + torsion ?
+        ?
+PipeCurveSegment::Helix
+        ?
+PipeCurveSampler
+
+No springback yet.
+No material physics yet.
+Only geometric helix + basic machine kinematics.
