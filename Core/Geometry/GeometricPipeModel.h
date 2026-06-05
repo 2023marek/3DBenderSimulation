@@ -1,5 +1,7 @@
 #pragma once
 
+#pragma once
+
 #include <vector>
 #include <cmath>
 #include <iostream>
@@ -11,6 +13,9 @@
 #include "Core/Geometry/PipeNode.h"
 #include "Core/Geometry/PipeSegment.h"
 
+#include "Core/Curve/PipeCurve.h"
+#include "Core/Curve/PipeCurveSegment.h"
+#include "Core/Sampling/PipeCurveSampler.h"
 // =====================================================
 // GEOMETRIC PIPE MODEL
 //
@@ -53,8 +58,11 @@ public:
     {
         operations.clear();
         segments.clear();
+        curve.clear();
         nodes.clear();
+
         resetFrame();
+
         dirty = true;
     }
 
@@ -119,15 +127,53 @@ public:
         return segments;
     }
 
+    const PipeCurve& getCurve() const
+    {
+        buildIfDirty();
+        return curve;
+    }
+
     void build() const
     {
+        // =====================================================
+        // CAD CURVATURE-DRIVEN BUILD PATH
+        //
+        // operations
+        //      ?
+        // PipeCurve segments
+        //      ?
+        // PipeCurveSampler
+        //      ?
+        // PipeNode samples for rendering
+        //
+        // Important:
+        // Nodes are not the primary model.
+        // Nodes are only sampled output.
+        // =====================================================
+
+        curve.clear();
         segments.clear();
         nodes.clear();
 
         resetFrame();
 
+        buildCurveFromOperations();
+
+        nodes =
+            PipeCurveSampler::sample(
+                curve,
+                ds
+            );
+
+        std::cout << "[CAD CURVE BUILD] curveSegments="
+            << curve.size()
+            << " nodes="
+            << nodes.size()
+            << std::endl;
+
+        // Temporary legacy/debug segment list.
+        // Later this can be removed when all CAD code reads PipeCurve.
         buildSegments();
-        buildNodes();
 
         dirty = false;
     }
@@ -136,13 +182,19 @@ private:
     double ds = 0.5;
 
     std::vector<Operation> operations;
-
+    // Curvature-driven model.
+    // This is now the primary CAD geometric representation.
+    mutable PipeCurve curve;
     // Cached rebuild data.
     // These may change even inside const getters.
     mutable bool dirty = true;
     mutable std::vector<Segment> segments;
     mutable std::vector<Node> nodes;
     mutable Frame currentFrame;
+
+
+
+
 
 private:
     void buildIfDirty() const
@@ -194,205 +246,62 @@ private:
         }
     }
 
-    void buildNodes() const
-    {
-        nodes.push_back({
-            currentFrame.P,
-            currentFrame.T,
-            currentFrame.N,
-            currentFrame.B
-            });
-
-        for (const auto& s : segments)
-        {
-            if (s.type == Segment::LINE)
-            {
-                buildLine(s.length);
-            }
-            else if (s.type == Segment::ARC)
-            {
-                buildArc(s);
-            }
-            else if (s.type == Segment::ROTATE)
-            {
-                buildRotate(s);
-            }
-        }
-
-        
-    }
+   
 
 
 
 
-    void buildLine(double length) const
-    {
-        if (length <= 0.0 || ds <= 1e-9)
-            return;
-
-        int steps =
-            std::max(1, static_cast<int>(std::ceil(length / ds)));
-
-        double stepLength =
-            length / static_cast<double>(steps);
-
-        for (int i = 1; i <= steps; ++i)
-        {
-            currentFrame.P =
-                currentFrame.P +
-                currentFrame.T.normalized() * stepLength;
-
-            nodes.push_back({
-                currentFrame.P,
-                currentFrame.T,
-                currentFrame.N,
-                currentFrame.B
-                });
-        }
-    }
-
-    void buildArc(const Segment& s) const
-    {
-        if (std::abs(s.curvature) < 1e-12)
-            return;
-
-        if (s.angle <= 0.0)
-            return;
-
-        double radius =
-            1.0 / std::abs(s.curvature);
-
-        double arcLength =
-            radius * s.angle;
-
-        int steps =
-            std::max(1, static_cast<int>(std::ceil(arcLength / ds)));
-
-        double dA =
-            s.angle / static_cast<double>(steps);
-
-        for (int i = 1; i <= steps; ++i)
-        {
-            Vec3D prevT = currentFrame.T;
-
-            double signedDA =
-                dA * bendDirectionSign(s.bendDirection);
-
-            currentFrame.T =
-                rotateAroundAxis(
-                    currentFrame.T,
-                    currentFrame.B,
-                    signedDA
-                ).normalized();
-
-            transportFrame(prevT, currentFrame.T, currentFrame);
-
-            Vec3D midT =
-                (prevT + currentFrame.T).normalized();
-
-            if (midT.lengthSquared() < 1e-12)
-                midT = currentFrame.T;
-
-            currentFrame.P =
-                currentFrame.P + midT * (radius * dA);
-
-            nodes.push_back({
-                currentFrame.P,
-                currentFrame.T,
-                currentFrame.N,
-                currentFrame.B
-                });
-        }
-    }
-
-    void buildRotate(const Segment& s) const
-    {
-        double signedAngle =
-            s.rotAngle * rotationDirectionSign(s.rotationDirection);
-
-        currentFrame.N =
-            rotateAroundAxis(
-                currentFrame.N,
-                currentFrame.T,
-                signedAngle
-            ).normalized();
-
-        currentFrame.B =
-            rotateAroundAxis(
-                currentFrame.B,
-                currentFrame.T,
-                signedAngle
-            ).normalized();
-
-        orthonormalizeFrame(currentFrame);
-
-        nodes.push_back({
-            currentFrame.P,
-            currentFrame.T,
-            currentFrame.N,
-            currentFrame.B
-            });
-    }
+   
 
 private:
-    Vec3D rotateAroundAxis(
-        const Vec3D& v,
-        const Vec3D& axis,
-        double angle) const
+    
+    void buildCurveFromOperations() const
     {
-        Vec3D k = axis.normalized();
+        // =====================================================
+        // Convert user operations into curvature-driven segments.
+        //
+        // This is the new CAD path:
+        //
+        // FEED   -> Line segment
+        // BEND   -> Circular arc segment
+        // ROTATE -> Rotation-only frame segment
+        //
+        // Later:
+        // HELIX / ROLL / STRETCH operations will also produce
+        // curve segments here or through a ManufacturingPass.
+        // =====================================================
 
-        if (k.lengthSquared() < 1e-12)
-            return v;
+        curve.clear();
 
-        return v * std::cos(angle)
-            + cross(k, v) * std::sin(angle)
-            + k * dot(k, v) * (1.0 - std::cos(angle));
-    }
-
-    void transportFrame(
-        const Vec3D& oldT,
-        const Vec3D& newT,
-        Frame& frame) const
-    {
-        Vec3D axis = cross(oldT, newT);
-
-        if (axis.lengthSquared() < 1e-12)
+        for (const auto& op : operations)
         {
-            orthonormalizeFrame(frame);
-            return;
+            if (op.type == Operation::FEED)
+            {
+                curve.addSegment(
+                    PipeCurveSegment::makeLine(
+                        op.length
+                    )
+                );
+            }
+            else if (op.type == Operation::BEND)
+            {
+                curve.addSegment(
+                    PipeCurveSegment::makeCircularArc(
+                        op.R,
+                        op.angle,
+                        op.bendDirection
+                    )
+                );
+            }
+            else if (op.type == Operation::ROTATE)
+            {
+                curve.addSegment(
+                    PipeCurveSegment::makeRotationOnly(
+                        op.angle,
+                        op.rotationDirection
+                    )
+                );
+            }
         }
-
-        axis = axis.normalized();
-
-        double d =
-            dot(oldT.normalized(), newT.normalized());
-
-        d = std::max(-1.0, std::min(1.0, d));
-
-        double angle =
-            std::acos(d);
-
-        frame.N =
-            rotateAroundAxis(frame.N, axis, angle).normalized();
-
-        frame.B =
-            rotateAroundAxis(frame.B, axis, angle).normalized();
-
-        orthonormalizeFrame(frame);
-    }
-
-    void orthonormalizeFrame(Frame& frame) const
-    {
-        frame.T = frame.T.normalized();
-
-        frame.N =
-            (frame.N - frame.T * dot(frame.N, frame.T)).normalized();
-
-        frame.B =
-            cross(frame.T, frame.N).normalized();
-
-        frame.N =
-            cross(frame.B, frame.T).normalized();
     }
 };

@@ -427,3 +427,13 @@ Pass 3:
     output PipeCurve
 
 So add a lightweight skeleton.
+
+==========================================
+Phase 7C — Refactor GeometricPipeModel to use PipeCurve + PipeCurveSampler
+
+Goal:
+
+GeometricPipeModel:
+    operations -> PipeCurve -> PipeCurveSampler -> nodes
+    Phase 7C — Refactor GeometricPipeModel
+

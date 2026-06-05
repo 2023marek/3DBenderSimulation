@@ -43,6 +43,13 @@ AppController::AppController()
 
     sim.loadProgram(ops);
 
+    //sim.setMode(
+     //   SimulationController::SimulationMode::ManufacturingPlayback
+    //);
+
+    //sim.setMode(
+    //    SimulationController::SimulationMode::CADPreview
+    //);
     ManufacturingPass pass;
 
     pass.name =
