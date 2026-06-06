@@ -2,15 +2,27 @@
 
 #include "Core/Geometry/GeometricPipeModel.h"
 #include "Core/Manufacturing/ManufacturingPipeSimulator.h"
+#include "Core/Forming/ManufacturingPlanPreviewModel.h"
 
 class PipeSystem
 {
 public:
     PipeSystem()
         : cadModel(0.5),
-        manufacturing(0.5)
+        manufacturing(0.5),
+        planPreview(0.5)
     {
     }
+
+    ManufacturingPlanPreviewModel& manufacturingPlanPreview()
+    {
+        return planPreview;
+    }
+
+    const ManufacturingPlanPreviewModel& manufacturingPlanPreview() const
+    {
+        return planPreview;
+    } 
 
     explicit PipeSystem(double sampleStep)
         : cadModel(sampleStep),
@@ -52,4 +64,5 @@ public:
 private:
     GeometricPipeModel cadModel;
     ManufacturingPipeSimulator manufacturing;
+    ManufacturingPlanPreviewModel planPreview;
 };

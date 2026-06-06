@@ -3,6 +3,7 @@
 #include <vector>
 
 #include "Core/Forming/ManufacturingPass.h"
+#include "Core/Curve/PipeCurve.h"
 
 // =====================================================
 // MANUFACTURING PLAN
@@ -39,4 +40,30 @@ struct ManufacturingPlan
     {
         passes.push_back(pass);
     }
-}; 
+
+    PipeCurve buildCombinedCurve() const
+    {
+        // =====================================================
+        // MULTI-PASS CURVE COMPOSITION
+        //
+        // Each pass owns an outputCurve.
+        //
+        // This does not resimulate passes.
+        // It only concatenates existing curve outputs.
+        // =====================================================
+
+        PipeCurve combined;
+
+        for (const auto& pass : passes)
+        {
+            if (!pass.enabled)
+                continue;
+
+            combined.appendCurve(
+                pass.outputCurve
+            );
+        }
+
+        return combined;
+    }
+};

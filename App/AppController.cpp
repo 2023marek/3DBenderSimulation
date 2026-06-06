@@ -11,6 +11,8 @@
 #include "Core/Forming/ManufacturingPlan.h"
 #include "Core/Forming/HelixOperation.h"
 #include "Core/Forming/HelixCurveBuilder.h"
+#include "Core/Forming/HelixFormingPassBuilder.h"
+#include "Core/Forming/ManufacturingPlanPreviewModel.h"
 
 // =====================================
 // CONSTRUCTOR
@@ -45,86 +47,99 @@ AppController::AppController()
 
     sim.loadProgram(ops);
 
-    //sim.setMode(
-     //   SimulationController::SimulationMode::ManufacturingPlayback
-    //);
+   // sim.setMode(
+   //     SimulationController::SimulationMode::ManufacturingPlayback
+   // );
 
     //sim.setMode(
     //    SimulationController::SimulationMode::CADPreview
     //);
-    ManufacturingPass pass;
+    
 
-    pass.name =
-        "Main rotary draw bending pass";
+	//=====================================================
+   
 
-    pass.processType =
+
+    ManufacturingPass rotaryPass;
+
+    rotaryPass.name =
+        "Rotary draw bending pass";
+
+    rotaryPass.processType =
         TubeFormingProcessType::RotaryDrawBending;
 
-    pass.operations =
+    rotaryPass.operations =
         ops;
 
-    pass.outputCurve.addSegment(
+    rotaryPass.outputCurve.addSegment(
         PipeCurveSegment::makeLine(120.0)
     );
 
-    ManufacturingPlan plan;
-    plan.addPass(pass);
+    rotaryPass.outputCurve.addSegment(
+        PipeCurveSegment::makeCircularArc(
+            20.0,
+            PI / 2.0,
+            BendDirection::CCW
+        )
+    );
 
-    std::cout << "[PASS TEST] passes="
-        << plan.size()
-        << " firstPassOps="
-        << plan.passes.front().operations.size()
-        << " firstPassSegments="
-        << plan.passes.front().outputCurve.size()
-        << std::endl;
+    rotaryPass.completed =
+        true;
 
-	//=====================================================
-    HelixOperation helixOp;
 
-    helixOp.inputMode =
+
+ HelixOperation helixPassOp;
+
+    helixPassOp.inputMode =
         HelixOperation::InputMode::RadiusPitch;
 
-    helixOp.length = 200.0;
-    helixOp.helixRadius = 30.0;
-    helixOp.pitch = 20.0;
-    helixOp.feedSpeed = 40.0;
+    helixPassOp.length = 200.0;
+    helixPassOp.helixRadius = 10.0;
+    helixPassOp.pitch = 15.0;
+    helixPassOp.feedSpeed = 40.0;
 
-    auto helixResult =
-        HelixCurveBuilder::build(helixOp);
 
-    if (helixResult.valid)
-    {
-        PipeCurve helixCurve;
-
-        helixCurve.addSegment(
-            helixResult.segment
+    ManufacturingPlan helixPlan;
+    ManufacturingPass helixPass =
+        HelixFormingPassBuilder::buildPass(
+            helixPassOp,
+            "Heating element helix pass"
         );
 
-        auto helixNodes =
-            PipeCurveSampler::sample(
-                helixCurve,
-                0.5
-            );
+    
+    
+    ManufacturingPlan multiPassPlan;
 
-        std::cout << "[HELIX GEOMETRY TEST] radius="
-            << helixResult.helixRadius
-            << " pitch="
-            << helixResult.pitch
-            << " kappa="
-            << helixResult.curvature
-            << " tau="
-            << helixResult.torsion
-            << " turns="
-            << helixResult.numberOfTurns
-            << " omega="
-            << helixResult.angularSpeed
-            << " nodes="
-            << helixNodes.size()
-            << std::endl;
-    }
+    multiPassPlan.addPass(
+        rotaryPass
+    );
 
+    multiPassPlan.addPass(
+        helixPass
+    );
 
+    // =====================================================
+    // Store the complete multi-pass plan in the simulation.
+    // GLView renders it through ManufacturingPlanPreview.
+    // =====================================================
+
+    sim.getManufacturingPlanPreview().setPlan(
+        multiPassPlan
+    );
+
+    // =====================================================
+    // Select preview mode.
+    // This shows the composed curve:
+    // rotary draw bending pass + helix forming pass.
+    // =====================================================
+
+    sim.setMode(
+        SimulationController::SimulationMode::ManufacturingPlanPreview
+    );
+      
 }
+
+
 
 void AppController::update(double dt)
 {

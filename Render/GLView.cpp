@@ -480,7 +480,38 @@ void GLView::paintGL()
             );
         }
     }
+    else if (mode == SimulationController::SimulationMode::ManufacturingPlanPreview)
+    {
+        const auto& preview =
+            app->getManufacturingPlanPreview();
 
+        const auto& previewNodes =
+            preview.getNodes();
+
+        std::cout << "[GLView PLAN PREVIEW] nodes="
+            << previewNodes.size()
+            << std::endl;
+
+        pipeRenderer.setMode(renderMode);
+
+        if (renderMode == RenderMode::LINE)
+        {
+            pipeRenderer.uploadLine(
+                nodesToFloatLine(previewNodes)
+            );
+
+            glLineWidth(2.0f);
+            pipeRenderer.draw();
+        }
+        else if (renderMode == RenderMode::MESH)
+        {
+            drawTubeZone(
+                previewNodes,
+                5.0,
+                12
+            );
+        }
+    }
     // =====================================================
     // MANUFACTURING PLAYBACK
     // Uses current PipeAxis3D manufacturing zones.

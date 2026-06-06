@@ -41,6 +41,14 @@ struct PipeCurve
         segments.push_back(segment);
     }
 
+    void appendCurve(const PipeCurve& other)
+    {
+        for (const auto& segment : other.segments)
+        {
+            segments.push_back(segment);
+        }
+    }
+
     double totalLength() const
     {
         double total = 0.0;

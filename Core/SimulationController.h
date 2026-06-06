@@ -6,6 +6,8 @@
 #include "Core/Machine/MachineSystem.h"
 #include "Core/Manufacturing/RotationKinematicMode.h"
 #include "Core/PipeSystem.h"
+#include "Core/Forming/ManufacturingPlanPreviewModel.h"
+
 
 class SimulationController
 {
@@ -13,7 +15,8 @@ public:
     enum class SimulationMode
     {
         CADPreview,
-        ManufacturingPlayback
+        ManufacturingPlayback,
+        ManufacturingPlanPreview
     };
 
 public:
@@ -26,6 +29,18 @@ public:
     void step();
     void reset();
     void update(double deltaTime);
+
+    //Accessors
+
+    ManufacturingPlanPreviewModel& getManufacturingPlanPreview()
+    {
+        return pipeSystem.manufacturingPlanPreview();
+    }
+
+    const ManufacturingPlanPreviewModel& getManufacturingPlanPreview() const
+    {
+        return pipeSystem.manufacturingPlanPreview();
+    }
 
     // =====================================================
     // Rotation kinematic mode

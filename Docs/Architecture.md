@@ -481,3 +481,71 @@ PipeCurveSampler
 No springback yet.
 No material physics yet.
 Only geometric helix + basic machine kinematics.
+====================================================
+Phase 7G — Add HelixFormingPass skeleton
+
+Goal:
+
+ManufacturingPass can represent helix forming as a real pass.
+
+Not connected to manufacturing playback yet.
+
+We will add:
+
+HelixFormingPass / HelixPassBuilder
+
+so later you can have:
+
+Pass 1: RotaryDrawBending
+Pass 2: HelixForming
+
+and both output PipeCurve.
+====================================================
+Phase 7H — Add multi-pass ManufacturingPlan curve composition
+
+That will allow:
+
+RotaryDrawBending output curve
+    +
+HelixForming output curve
+    ?
+combined PipeCurve
+    ?
+PipeCurveSampler
+
+====================================================
+Current behavior:
+
+Pass 1 curve
+    ends here
+Pass 2 helix
+    starts immediately at Pass 1 end frame
+
+So the spiral starts at the end of the previous pass.
+
+To control insertion point later, we need one of these options:
+
+1. Append mode
+   helix starts at previous pass end
+
+2. Insert-at-distance mode
+   helix starts at arc length s along previous curve
+
+3. Insert-at-node mode
+   helix starts at selected PipeNode index
+
+4. Insert-at-frame mode
+   helix starts from explicit Frame
+
+For now, Phase 7J should stay simple and use append mode. Then Phase 7K can add insertion control.
+
+Phase 7J — Render ManufacturingPlanPreviewModel
+
+Goal:
+
+Show multi-pass preview:
+    rotary draw bending + helix forming
+
+This will prove visually:
+
+ManufacturingPlan -> combined curve -> sampled nodes -> GLView

@@ -9,6 +9,8 @@
 #include "Render/HUDData.h"
 #include "Core/Machine/MachineRuntimeState.h"
 #include "Core/Machine/MachineRenderData.h"
+#include "Core/Forming/ManufacturingPlanPreviewModel.h"
+#include "Core/PipeSystem.h"
 
 
 class AppController
@@ -17,6 +19,17 @@ public:
     AppController();
 
     void update(double dt);
+
+    //ACCESSORS
+    ManufacturingPlanPreviewModel& getManufacturingPlanPreview()
+    {
+        return sim.getManufacturingPlanPreview();
+    }
+
+    const ManufacturingPlanPreviewModel& getManufacturingPlanPreview() const
+    {
+        return sim.getManufacturingPlanPreview();
+    }
 
     // =====================================================
     // RENDER MODE API
