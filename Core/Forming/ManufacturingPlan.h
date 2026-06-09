@@ -1,9 +1,11 @@
 #pragma once
 
 #include <vector>
+#include <iostream>
 
 #include "Core/Forming/ManufacturingPass.h"
 #include "Core/Curve/PipeCurve.h"
+#include "Core/Forming/PassPlacement.h"
 
 // =====================================================
 // MANUFACTURING PLAN
@@ -46,10 +48,19 @@ struct ManufacturingPlan
         // =====================================================
         // MULTI-PASS CURVE COMPOSITION
         //
-        // Each pass owns an outputCurve.
+        // Supported now:
         //
-        // This does not resimulate passes.
-        // It only concatenates existing curve outputs.
+        // AppendToPrevious:
+        //     add pass curve to the end.
+        //
+        // InsertAtArcLength:
+        //     split current combined curve at arc length s,
+        //     insert pass curve there,
+        //     append remaining curve after it.
+        //
+        // Current limitation:
+        //     splitAtArcLength currently splits Line segments exactly.
+        //     Arc / helix split support comes later.
         // =====================================================
 
         PipeCurve combined;
@@ -59,9 +70,77 @@ struct ManufacturingPlan
             if (!pass.enabled)
                 continue;
 
-            combined.appendCurve(
-                pass.outputCurve
-            );
+            if (pass.placement.mode
+                == PassPlacementMode::AppendToPrevious)
+            {
+                combined.appendCurve(
+                    pass.outputCurve
+                );
+            }
+            else if (pass.placement.mode
+                == PassPlacementMode::InsertAtArcLength)
+            {
+                PipeCurveSplitResult split =
+                    combined.splitAtArcLength(
+                        pass.placement.arcLength
+                    );
+
+                if (!split.valid)
+                {
+                    std::cerr
+                        << "[PLAN COMPOSE WARNING] Invalid insert arc length. Appending pass instead.\n";
+
+                    combined.appendCurve(
+                        pass.outputCurve
+                    );
+
+                    continue;
+                }
+
+                PipeCurve rebuilt;
+
+                rebuilt.appendCurve(
+                    split.before
+                );
+
+                rebuilt.appendCurve(
+                    pass.outputCurve
+                );
+
+                rebuilt.appendCurve(
+                    split.after
+                );
+
+                combined =
+                    rebuilt;
+
+                std::cout
+                    << "[PLAN COMPOSE INSERT] arcLength="
+                    << pass.placement.arcLength
+                    << " beforeSegments="
+                    << split.before.size()
+                    << " insertedSegments="
+                    << pass.outputCurve.size()
+                    << " afterSegments="
+                    << split.after.size()
+                    << " combinedSegments="
+                    << combined.size()
+                    << std::endl;
+            }
+            else
+            {
+                // =================================================
+                // Future:
+                // InsertAtNodeIndex
+                // ExplicitStartFrame
+                //
+                // Safe fallback for now.
+                // =================================================
+
+                combined.appendCurve(
+                    pass.outputCurve
+                );
+            }
         }
 
         return combined;

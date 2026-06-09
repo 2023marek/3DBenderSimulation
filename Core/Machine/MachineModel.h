@@ -49,7 +49,7 @@ struct MachineModel
         bendDie.meshPath ="Assets/Machine/bend_die.stl";
         bendDie.meshScale = 1.0;
         bendDie.radius = defaultBendRadius;
-        bendDie.visible = true;
+        bendDie.visible = false;
         parts.push_back(bendDie);
 
         // Clamp die

@@ -549,3 +549,162 @@ Show multi-pass preview:
 This will prove visually:
 
 ManufacturingPlan -> combined curve -> sampled nodes -> GLView
+========================================================
+++++++++++++++++++++++++++++++++++++++++++++++++++++++
+REAL MACHINE THINKING
+
+Physically:
+
+straight tube stock enters machine ->  modify: here prebending tube stock
+
+        ?
+material enters bend zone  zone1
+        ?
+local deformation occurs    zone2
+        ?
+material exits bend zone
+        ?
+shape freezes                  zone3 
+        |
+  tube stock rigid part    zone4   
+
+
+
+
+================================================================
+OLD THINKING:
+
+buildArc()
+creates bend
+
+NEW THINKING:
+
+material continuously flows
+through a deformation field
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+===============================================================
+
+===\
+    \
+tail ===================> [ machineEntryFrame ] -----------> \\\\\\\\ )))))))========\Head incoming stock
+                                                                                      \======>
+       incoming stock              entry        positioned     active   frozen
+                                                straight       zone     geometry
+================================================================================================
+
+
+## Simulation Modes
+
+### CADPreview
+
+Displays the final ideal pipe from the CAD operation list.
+
+### PlannedShapePreview
+
+Displays the final composed shape from a multi-pass manufacturing plan.
+
+This mode is CAD-like. It does not simulate the manufacturing process.
+
+It must not be used for:
+- incoming stock
+- positioned straight material
+- active bend zone
+- frozen geometry
+- process collision simulation
+
+### ManufacturingPlayback
+
+Displays the real forming process.
+
+This mode owns the four-zone manufacturing model:
+
+```text
+IncomingStock -> machineEntryFrame -> PositionedStraight -> ActiveZone -> FrozenGeometry
+=================================================================================================
+
+ManufacturingPass can describe WHERE its outputCurve should start.
+
+For now:
+    metadata only
+
+No curve insertion logic yet.
+No rendering change yet.
+No playback change yet.
+
+This prepares:
+
+AppendToPrevious
+InsertAtArcLength
+InsertAtNodeIndex
+ExplicitStartFrame
+
+=======================================================
+7O-1: Add curve length helpers.
+7O-2: Add basic split-at-segment-boundary support.
+7O-3: Add real split inside Line / CircularArc.
+7O-4: Use it inside ManufacturingPlan::buildCombinedCurve().
+==========================================================
+Phase 7O-1 will only add helper functions for measuring and locating curve positions. We won’t split or insert anything yet, so rendering should remain unchanged.
+
+Phase 7O-1 — Add curve length helpers
+
+Goal:
+
+PipeCurve can answer:
+    total length
+    which segment contains arc length s
+    local distance inside that segment
+    ==========================================================
+
+    7O-2 will add basic split-at-segment-boundary support. This means if s falls exactly on a segment boundary, we can split the curve there and insert the new segment.
+    Add curve split helpers for line segments
+
+Goal:
+
+Split PipeCurve at arc length s.
+
+For now:
+    only split inside Line segments.
+
+If s falls inside an arc/helix/rotation:
+    no real split yet
+    fallback behavior for safety
+
+This prepares:
+
+beforeCurve + insertedPass + afterCurve
+===========================================================
+Phase 7O-4 — Add arc segment split support
+====================================================
+Goal:
+
+InsertAtArcLength should also work inside circular arc segments.
+
+Currently line split works.
+
+
+
+Now we add circular arc split.
+
+Example:
+
+Line 198
+Arc length 31.416
+Insert at s = 202
+
+202 is inside arc:
+    localS = 4
+
+Expected split:
+
+before:
+    Line 198
+    Arc first part
+
+insert:
+    Helix
+
+after:
+    Arc remaining part
+    Rotate
+    Line

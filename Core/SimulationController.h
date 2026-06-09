@@ -15,8 +15,15 @@ public:
     enum class SimulationMode
     {
         CADPreview,
-        ManufacturingPlayback,
-        ManufacturingPlanPreview
+
+        // Final multi-pass planned shape.
+        // This is NOT process playback.
+        PlannedShapePreview,
+
+        // Real manufacturing process simulation.
+        // Uses incoming stock / positioned straight /
+        // active zone / frozen geometry.
+        ManufacturingPlayback
     };
 
 public:
@@ -34,12 +41,12 @@ public:
 
     ManufacturingPlanPreviewModel& getManufacturingPlanPreview()
     {
-        return pipeSystem.manufacturingPlanPreview();
+        return pipeSystem.planedShapePreview();
     }
 
     const ManufacturingPlanPreviewModel& getManufacturingPlanPreview() const
     {
-        return pipeSystem.manufacturingPlanPreview();
+        return pipeSystem.planedShapePreview();
     }
 
     // =====================================================

@@ -43,6 +43,7 @@ private:
     bool leftPressed = false;
     bool rightPressed = false;
     bool autoFrame = true;   // run once
+    bool showMachineReference = true; //machine reference
     glm::vec3 computePipeCenterAndSize(float& outSize);
 
     // =========================

@@ -442,11 +442,36 @@ void GLView::paintGL()
 
     auto mode =
         app->getSimulationMode();
-    std::cout << "[GLView] mode="
-        << (mode == SimulationController::SimulationMode::CADPreview
-            ? "CADPreview"
-            : "ManufacturingPlayback")
-        << std::endl;
+   // std::cout << "[GLView] mode="
+    //    << (mode == SimulationController::SimulationMode::CADPreview
+    //        ? "CADPreview"
+    //        : "ManufacturingPlayback")
+    //    << std::endl;
+    // 
+    // 
+    // 
+    std::cout << "[GLView] mode=";
+
+    if (mode == SimulationController::SimulationMode::CADPreview)
+    {
+        std::cout << "CADPreview";
+    }
+    else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
+    {
+        std::cout << "PlannedShapePreview";
+    }
+    else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
+    {
+        std::cout << "ManufacturingPlayback";
+    }
+    else
+    {
+        std::cout << "Unknown";
+    }
+
+    std::cout << std::endl;
+
+   
     // =====================================================
     // CAD PREVIEW
     // Uses GeometricPipeModel.
@@ -480,7 +505,7 @@ void GLView::paintGL()
             );
         }
     }
-    else if (mode == SimulationController::SimulationMode::ManufacturingPlanPreview)
+    else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
     {
         const auto& preview =
             app->getManufacturingPlanPreview();
@@ -542,7 +567,10 @@ void GLView::paintGL()
             drawTubeZone(data.activeZoneNodes, 5.0, 12);
         }
     }
-    drawMachineReference();
+    if (showMachineReference)
+    {
+        drawMachineReference();
+    }
     if (hud)
     {
         hud->update(hudData, RenderMode::LINE);

@@ -6,6 +6,7 @@
 #include "Core/Operations.h"
 #include "Core/Curve/PipeCurve.h"
 #include "Core/Forming/TubeFormingProcessType.h"
+#include "Core/Forming/PassPlacement.h"
 
 // =====================================================
 // MANUFACTURING PASS
@@ -33,6 +34,8 @@ struct ManufacturingPass
 
     TubeFormingProcessType processType =
         TubeFormingProcessType::RotaryDrawBending;
+    PassPlacement placement =
+        PassPlacement::append();
 
     // =====================================================
     // INPUT COMMANDS
@@ -73,6 +76,9 @@ struct ManufacturingPass
 
         processType =
             TubeFormingProcessType::RotaryDrawBending;
+
+        placement =
+            PassPlacement::append();
 
         operations.clear();
         outputCurve.clear();

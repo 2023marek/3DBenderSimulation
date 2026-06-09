@@ -90,6 +90,9 @@ set(CORE_HEADERS
     Core/Forming/HelixOperation.h
     Core/Forming/HelixCurveBuilder.h
     Core/Forming/HelixFormingPassBuilder.h
+    Core/Forming/RotaryDrawPassBuilder.h
+    Core/Forming/PassPlacement.h
+    
     Core/Geometry/Frame.h
     Core/Geometry/PipeNode.h
     Core/Geometry/PipeSegment.h

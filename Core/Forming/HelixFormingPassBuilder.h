@@ -36,7 +36,8 @@ public:
 
         pass.processType =
             TubeFormingProcessType::HelixForming;
-
+        pass.placement =
+            PassPlacement::append();
         auto result =
             HelixCurveBuilder::build(op);
 

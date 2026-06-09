@@ -14,12 +14,12 @@ public:
     {
     }
 
-    ManufacturingPlanPreviewModel& manufacturingPlanPreview()
+    ManufacturingPlanPreviewModel& planedShapePreview()
     {
         return planPreview;
     }
 
-    const ManufacturingPlanPreviewModel& manufacturingPlanPreview() const
+    const ManufacturingPlanPreviewModel& planedShapePreview() const
     {
         return planPreview;
     } 
