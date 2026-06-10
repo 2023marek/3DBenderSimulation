@@ -14,6 +14,7 @@
 #include "Core/Forming/HelixFormingPassBuilder.h"
 #include "Core/Forming/ManufacturingPlanPreviewModel.h"
 #include "Core/Forming/RotaryDrawPassBuilder.h"
+#include "Core/Sampling/PipeCurveSampleQuery.h"
 
 // =====================================
 // CONSTRUCTOR
@@ -174,6 +175,34 @@ AppController::AppController()
         << split.after.totalLength()
         << std::endl;
 
+    auto rotaryNodes =
+        PipeCurveSampler::sample(
+            rotaryCurve,
+            0.5
+        );
+
+    auto frameQuery =
+        PipeCurveSampleQuery::findFrameAtArcLength(
+            rotaryNodes,
+            202.0
+        );
+
+    std::cout << "[FRAME QUERY TEST] valid="
+        << frameQuery.valid
+        << " targetS="
+        << frameQuery.targetS
+        << " nearestS="
+        << frameQuery.nearestS
+        << " error="
+        << frameQuery.error
+        << " nodeIndex="
+        << frameQuery.nodeIndex
+        << " P=("
+        << frameQuery.frame.P.x << ", "
+        << frameQuery.frame.P.y << ", "
+        << frameQuery.frame.P.z << ")"
+        << std::endl;
+
  ManufacturingPlan multiPassPlan;
 
     multiPassPlan.addPass(
@@ -183,6 +212,8 @@ AppController::AppController()
     multiPassPlan.addPass(
         helixPass
     );
+
+
 
     // =====================================================
     // Phase 7O-1 curve-location test.
@@ -222,17 +253,17 @@ AppController::AppController()
     //      rotary pass + helix pass.
     // =====================================================
 
-  // sim.setMode(
+   //sim.setMode(
   //   SimulationController::SimulationMode::ManufacturingPlayback
-  // );
+   //);
 
      sim.setMode(
         SimulationController::SimulationMode::PlannedShapePreview
-    );
+   );
 
-  //   sim.setMode(
+    // sim.setMode(
   //     SimulationController::SimulationMode::CADPreview
-  //  );
+    // );
 }
 
 

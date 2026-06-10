@@ -72,6 +72,132 @@ void main()
 }
 )";
 
+static std::vector<float> pointsToFloatLine(
+    const std::vector<Vec3D>& points)
+{
+    std::vector<float> data;
+    data.reserve(points.size() * 3);
+
+    for (const auto& p : points)
+    {
+        data.push_back(static_cast<float>(p.x));
+        data.push_back(static_cast<float>(p.y));
+        data.push_back(static_cast<float>(p.z));
+    }
+
+    return data;
+}
+
+
+
+
+
+void GLView::drawDebugPoint(
+    const Vec3D& p,
+    double size)
+{
+    std::vector<std::vector<float>> strips;
+
+    strips.push_back(
+        pointsToFloatLine({
+            { p.x - size, p.y, p.z },
+            { p.x + size, p.y, p.z }
+            })
+    );
+
+    strips.push_back(
+        pointsToFloatLine({
+            { p.x, p.y - size, p.z },
+            { p.x, p.y + size, p.z }
+            })
+    );
+
+    strips.push_back(
+        pointsToFloatLine({
+            { p.x, p.y, p.z - size },
+            { p.x, p.y, p.z + size }
+            })
+    );
+
+    pipeRenderer.setMode(RenderMode::LINE);
+    pipeRenderer.uploadLineStrips(strips);
+
+    glLineWidth(3.0f);
+    pipeRenderer.draw();
+}
+
+
+
+void GLView::drawDebugFrame(
+    const Frame& frame,
+    double size)
+{
+    // =====================================================
+    // DEBUG FRAME DRAWING
+    //
+    // Draws local frame axes at a selected point.
+    //
+    // T axis: tangent direction
+    // N axis: normal direction
+    // B axis: binormal direction
+    //
+    // Current renderer uses one color for all strips.
+    // Later we can draw each axis with separate color.
+    // =====================================================
+
+    Vec3D P =
+        frame.P;
+
+    Vec3D T =
+        frame.T.normalized();
+
+    Vec3D N =
+        frame.N.normalized();
+
+    Vec3D B =
+        frame.B.normalized();
+
+    std::vector<std::vector<float>> strips;
+
+    // Tangent axis
+    strips.push_back(
+        pointsToFloatLine({
+            P,
+            P + T * size
+            })
+    );
+
+    // Normal axis
+    strips.push_back(
+        pointsToFloatLine({
+            P,
+            P + N * size
+            })
+    );
+
+    // Binormal axis
+    strips.push_back(
+        pointsToFloatLine({
+            P,
+            P + B * size
+            })
+    );
+
+    pipeRenderer.setMode(
+        RenderMode::LINE
+    );
+
+    pipeRenderer.uploadLineStrips(
+        strips
+    );
+
+    glLineWidth(
+        4.0f
+    );
+
+    pipeRenderer.draw();
+}
+
 // =========================
 // Helper for machine reference (axes)
 // 
@@ -106,6 +232,10 @@ static std::vector<float> nodesToFloatLine(
 
     return data;
 }
+
+//===================================
+// 
+
 // =========================
 // CONNECT PIPE DATA
 // =========================
@@ -528,6 +658,9 @@ void GLView::paintGL()
             glLineWidth(2.0f);
             pipeRenderer.draw();
         }
+
+
+
         else if (renderMode == RenderMode::MESH)
         {
             drawTubeZone(
@@ -536,7 +669,59 @@ void GLView::paintGL()
                 12
             );
         }
+
+
+        if (preview.hasInsertionMarkerNode())
+        {
+            const PipeNode& marker =
+                preview.getInsertionMarkerNode();
+
+            shader->setVec3(
+                "pipeColor",
+                glm::vec3(1.0f, 0.2f, 0.2f)
+            );
+
+            drawDebugPoint(
+                marker.pos,
+                8.0
+            );
+
+            shader->setVec3(
+                "pipeColor",
+                glm::vec3(0.2f, 0.9f, 0.3f)
+            );
+        }
+        if (preview.hasInsertionStartFrame())
+        {
+            const Frame& insertionFrame =
+                preview.getInsertionStartFrame();
+
+            shader->setVec3(
+                "pipeColor",
+                glm::vec3(1.0f, 0.8f, 0.1f)
+            );
+
+            drawDebugFrame(
+                insertionFrame,
+                18.0
+            );
+
+            pipeRenderer.setMode(
+                renderMode
+            );
+
+            shader->setVec3(
+                "pipeColor",
+                glm::vec3(0.2f, 0.9f, 0.3f)
+            );
+        }
     }
+
+
+
+
+
+
     // =====================================================
     // MANUFACTURING PLAYBACK
     // Uses current PipeAxis3D manufacturing zones.

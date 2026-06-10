@@ -708,3 +708,297 @@ after:
     Arc remaining part
     Rotate
     Line
+
+    ============================================================
+    Phase 7O-5 — Add visual insertion marker/debug frame
+
+Goal:
+
+Show insertion point visually in PlannedShapePreview.
+
+No curve change.
+No manufacturing playback change.
+No process simulation change.
+
+====================================================
+Phase 7P — Add explicit insertion-start frame support
+
+Goal:
+
+At insertion point, capture the frame:
+    P, T, N, B
+
+This will later allow:
+    helix starts with correct orientation
+    inserted curve aligns to selected pipe frame
+
+Right now we insert by curve order, but the inserted helix still uses its own default frame behavior. Next we need to make insertion frame-aware.
+
+This is the bridge to:
+
+InsertAtArcLength
+    ?
+find frame at s
+    ?
+start inserted helix from that frame
+
+We should do this carefully in small steps.
+======
+ASCII diagram: frame lookup at arc length
+Pipe curve sampled into nodes:
+
+s=0                                                        s=end
+?                                                          ?
+?                                                          ?
+
+N0 ---- N1 ---- N2 ---- N3 ---- N4 ---- N5 ---- N6 ---- N7
+0     0.5    1.0    1.5    2.0    2.5    3.0    3.5   ... mm
+
+                         targetS
+                            ?
+                            ?
+                         s = 2.2
+
+Nearest sampled node:
+
+N4 at s=2.0     error = 0.2
+N5 at s=2.5     error = 0.3
+
+Chosen:
+    N4
+
+Returned frame:
+
+Frame at N4:
+    P = node.pos
+    T = node.T
+    N = node.N
+    B = node.B
+
+For your use case:
+
+Rotary curve:
+
+Line 198 mm
+?
+???????????????????????????????????????????????
+0                                           198
+                                             ?
+                                             ?
+                                         Arc begins
+
+Arc length 31.416 mm
+198 -------------------- 202 -------------------- 229.416
+                          ?
+                          ?
+                    insertion target
+
+Frame query returns:
+
+P = position on bend
+T = tangent of pipe at s=202
+N = normal direction at s=202
+B = binormal at s=202
+
+That frame will later become:
+
+start frame for inserted helix
+Simplified analytic exact frame query example
+
+Sample-based query:
+
+sample curve into nodes
+find nearest node
+return that node frame
+
+Analytic exact query:
+
+find segment containing s
+compute frame exactly inside that segment
+without relying on nearest sampled node
+
+Example for a line segment:
+
+start frame:
+    P0, T0, N0, B0
+
+local arc length:
+    localS
+
+Exact frame:
+
+P = P0 + T0 * localS
+T = T0
+N = N0
+B = B0
+
+C++-style:
+
+Frame frameOnLine(
+    const Frame& startFrame,
+    double localS)
+{
+    Frame f = startFrame;
+
+    f.P =
+        startFrame.P
+        + startFrame.T.normalized() * localS;
+
+    return f;
+}
+
+Example for a circular arc:
+
+Given:
+
+radius R
+local arc length localS
+bend angle a = localS / R
+bend direction sign = +1 or -1
+
+Start frame:
+    P0, T0, N0, B0
+
+Rotate tangent around B:
+
+T1 = rotateAroundAxis(T0, B0, sign * a)
+
+Move position along arc approximately/exactly:
+
+P1 = P0
+     + T0 * (R * sin(a))
+     + N0 * (sign * R * (1 - cos(a)))
+
+Frame:
+    P = P1
+    T = T1
+    N/B updated by transport or rotation
+
+Simplified C++-style:
+
+Frame frameOnCircularArc(
+    const Frame& startFrame,
+    double radius,
+    double localS,
+    BendDirection bendDirection)
+{
+    Frame f = startFrame;
+
+    double sign =
+        bendDirectionSign(bendDirection);
+
+    double a =
+        localS / radius;
+
+    Vec3D T0 =
+        startFrame.T.normalized();
+
+    Vec3D N0 =
+        startFrame.N.normalized();
+
+    Vec3D B0 =
+        startFrame.B.normalized();
+
+    f.P =
+        startFrame.P
+        + T0 * (radius * std::sin(a))
+        + N0 * (sign * radius * (1.0 - std::cos(a)));
+
+    f.T =
+        rotateAroundAxis(
+            T0,
+            B0,
+            sign * a
+        ).normalized();
+
+    f.N =
+        rotateAroundAxis(
+            N0,
+            B0,
+            sign * a
+        ).normalized();
+
+    f.B =
+        B0;
+
+    return f;
+}
+
+So the future direction is:
+
+Phase now:
+    sample-based frame lookup
+
+Later:
+    analytic frame lookup per segment type:
+        Line
+        CircularArc
+        Helix
+        VariableCurvature
+        ============================================
+        Phase 7P-2 — Store insertion frame in preview model
+
+Goal:
+
+ManufacturingPlanPreviewModel
+    finds insertion arc length
+    queries frame at that location
+    stores insertion Frame
+
+This prepares:
+
+inserted helix starts from selected frame
+===========================================================
+Phase 7P-3 — Draw insertion frame axes
+
+Goal:
+
+Show T / N / B axes at insertion point
+
+This will visually confirm not only position, but
+also orientation of the insertion frame.
+
+
+====
+7P-3 — Draw insertion frame axes
+
+Goal:
+
+At insertion point, draw:
+    T axis
+    N axis
+    B axis
+
+This verifies orientation, not only position.
+===========================================================
+Phase 7Q — Prepare inserted curve frame alignment
+
+Goal:
+
+Inserted helix should eventually start from insertion frame orientation:
+    P, T, N, B
+
+Small first step:
+
+Add metadata:
+    ManufacturingPass::resolvedStartFrame
+    ManufacturingPass::hasResolvedStartFrame
+
+No transform yet.
+
+This prepares:
+
+InsertAtArcLength
+    ?
+find frame
+    ?
+store resolved frame
+    ?
+next phase transforms inserted curve into that fram
+
+=====
+Insertion pass can store its resolved start frame:
+    P, T, N, B
+
+No curve transform yet.
+No visual change expected.

@@ -111,6 +111,7 @@ set(CORE_HEADERS
     Core/Mesh/TriangleMesh.h
     Core/Mesh/StlLoader.h
     Core/Sampling/PipeCurveSampler.h
+    Core/Sampling/PipeCurveSampleQuery.h
 
     
 )

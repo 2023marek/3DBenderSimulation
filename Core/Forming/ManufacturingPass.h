@@ -7,6 +7,7 @@
 #include "Core/Curve/PipeCurve.h"
 #include "Core/Forming/TubeFormingProcessType.h"
 #include "Core/Forming/PassPlacement.h"
+#include "Core/Geometry/Frame.h"
 
 // =====================================================
 // MANUFACTURING PASS
@@ -51,6 +52,8 @@ struct ManufacturingPass
 
     std::vector<Operation> operations;
 
+
+
     // =====================================================
     // OUTPUT GEOMETRY
     //
@@ -62,6 +65,29 @@ struct ManufacturingPass
     // =====================================================
 
     PipeCurve outputCurve;
+
+
+
+    // =====================================================
+// RESOLVED START FRAME
+//
+// Used after placement resolution.
+//
+// Example:
+// InsertAtArcLength(202)
+//      ?
+// find frame on existing curve at s=202
+//      ?
+// store that frame here
+//
+// Phase 7Q:
+// metadata only.
+// Later:
+// inserted outputCurve will be transformed/aligned to this frame.
+// =====================================================
+
+    bool hasResolvedStartFrame = false;
+    Frame resolvedStartFrame;
 
     // =====================================================
     // STATE FLAGS
@@ -85,5 +111,8 @@ struct ManufacturingPass
 
         enabled = true;
         completed = false;
+
+        hasResolvedStartFrame = false;
+        resolvedStartFrame = Frame();
     }
 };

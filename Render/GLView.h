@@ -10,6 +10,7 @@ class AppController;
 #include "Render/PipeRenderer.h"
 #include "Core/Geometry/PipeNode.h"
 #include "Render/MachineRenderer.h"
+#include "Core/Geometry/Frame.h"
 
 
 
@@ -45,6 +46,12 @@ private:
     bool autoFrame = true;   // run once
     bool showMachineReference = true; //machine reference
     glm::vec3 computePipeCenterAndSize(float& outSize);
+    void drawDebugPoint(
+        const Vec3D& p,
+        double size);
+    void drawDebugFrame(
+        const Frame& frame,
+        double size);
 
     // =========================
     // DATA SOURCE
