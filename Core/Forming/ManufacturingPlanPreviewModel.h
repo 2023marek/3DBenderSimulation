@@ -188,14 +188,37 @@ private:
 
         transformedInsertedNodes.clear();
 
-        curve =
-            plan.buildCombinedCurve();
+        const ManufacturingPass* insertPass =
+            findFirstInsertAtArcLengthPass();
 
-        nodes =
-            PipeCurveSampler::sample(
-                curve,
-                ds
+        if (insertPass)
+        {
+            curve =
+                buildBaseCurveBeforePass(
+                    *insertPass
+                );
+
+            nodes =
+                PipeCurveSampler::sample(
+                    curve,
+                    ds
+                );
+
+            applyTransformedInsertionPreview(
+                *insertPass
             );
+        }
+        else
+        {
+            curve =
+                plan.buildCombinedCurve();
+
+            nodes =
+                PipeCurveSampler::sample(
+                    curve,
+                    ds
+                );
+        }
 
         std::cout << "[PLAN PREVIEW BUILD] passes="
             << plan.size()
@@ -203,28 +226,16 @@ private:
             << curve.size()
             << " nodes="
             << nodes.size()
+            << " transformedPreview="
+            << usingTransformedPreviewNodes
             << std::endl;
-
-        for (const auto& pass : plan.passes)
-        {
-            if (!pass.enabled)
-                continue;
-
-            if (pass.placement.mode
-                != PassPlacementMode::InsertAtArcLength)
-            {
-                continue;
-            }
-
-            applyTransformedInsertionPreview(
-                pass
-            );
-
-            break;
-        }
 
         dirty = false;
     }
+
+
+
+
     // Helper Reason:
     //When joining curves, first node of next section often duplicates
     //the last node of previous section.
@@ -453,5 +464,21 @@ private:
             << std::endl;
 
         return true;
+    }
+    const ManufacturingPass* findFirstInsertAtArcLengthPass() const
+    {
+        for (const auto& pass : plan.passes)
+        {
+            if (!pass.enabled)
+                continue;
+
+            if (pass.placement.mode
+                == PassPlacementMode::InsertAtArcLength)
+            {
+                return &pass;
+            }
+        }
+
+        return nullptr;
     }
 };

@@ -1134,3 +1134,19 @@ ManufacturingPlanPreviewModel::build()
     becomes smaller
 
 Insertion preview logic moves into helper functions.
+============================================================
+Phase 7T — Remove old composed insertion from preview path
+PlannedShapePreview should not rely on:
+    plan.buildCombinedCurve()
+for InsertAtArcLength preview nodes
+Why:
+buildCombinedCurve() still inserts the pass in curve-segment form.
+Then preview-node rebuild overrides it.
+
+This works, but is confusing.
+next clean up
+If plan contains InsertAtArcLength:
+    build preview directly from transformed-node path
+
+Else:
+    use normal combined curve sampling
