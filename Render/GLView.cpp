@@ -580,23 +580,23 @@ void GLView::paintGL()
     // 
     // 
     // 
-    std::cout << "[GLView] mode=";
+   // std::cout << "[GLView] mode=";
 
     if (mode == SimulationController::SimulationMode::CADPreview)
     {
-        std::cout << "CADPreview";
+  //      std::cout << "CADPreview";
     }
     else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
     {
-        std::cout << "PlannedShapePreview";
+    //    std::cout << "PlannedShapePreview";
     }
     else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
     {
-        std::cout << "ManufacturingPlayback";
+   //     std::cout << "ManufacturingPlayback";
     }
     else
     {
-        std::cout << "Unknown";
+    //    std::cout << "Unknown";
     }
 
     std::cout << std::endl;
@@ -614,9 +614,9 @@ void GLView::paintGL()
 
         const auto& cadNodes =
             cadPipe.getNodes();
-        std::cout << "[GLView CADPreview] nodes="
-            << cadNodes.size()
-            << std::endl;
+       // std::cout << "[GLView CADPreview] nodes="
+        //    << cadNodes.size()
+        //    << std::endl;
         pipeRenderer.setMode(renderMode);
 
         if (renderMode == RenderMode::LINE)
@@ -641,11 +641,11 @@ void GLView::paintGL()
             app->getManufacturingPlanPreview();
 
         const auto& previewNodes =
-            preview.getNodes();
+           preview.getNodes();
 
-        std::cout << "[GLView PLAN PREVIEW] nodes="
-            << previewNodes.size()
-            << std::endl;
+        //std::cout << "[GLView PLAN PREVIEW] nodes="
+         //   << previewNodes.size()
+          //  << std::endl;
 
         pipeRenderer.setMode(renderMode);
 
