@@ -1124,3 +1124,13 @@ Not:
 
 combined curve with old helix already inserted 
 
+======================================
+Phase 7S — Clean preview insertion code
+Goal:
+Move the node-rebuild logic out of build()
+into a helper function.
+
+ManufacturingPlanPreviewModel::build()
+    becomes smaller
+
+Insertion preview logic moves into helper functions.

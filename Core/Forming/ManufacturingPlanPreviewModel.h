@@ -181,25 +181,12 @@ private:
 
     void build() const
     {
-
-        // =====================================================
-   // Reset cached debug/overlay data for this build.
-   // =====================================================
-
         hasInsertionMarker = false;
         hasInsertionFrame = false;
         hasResolvedInsertionFrame = false;
         usingTransformedPreviewNodes = false;
-        transformedInsertedNodes.clear();  
-        // =====================================================
-        // MULTI-PASS PREVIEW BUILD
-        //
-        // Important:
-        // The ManufacturingPlan already contains output curves
-        // from each pass.
-        //
-        // We only compose and sample them here.
-        // =====================================================
+
+        transformedInsertedNodes.clear();
 
         curve =
             plan.buildCombinedCurve();
@@ -217,239 +204,26 @@ private:
             << " nodes="
             << nodes.size()
             << std::endl;
-        // =====================================================
-// DEBUG INSERTION MARKER
-//
-// Finds first pass using InsertAtArcLength and stores
-// nearest sampled node as marker.
-//
-// This is visual/debug only.
-// =====================================================
-
-        hasInsertionMarker = false;
 
         for (const auto& pass : plan.passes)
         {
+            if (!pass.enabled)
+                continue;
+
             if (pass.placement.mode
                 != PassPlacementMode::InsertAtArcLength)
             {
                 continue;
             }
 
-            double targetS =
-                pass.placement.arcLength;
-
-            double accumulated =
-                0.0;
-
-            if (!nodes.empty())
-            {
-                insertionMarkerNode =
-                    nodes.front();
-
-                double bestError =
-                    std::numeric_limits<double>::max();
-
-                for (size_t i = 1; i < nodes.size(); ++i)
-                {
-                    double step =
-                        (nodes[i].pos - nodes[i - 1].pos).length();
-
-                    accumulated += step;
-
-                    double error =
-                        std::abs(accumulated - targetS);
-
-                    if (error < bestError)
-                    {
-                        bestError = error;
-                        insertionMarkerNode = nodes[i];
-                        hasInsertionMarker = true;
-                    }
-                }
-            }
+            applyTransformedInsertionPreview(
+                pass
+            );
 
             break;
         }
-        // =====================================================
-// DEBUG / FUTURE INSERTION START FRAME
-//
-// For the first InsertAtArcLength pass, query the frame
-// at the requested insertion arc length.
-//
-// This frame will later be used to orient inserted curves,
-// for example:
-//     helix starts from selected pipe frame.
-// =====================================================
 
-        hasInsertionFrame = false;
-
-        for (const auto& pass : plan.passes)
-        {
-            if (pass.placement.mode
-                != PassPlacementMode::InsertAtArcLength)
-            {
-                continue;
-            }
-
-            // =====================================================
-            // Build base curve from passes BEFORE inserted pass.
-            //
-            // Important:
-            // The base curve does not contain the inserted pass.
-            // Therefore frame query and split happen on the real
-            // target curve, not on the already-composed preview curve.
-            // =====================================================
-
-            PipeCurve baseCurve;
-
-            for (const auto& basePass : plan.passes)
-            {
-                if (&basePass == &pass)
-                    break;
-
-                if (!basePass.enabled)
-                    continue;
-
-                baseCurve.appendCurve(
-                    basePass.outputCurve
-                );
-            }
-
-            auto baseNodes =
-                PipeCurveSampler::sample(
-                    baseCurve,
-                    ds
-                );
-
-            auto frameQuery =
-                PipeCurveSampleQuery::findFrameAtArcLength(
-                    baseNodes,
-                    pass.placement.arcLength
-                );
-
-            if (frameQuery.valid)
-            {
-                insertionFrame =
-                    frameQuery.frame;
-
-                hasInsertionFrame =
-                    true;
-
-                resolvedInsertionFrame =
-                    frameQuery.frame;
-
-                hasResolvedInsertionFrame =
-                    true;
-
-                auto localInsertedNodes =
-                    PipeCurveSampler::sample(
-                        pass.outputCurve,
-                        ds
-                    );
-
-                transformedInsertedNodes =
-                    PipeCurveTransform::transformNodesToFrame(
-                        localInsertedNodes,
-                        frameQuery.frame
-                    );
-
-                PipeCurveSplitResult split =
-                    baseCurve.splitAtArcLength(
-                        pass.placement.arcLength
-                    );
-
-                if (split.valid)
-                {
-                    auto beforeNodes =
-                        PipeCurveSampler::sample(
-                            split.before,
-                            ds
-                        );
-
-                    auto localAfterNodes =
-    PipeCurveSampler::sample(
-        split.after,
-        ds
-    );
-
-std::vector<PipeNode> afterNodes;
-
-if (!transformedInsertedNodes.empty())
-{
-    Frame insertedEndFrame =
-        frameFromNode(
-            transformedInsertedNodes.back()
-        );
-
-    afterNodes =
-        PipeCurveTransform::transformNodesToFrame(
-            localAfterNodes,
-            insertedEndFrame
-        );
-}
-else
-{
-    afterNodes =
-        localAfterNodes;
-}
-
-                    std::vector<PipeNode> rebuiltNodes;
-
-                    appendNodesSkippingFirst(
-                        rebuiltNodes,
-                        beforeNodes
-                    );
-
-                    appendNodesSkippingFirst(
-                        rebuiltNodes,
-                        transformedInsertedNodes
-                    );
-
-                    appendNodesSkippingFirst(
-                        rebuiltNodes,
-                        afterNodes
-                    );
-
-                    if (!rebuiltNodes.empty())
-                    {
-                        nodes =
-                            rebuiltNodes;
-
-                        usingTransformedPreviewNodes =
-                            true;
-
-                        std::cout << "[PLAN PREVIEW NODE REBUILD] beforeNodes="
-                            << beforeNodes.size()
-                            << " insertedNodes="
-                            << transformedInsertedNodes.size()
-                            << " afterNodes="
-                            << afterNodes.size()
-                            << " finalNodes="
-                            << nodes.size()
-                            << std::endl;
-                    }
-                }
-
-                std::cout << "[PLAN PREVIEW RESOLVED FRAME] arcLength="
-                    << pass.placement.arcLength
-                    << " P=("
-                    << resolvedInsertionFrame.P.x << ", "
-                    << resolvedInsertionFrame.P.y << ", "
-                    << resolvedInsertionFrame.P.z << ")"
-                    << std::endl;
-
-                std::cout << "[PLAN PREVIEW TRANSFORMED INSERT] localNodes="
-                    << localInsertedNodes.size()
-                    << " transformedNodes="
-                    << transformedInsertedNodes.size()
-                    << std::endl;
-            }
-
-            break;
-        }  
-        dirty =
-            false;
+        dirty = false;
     }
     // Helper Reason:
     //When joining curves, first node of next section often duplicates
@@ -485,5 +259,199 @@ else
         f.B = node.B;
 
         return f;
+    }
+
+    PipeCurve buildBaseCurveBeforePass(
+        const ManufacturingPass& targetPass) const
+    {
+        PipeCurve baseCurve;
+
+        for (const auto& pass : plan.passes)
+        {
+            if (&pass == &targetPass)
+                break;
+
+            if (!pass.enabled)
+                continue;
+
+            baseCurve.appendCurve(
+                pass.outputCurve
+            );
+        }
+
+        return baseCurve;
+    }
+
+   
+
+    bool applyTransformedInsertionPreview(
+        const ManufacturingPass& pass) const
+    {
+        // =====================================================
+        // TRANSFORMED INSERTION PREVIEW
+        //
+        // Builds preview nodes as:
+        //
+        // base before insertion
+        //      +
+        // transformed inserted pass
+        //      +
+        // base after insertion
+        //
+        // This is preview-node composition only.
+        // It does not modify the underlying PipeCurve model.
+        // =====================================================
+
+        PipeCurve baseCurve =
+            buildBaseCurveBeforePass(
+                pass
+            );
+
+        auto baseNodes =
+            PipeCurveSampler::sample(
+                baseCurve,
+                ds
+            );
+
+        auto frameQuery =
+            PipeCurveSampleQuery::findFrameAtArcLength(
+                baseNodes,
+                pass.placement.arcLength
+            );
+
+        if (!frameQuery.valid)
+            return false;
+
+        insertionFrame =
+            frameQuery.frame;
+
+        hasInsertionFrame =
+            true;
+
+        resolvedInsertionFrame =
+            frameQuery.frame;
+
+        hasResolvedInsertionFrame =
+            true;
+
+        insertionMarkerNode.pos =
+            frameQuery.frame.P;
+
+        insertionMarkerNode.T =
+            frameQuery.frame.T;
+
+        insertionMarkerNode.N =
+            frameQuery.frame.N;
+
+        insertionMarkerNode.B =
+            frameQuery.frame.B;
+
+        hasInsertionMarker =
+            true;
+
+        auto localInsertedNodes =
+            PipeCurveSampler::sample(
+                pass.outputCurve,
+                ds
+            );
+
+        transformedInsertedNodes =
+            PipeCurveTransform::transformNodesToFrame(
+                localInsertedNodes,
+                frameQuery.frame
+            );
+
+        PipeCurveSplitResult split =
+            baseCurve.splitAtArcLength(
+                pass.placement.arcLength
+            );
+
+        if (!split.valid)
+            return false;
+
+        auto beforeNodes =
+            PipeCurveSampler::sample(
+                split.before,
+                ds
+            );
+
+        auto localAfterNodes =
+            PipeCurveSampler::sample(
+                split.after,
+                ds
+            );
+
+        std::vector<PipeNode> afterNodes;
+
+        if (!transformedInsertedNodes.empty())
+        {
+            Frame insertedEndFrame =
+                frameFromNode(
+                    transformedInsertedNodes.back()
+                );
+
+            afterNodes =
+                PipeCurveTransform::transformNodesToFrame(
+                    localAfterNodes,
+                    insertedEndFrame
+                );
+        }
+        else
+        {
+            afterNodes =
+                localAfterNodes;
+        }
+
+        std::vector<PipeNode> rebuiltNodes;
+
+        appendNodesSkippingFirst(
+            rebuiltNodes,
+            beforeNodes
+        );
+
+        appendNodesSkippingFirst(
+            rebuiltNodes,
+            transformedInsertedNodes
+        );
+
+        appendNodesSkippingFirst(
+            rebuiltNodes,
+            afterNodes
+        );
+
+        if (rebuiltNodes.empty())
+            return false;
+
+        nodes =
+            rebuiltNodes;
+
+        usingTransformedPreviewNodes =
+            true;
+
+        std::cout << "[PLAN PREVIEW NODE REBUILD] beforeNodes="
+            << beforeNodes.size()
+            << " insertedNodes="
+            << transformedInsertedNodes.size()
+            << " afterNodes="
+            << afterNodes.size()
+            << " finalNodes="
+            << nodes.size()
+            << std::endl;
+
+        std::cout << "[PLAN PREVIEW RESOLVED FRAME] arcLength="
+            << pass.placement.arcLength
+            << " P=("
+            << resolvedInsertionFrame.P.x << ", "
+            << resolvedInsertionFrame.P.y << ", "
+            << resolvedInsertionFrame.P.z << ")"
+            << std::endl;
+
+        std::cout << "[PLAN PREVIEW TRANSFORMED INSERT] localNodes="
+            << localInsertedNodes.size()
+            << " transformedNodes="
+            << transformedInsertedNodes.size()
+            << std::endl;
+
+        return true;
     }
 };
