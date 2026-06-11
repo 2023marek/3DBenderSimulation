@@ -1086,3 +1086,41 @@ PipeCurve segment model unchanged
 
 ============================================================
 
+
+So you are rebuilding from the already-composed curve:
+
+Line + old helix + rest
+
+Then you add:
+
+transformed helix
+
+Result:
+
+transformed helix at marker
++
+old default helix near origin / wrong frame
+
+That is why you see two helixes.
+
+Correct rule
+
+For transformed preview we must split the base curve before insertion, not the already-composed curve.
+
+Correct structure:
+
+base curve = rotary pass only
+
+split base curve at s
+
+preview nodes =
+    base before
+    +
+    transformed inserted helix
+    +
+    base after
+
+Not:
+
+combined curve with old helix already inserted 
+

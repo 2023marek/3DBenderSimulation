@@ -177,6 +177,8 @@ private:
         build();
     }
 
+    //======================================
+
     void build() const
     {
 
@@ -187,6 +189,7 @@ private:
         hasInsertionMarker = false;
         hasInsertionFrame = false;
         hasResolvedInsertionFrame = false;
+        usingTransformedPreviewNodes = false;
         transformedInsertedNodes.clear();  
         // =====================================================
         // MULTI-PASS PREVIEW BUILD
@@ -289,11 +292,39 @@ private:
                 continue;
             }
 
+            // =====================================================
+            // Build base curve from passes BEFORE inserted pass.
+            //
+            // Important:
+            // The base curve does not contain the inserted pass.
+            // Therefore frame query and split happen on the real
+            // target curve, not on the already-composed preview curve.
+            // =====================================================
 
+            PipeCurve baseCurve;
+
+            for (const auto& basePass : plan.passes)
+            {
+                if (&basePass == &pass)
+                    break;
+
+                if (!basePass.enabled)
+                    continue;
+
+                baseCurve.appendCurve(
+                    basePass.outputCurve
+                );
+            }
+
+            auto baseNodes =
+                PipeCurveSampler::sample(
+                    baseCurve,
+                    ds
+                );
 
             auto frameQuery =
                 PipeCurveSampleQuery::findFrameAtArcLength(
-                    nodes,
+                    baseNodes,
                     pass.placement.arcLength
                 );
 
@@ -310,6 +341,7 @@ private:
 
                 hasResolvedInsertionFrame =
                     true;
+
                 auto localInsertedNodes =
                     PipeCurveSampler::sample(
                         pass.outputCurve,
@@ -321,6 +353,83 @@ private:
                         localInsertedNodes,
                         frameQuery.frame
                     );
+
+                PipeCurveSplitResult split =
+                    baseCurve.splitAtArcLength(
+                        pass.placement.arcLength
+                    );
+
+                if (split.valid)
+                {
+                    auto beforeNodes =
+                        PipeCurveSampler::sample(
+                            split.before,
+                            ds
+                        );
+
+                    auto localAfterNodes =
+    PipeCurveSampler::sample(
+        split.after,
+        ds
+    );
+
+std::vector<PipeNode> afterNodes;
+
+if (!transformedInsertedNodes.empty())
+{
+    Frame insertedEndFrame =
+        frameFromNode(
+            transformedInsertedNodes.back()
+        );
+
+    afterNodes =
+        PipeCurveTransform::transformNodesToFrame(
+            localAfterNodes,
+            insertedEndFrame
+        );
+}
+else
+{
+    afterNodes =
+        localAfterNodes;
+}
+
+                    std::vector<PipeNode> rebuiltNodes;
+
+                    appendNodesSkippingFirst(
+                        rebuiltNodes,
+                        beforeNodes
+                    );
+
+                    appendNodesSkippingFirst(
+                        rebuiltNodes,
+                        transformedInsertedNodes
+                    );
+
+                    appendNodesSkippingFirst(
+                        rebuiltNodes,
+                        afterNodes
+                    );
+
+                    if (!rebuiltNodes.empty())
+                    {
+                        nodes =
+                            rebuiltNodes;
+
+                        usingTransformedPreviewNodes =
+                            true;
+
+                        std::cout << "[PLAN PREVIEW NODE REBUILD] beforeNodes="
+                            << beforeNodes.size()
+                            << " insertedNodes="
+                            << transformedInsertedNodes.size()
+                            << " afterNodes="
+                            << afterNodes.size()
+                            << " finalNodes="
+                            << nodes.size()
+                            << std::endl;
+                    }
+                }
 
                 std::cout << "[PLAN PREVIEW RESOLVED FRAME] arcLength="
                     << pass.placement.arcLength
@@ -335,13 +444,46 @@ private:
                     << " transformedNodes="
                     << transformedInsertedNodes.size()
                     << std::endl;
-
-
             }
-           
+
             break;
-        }
+        }  
         dirty =
             false;
+    }
+    // Helper Reason:
+    //When joining curves, first node of next section often duplicates
+    //the last node of previous section.
+
+
+    static void appendNodesSkippingFirst(
+        std::vector<PipeNode>& target,
+        const std::vector<PipeNode>& source)
+    {
+        if (source.empty())
+            return;
+
+        size_t startIndex =
+            target.empty() ? 0 : 1;
+
+        for (size_t i = startIndex; i < source.size(); ++i)
+        {
+            target.push_back(
+                source[i]
+            );
+        }
+    }
+
+    static Frame frameFromNode(
+        const PipeNode& node)
+    {
+        Frame f;
+
+        f.P = node.pos;
+        f.T = node.T;
+        f.N = node.N;
+        f.B = node.B;
+
+        return f;
     }
 };
