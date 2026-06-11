@@ -1150,3 +1150,14 @@ If plan contains InsertAtArcLength:
 
 Else:
     use normal combined curve sampling
+    ===============================================
+    Phase 7U — Clean temporary debug tests from
+    Remove old phase test code from constructor
+or move it behind a debug flag.
+ops
+sim.loadProgram(ops)
+rotaryPass
+helixPass
+multiPassPlan
+sim.getManufacturingPlanPreview().setPlan(...)
+sim.setMode(...)

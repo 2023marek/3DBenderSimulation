@@ -4,27 +4,24 @@
 
 #include "AppController.h"
 
-#include "Core/Curve/PipeCurve.h"
-#include "Core/Curve/PipeCurveSegment.h"
-#include "Core/Sampling/PipeCurveSampler.h"
 #include "Core/Forming/ManufacturingPass.h"
 #include "Core/Forming/ManufacturingPlan.h"
 #include "Core/Forming/HelixOperation.h"
-#include "Core/Forming/HelixCurveBuilder.h"
 #include "Core/Forming/HelixFormingPassBuilder.h"
-#include "Core/Forming/ManufacturingPlanPreviewModel.h"
 #include "Core/Forming/RotaryDrawPassBuilder.h"
-#include "Core/Sampling/PipeCurveSampleQuery.h"
-#include "Core/Curve/PipeCurveTransform.h"
 
 // =====================================
 // CONSTRUCTOR
 // =====================================
 AppController::AppController()
 {
-    sim.getManufacturingPipe().setIncomingStockLength(
-        500.0
-    );
+    // =====================================================
+    // TEST PROGRAM
+    //
+    // Classic rotary draw bending operation queue.
+    // Used by ManufacturingPlayback.
+    // =====================================================
+
     std::vector<Operation> ops;
 
     Operation op1;
@@ -51,19 +48,25 @@ AppController::AppController()
     ops.push_back(op3);
     ops.push_back(op4);
 
-    // =====================================================
-    // Load classic rotary draw operation queue.
-    //
-    // This is used by ManufacturingPlayback.
-    // =====================================================
+    sim.loadProgram(
+        ops
+    );
 
-    sim.loadProgram(ops);
+    sim.getManufacturingPipe().setIncomingStockLength(
+        300.0
+    );
 
     // =====================================================
-    // Build rotary draw pass from operation list.
+    // PLANNED SHAPE PREVIEW PROGRAM
     //
-    // This creates the ideal curve representation of
-    // the same FEED / BEND / ROTATE / FEED program.
+    // Pass 1:
+    //     rotary draw bending pass generated from ops.
+    //
+    // Pass 2:
+    //     helix forming pass inserted at arc length.
+    //
+    // This preview is CAD-like final planned shape.
+    // It is separate from ManufacturingPlayback.
     // =====================================================
 
     ManufacturingPass rotaryPass =
@@ -71,22 +74,6 @@ AppController::AppController()
             ops,
             "Rotary draw bending pass"
         );
-
-    std::cout << "[ROTARY PASS TEST] ops="
-        << rotaryPass.operations.size()
-        << " curveSegments="
-        << rotaryPass.outputCurve.size()
-        << " completed="
-        << rotaryPass.completed
-        << std::endl;
-
-    // =====================================================
-    // Build helix forming pass.
-    //
-    // Current scope:
-    // geometric helix + machine kinematics metadata.
-    // No springback/material physics yet.
-    // =====================================================
 
     HelixOperation helixPassOp;
 
@@ -104,141 +91,12 @@ AppController::AppController()
             "Heating element helix pass"
         );
 
-    // =====================================================
-    // Placement metadata.
-    //
-    // Phase 7O-1:
-    // We only test locating arc length.
-    // InsertAtArcLength is not applied yet.
-    //
-    // Phase 7O later:
-    // This will control where the helix is inserted.
-    // =====================================================
-
     helixPass.placement =
         PassPlacement::atArcLength(
             202.0
         );
 
-    std::cout << "[PLACEMENT TEST] mode="
-        << static_cast<int>(
-            helixPass.placement.mode
-            )
-        << " arcLength="
-        << helixPass.placement.arcLength
-        << std::endl;
-
-    // =====================================================
-    // Build multi-pass plan.
-    //
-    // Current composition still appends curves.
-    // InsertAtArcLength is stored as metadata only for now.
-    // =====================================================
-
-   
-
-    PipeCurve rotaryCurve =
-        rotaryPass.outputCurve;
-
-    PipeCurveLocation loc =
-        rotaryCurve.locateArcLength(
-            202.0
-        );
-
-    std::cout << "[ROTARY CURVE LOCATION TEST] valid="
-        << loc.valid
-        << " segmentIndex="
-        << loc.segmentIndex
-        << " globalS="
-        << loc.globalS
-        << " localS="
-        << loc.localS
-        << " segmentStart="
-        << loc.segmentStartS
-        << " segmentEnd="
-        << loc.segmentEndS
-        << std::endl;
-
-    PipeCurveSplitResult split =
-        rotaryCurve.splitAtArcLength(
-            202.0
-        );
-
-    std::cout << "[ROTARY CURVE SPLIT TEST] valid="
-        << split.valid
-        << " beforeSegments="
-        << split.before.size()
-        << " beforeLength="
-        << split.before.totalLength()
-        << " afterSegments="
-        << split.after.size()
-        << " afterLength="
-        << split.after.totalLength()
-        << std::endl;
-
-    auto rotaryNodes =
-        PipeCurveSampler::sample(
-            rotaryCurve,
-            0.5
-        );
-
-    auto frameQuery =
-        PipeCurveSampleQuery::findFrameAtArcLength(
-            rotaryNodes,
-            202.0
-        );
-
-    std::cout << "[FRAME QUERY TEST] valid="
-        << frameQuery.valid
-        << " targetS="
-        << frameQuery.targetS
-        << " nearestS="
-        << frameQuery.nearestS
-        << " error="
-        << frameQuery.error
-        << " nodeIndex="
-        << frameQuery.nodeIndex
-        << " P=("
-        << frameQuery.frame.P.x << ", "
-        << frameQuery.frame.P.y << ", "
-        << frameQuery.frame.P.z << ")"
-        << std::endl;
-
-    PipeCurve helixOnlyCurve;
-    helixOnlyCurve.addSegment(
-        helixPass.outputCurve.segments.front()
-    );
-
-    auto helixLocalNodes =
-        PipeCurveSampler::sample(
-            helixOnlyCurve,
-            0.5
-        );
-
-    auto helixTransformedNodes =
-        PipeCurveTransform::transformNodesToFrame(
-            helixLocalNodes,
-            frameQuery.frame
-        );
-
-    if (!helixTransformedNodes.empty())
-    {
-        const auto& first =
-            helixTransformedNodes.front();
-
-        std::cout << "[TRANSFORM TEST] localNodes="
-            << helixLocalNodes.size()
-            << " transformedNodes="
-            << helixTransformedNodes.size()
-            << " firstP=("
-            << first.pos.x << ", "
-            << first.pos.y << ", "
-            << first.pos.z << ")"
-            << std::endl;
-    }
-
-
- ManufacturingPlan multiPassPlan;
+    ManufacturingPlan multiPassPlan;
 
     multiPassPlan.addPass(
         rotaryPass
@@ -248,59 +106,37 @@ AppController::AppController()
         helixPass
     );
 
-
-
-    // =====================================================
-    // Phase 7O-1 curve-location test.
-    //
-    // Locate global arc length s = 80 mm inside the
-    // composed curve.
-    //
-    // Expected:
-    // s=80 is inside first FEED segment:
-    // segmentIndex=0, localS=80, segmentStart=0, segmentEnd=120.
-    // =====================================================
-
-    PipeCurve combinedCurve =
-        multiPassPlan.buildCombinedCurve();
-
-    // =====================================================
-    // Store complete multi-pass plan in the simulation.
-    //
-    // PlannedShapePreview renders this final composed shape.
-    // ManufacturingPlayback ignores the helix pass for now
-    // and uses only the operation queue.
-    // =====================================================
-
     sim.getManufacturingPlanPreview().setPlan(
         multiPassPlan
     );
 
     // =====================================================
-    // Choose active mode.
+    // ACTIVE MODE
     //
-    // ManufacturingPlayback:
-    //      process simulation with incoming stock,
-    //      positioned straight, active zone, frozen geometry.
+    // Use one:
+    //
+    // CADPreview:
+    //     ideal CAD from operation list.
     //
     // PlannedShapePreview:
-    //      final composed curve preview:
-    //      rotary pass + helix pass.
+    //     final multi-pass planned shape.
+    //
+    // ManufacturingPlayback:
+    //     real four-zone process simulation.
     // =====================================================
 
-   //sim.setMode(
-  //   SimulationController::SimulationMode::ManufacturingPlayback
-   //);
-
-     sim.setMode(
+    sim.setMode(
         SimulationController::SimulationMode::PlannedShapePreview
-   );
+    );
 
     // sim.setMode(
-  //     SimulationController::SimulationMode::CADPreview
+    //     SimulationController::SimulationMode::ManufacturingPlayback
+    // );
+
+    // sim.setMode(
+    //     SimulationController::SimulationMode::CADPreview
     // );
 }
-
 
 
 void AppController::update(double dt)
