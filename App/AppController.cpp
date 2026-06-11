@@ -15,6 +15,7 @@
 #include "Core/Forming/ManufacturingPlanPreviewModel.h"
 #include "Core/Forming/RotaryDrawPassBuilder.h"
 #include "Core/Sampling/PipeCurveSampleQuery.h"
+#include "Core/Curve/PipeCurveTransform.h"
 
 // =====================================
 // CONSTRUCTOR
@@ -202,6 +203,40 @@ AppController::AppController()
         << frameQuery.frame.P.y << ", "
         << frameQuery.frame.P.z << ")"
         << std::endl;
+
+    PipeCurve helixOnlyCurve;
+    helixOnlyCurve.addSegment(
+        helixPass.outputCurve.segments.front()
+    );
+
+    auto helixLocalNodes =
+        PipeCurveSampler::sample(
+            helixOnlyCurve,
+            0.5
+        );
+
+    auto helixTransformedNodes =
+        PipeCurveTransform::transformNodesToFrame(
+            helixLocalNodes,
+            frameQuery.frame
+        );
+
+    if (!helixTransformedNodes.empty())
+    {
+        const auto& first =
+            helixTransformedNodes.front();
+
+        std::cout << "[TRANSFORM TEST] localNodes="
+            << helixLocalNodes.size()
+            << " transformedNodes="
+            << helixTransformedNodes.size()
+            << " firstP=("
+            << first.pos.x << ", "
+            << first.pos.y << ", "
+            << first.pos.z << ")"
+            << std::endl;
+    }
+
 
  ManufacturingPlan multiPassPlan;
 

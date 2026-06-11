@@ -79,8 +79,9 @@ set(CORE_HEADERS
     Core/Math/Vec3D.h
     Core/Assets/AssetPathResolver.h
     Core/BendDirection.h
-    Core/Curve/PipeCurveSegment.h
     Core/Curve/PipeCurve.h
+    Core/Curve/PipeCurveSegment.h
+    Core/Curve/PipeCurveTransform.h
     Core/RotationDirection.h
     Core/Forming/TubeFormingProcessType.h
     Core/Forming/FormingOperation.h

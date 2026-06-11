@@ -715,6 +715,52 @@ void GLView::paintGL()
                 glm::vec3(0.2f, 0.9f, 0.3f)
             );
         }
+        const auto& transformedInsert =
+            preview.getTransformedInsertedNodes();
+
+        if (!transformedInsert.empty())
+        {
+            shader->setVec3(
+                "pipeColor",
+                glm::vec3(1.0f, 0.4f, 0.9f)
+            );
+
+            if (renderMode == RenderMode::LINE)
+            {
+                pipeRenderer.setMode(
+                    RenderMode::LINE
+                );
+
+                pipeRenderer.uploadLine(
+                    nodesToFloatLine(
+                        transformedInsert
+                    )
+                );
+
+                glLineWidth(
+                    4.0f
+                );
+
+                pipeRenderer.draw();
+            }
+            else if (renderMode == RenderMode::MESH)
+            {
+                drawTubeZone(
+                    transformedInsert,
+                    5.5,
+                    12
+                );
+            }
+
+            pipeRenderer.setMode(
+                renderMode
+            );
+
+            shader->setVec3(
+                "pipeColor",
+                glm::vec3(0.2f, 0.9f, 0.3f)
+            );
+        }
     }
 
 

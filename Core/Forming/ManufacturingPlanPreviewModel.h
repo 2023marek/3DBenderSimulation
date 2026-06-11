@@ -6,9 +6,10 @@
 #include <cmath>
 
 #include "Core/Forming/ManufacturingPlan.h"
-#include "Core/Sampling/PipeCurveSampler.h"
 #include "Core/Geometry/PipeNode.h"
+#include "Core/Sampling/PipeCurveSampler.h"
 #include "Core/Sampling/PipeCurveSampleQuery.h"
+#include "Core/Curve/PipeCurveTransform.h"
 
 // =====================================================
 // MANUFACTURING PLAN PREVIEW MODEL
@@ -55,6 +56,8 @@ public:
         hasInsertionMarker = false;
         hasInsertionFrame = false;
         hasResolvedInsertionFrame = false;
+        transformedInsertedNodes.clear();
+        usingTransformedPreviewNodes = false;
         dirty = true;
     }
 
@@ -135,6 +138,18 @@ public:
         return resolvedInsertionFrame;
     }
 
+    const std::vector<PipeNode>& getTransformedInsertedNodes() const
+    {
+        buildIfDirty();
+        return transformedInsertedNodes;
+    }
+
+    bool isUsingTransformedPreviewNodes() const
+    {
+        buildIfDirty();
+        return usingTransformedPreviewNodes;
+    }
+
 private:
     double ds = 0.5;
 
@@ -150,6 +165,8 @@ private:
     mutable Frame insertionFrame;
     mutable bool hasResolvedInsertionFrame = false;
     mutable Frame resolvedInsertionFrame;
+    mutable std::vector<PipeNode> transformedInsertedNodes;
+    mutable bool usingTransformedPreviewNodes = false;
 
 private:
     void buildIfDirty() const
@@ -162,6 +179,15 @@ private:
 
     void build() const
     {
+
+        // =====================================================
+   // Reset cached debug/overlay data for this build.
+   // =====================================================
+
+        hasInsertionMarker = false;
+        hasInsertionFrame = false;
+        hasResolvedInsertionFrame = false;
+        transformedInsertedNodes.clear();  
         // =====================================================
         // MULTI-PASS PREVIEW BUILD
         //
@@ -263,6 +289,8 @@ private:
                 continue;
             }
 
+
+
             auto frameQuery =
                 PipeCurveSampleQuery::findFrameAtArcLength(
                     nodes,
@@ -282,6 +310,17 @@ private:
 
                 hasResolvedInsertionFrame =
                     true;
+                auto localInsertedNodes =
+                    PipeCurveSampler::sample(
+                        pass.outputCurve,
+                        ds
+                    );
+
+                transformedInsertedNodes =
+                    PipeCurveTransform::transformNodesToFrame(
+                        localInsertedNodes,
+                        frameQuery.frame
+                    );
 
                 std::cout << "[PLAN PREVIEW RESOLVED FRAME] arcLength="
                     << pass.placement.arcLength
@@ -290,8 +329,16 @@ private:
                     << resolvedInsertionFrame.P.y << ", "
                     << resolvedInsertionFrame.P.z << ")"
                     << std::endl;
-            }
 
+                std::cout << "[PLAN PREVIEW TRANSFORMED INSERT] localNodes="
+                    << localInsertedNodes.size()
+                    << " transformedNodes="
+                    << transformedInsertedNodes.size()
+                    << std::endl;
+
+
+            }
+           
             break;
         }
         dirty =

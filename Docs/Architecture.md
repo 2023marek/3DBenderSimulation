@@ -1002,3 +1002,87 @@ Insertion pass can store its resolved start frame:
 
 No curve transform yet.
 No visual change expected.
+============================================================
+Phase 7R — Transform inserted curve to resolved frame
+
+Goal:
+
+Inserted helix curve should start from resolved insertion frame:
+    P, T, N, B
+
+Careful small step:
+
+7R-1:
+    add PipeCurveTransform helper
+    transform sampled nodes first for visual validation
+
+7R-2:
+    later transform PipeCurveSegment start frame / curve itself
+
+    ============================================================
+    Phase 7R-2 — Visualize transformed inserted helix overlay
+
+Goal:
+
+Draw transformed inserted helix as a debug overlay.
+
+This proves:
+    local helix
+        ?
+    transformed into insertion frame
+        ?
+    visually follows selected T/N/B orientation
+    ====
+    Yes. Phase 7R-2 complete.
+
+Confirmed:
+
+[PLAN PREVIEW TRANSFORMED INSERT] localNodes=401 transformedNodes=401
+
+and visually:
+
+1. composed helix visible
+2. transformed overlay helix visible
+
+Suggested commit:
+
+git commit -m "Visualize transformed inserted curve overlay"
+
+Next phase:
+
+Phase 7R-3 — Replace composed inserted curve with transformed sampled preview
+
+Goal:
+
+For PlannedShapePreview only:
+    before curve nodes
+    +
+    transformed inserted helix nodes
+    +
+    after curve nodes
+
+This means the preview will show the correct frame-aligned inserted helix, instead of the old default-frame inserted helix.
+
+Important:
+
+This will still be preview-node composition.
+It will not yet transform PipeCurveSegment analytically.
+ManufacturingPlayback unchanged.
+============================================================     
+Phase 7R-3 — Replace composed inserted curve with transformed sampled preview
+
+Goal:
+
+PlannedShapePreview nodes =
+    before insertion nodes
+    + transformed inserted helix nodes
+    + after insertion nodes
+
+This is still preview-only.
+
+ManufacturingPlayback unchanged
+CADPreview unchanged
+PipeCurve segment model unchanged
+
+============================================================
+
