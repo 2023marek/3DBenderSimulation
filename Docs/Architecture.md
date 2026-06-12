@@ -1161,3 +1161,9 @@ helixPass
 multiPassPlan
 sim.getManufacturingPlanPreview().setPlan(...)
 sim.setMode(...)
+==============================================================
+Phase 7W — Add preview debug flags
+
+Preview logs become optional.
+Default can stay ON for now.
+Later you can switch them OFF.

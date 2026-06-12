@@ -150,6 +150,19 @@ public:
         return usingTransformedPreviewNodes;
     }
 
+    //FLAG
+    //flag setter
+    void setDebugLogging(
+        bool enabled)
+    {
+        debugLogging = enabled;
+    }
+//flag getter
+    bool isDebugLoggingEnabled() const
+    {
+        return debugLogging;
+    }
+
 private:
     double ds = 0.5;
 
@@ -167,6 +180,7 @@ private:
     mutable Frame resolvedInsertionFrame;
     mutable std::vector<PipeNode> transformedInsertedNodes;
     mutable bool usingTransformedPreviewNodes = false;
+    bool debugLogging = true;
 
 private:
     void buildIfDirty() const
@@ -219,17 +233,18 @@ private:
                     ds
                 );
         }
-
-        std::cout << "[PLAN PREVIEW BUILD] passes="
-            << plan.size()
-            << " curveSegments="
-            << curve.size()
-            << " nodes="
-            << nodes.size()
-            << " transformedPreview="
-            << usingTransformedPreviewNodes
-            << std::endl;
-
+        if (debugLogging)
+        {
+            std::cout << "[PLAN PREVIEW BUILD] passes="
+                << plan.size()
+                << " curveSegments="
+                << curve.size()
+                << " nodes="
+                << nodes.size()
+                << " transformedPreview="
+                << usingTransformedPreviewNodes
+                << std::endl;
+        }
         dirty = false;
     }
 
@@ -438,31 +453,34 @@ private:
 
         usingTransformedPreviewNodes =
             true;
+        if (debugLogging)
+        {
+            std::cout << "[PLAN PREVIEW NODE REBUILD] beforeNodes="
+                << beforeNodes.size()
+                << " insertedNodes="
+                << transformedInsertedNodes.size()
+                << " afterNodes="
+                << afterNodes.size()
+                << " finalNodes="
+                << nodes.size()
+                << std::endl;
 
-        std::cout << "[PLAN PREVIEW NODE REBUILD] beforeNodes="
-            << beforeNodes.size()
-            << " insertedNodes="
-            << transformedInsertedNodes.size()
-            << " afterNodes="
-            << afterNodes.size()
-            << " finalNodes="
-            << nodes.size()
-            << std::endl;
 
-        std::cout << "[PLAN PREVIEW RESOLVED FRAME] arcLength="
-            << pass.placement.arcLength
-            << " P=("
-            << resolvedInsertionFrame.P.x << ", "
-            << resolvedInsertionFrame.P.y << ", "
-            << resolvedInsertionFrame.P.z << ")"
-            << std::endl;
 
-        std::cout << "[PLAN PREVIEW TRANSFORMED INSERT] localNodes="
-            << localInsertedNodes.size()
-            << " transformedNodes="
-            << transformedInsertedNodes.size()
-            << std::endl;
+            std::cout << "[PLAN PREVIEW RESOLVED FRAME] arcLength="
+                << pass.placement.arcLength
+                << " P=("
+                << resolvedInsertionFrame.P.x << ", "
+                << resolvedInsertionFrame.P.y << ", "
+                << resolvedInsertionFrame.P.z << ")"
+                << std::endl;
 
+            std::cout << "[PLAN PREVIEW TRANSFORMED INSERT] localNodes="
+                << localInsertedNodes.size()
+                << " transformedNodes="
+                << transformedInsertedNodes.size()
+                << std::endl;
+        }
         return true;
     }
     const ManufacturingPass* findFirstInsertAtArcLengthPass() const

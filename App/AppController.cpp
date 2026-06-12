@@ -110,6 +110,9 @@ AppController::AppController()
         multiPassPlan
     );
 
+    sim.getManufacturingPlanPreview().setDebugLogging(
+        false
+    );
     // =====================================================
     // ACTIVE MODE
     //
