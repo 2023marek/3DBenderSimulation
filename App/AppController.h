@@ -19,6 +19,11 @@ public:
     AppController();
 
     void update(double dt);
+    void useCADPreview();
+    void usePlannedShapePreview();
+    void useManufacturingPlayback(); 
+    //helper
+    void toggleSimulationMode();
 
     //ACCESSORS
     ManufacturingPlanPreviewModel& getManufacturingPlanPreview()
@@ -140,6 +145,8 @@ public:
     void handleAction(UserAction action);
 
     HUDData buildHUDData() const;
+
+   
 
 private:
     RenderMode renderMode = RenderMode::LINE;

@@ -1167,3 +1167,26 @@ Phase 7W — Add preview debug flags
 Preview logs become optional.
 Default can stay ON for now.
 Later you can switch them OFF.
+==============================================================  
+Phase 7X — Add preview mode selector helper
+
+Goal:
+
+Make AppController mode selection cleaner.
+=============================================================
+Phase 7Y — Add mode toggle action
+Goal:Keyboard/action can switch between:
+
+CADPreview
+PlannedShapePreview
+ManufacturingPlayback
+==
+CADPreview
+    ?
+PlannedShapePreview
+    ?
+ManufacturingPlayback
+    ?
+CADPreview
+===
+UserAction::ToggleSimulationMode

@@ -97,6 +97,13 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         std::cout << "[KEY] M ? TOGGLE MODE\n";
         controller.handleAction(UserAction::ToggleRenderMode);
 
+    case Qt::Key_N:
+        controller.handleAction(
+            UserAction::ToggleSimulationMode
+        );
+        update();
+        break;
+
         std::cout << "[MODE SWITCH] "
             << (controller.getRenderMode() == RenderMode::LINE ? "LINE" : "MESH")
             << std::endl;

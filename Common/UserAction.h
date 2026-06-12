@@ -6,5 +6,6 @@ enum class UserAction
     Pause,
     Reset,
     Step,
-    ToggleRenderMode
+    ToggleRenderMode,
+    ToggleSimulationMode
 };

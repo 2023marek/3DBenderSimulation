@@ -128,17 +128,11 @@ AppController::AppController()
     //     real four-zone process simulation.
     // =====================================================
 
-    sim.setMode(
-        SimulationController::SimulationMode::PlannedShapePreview
-    );
+    usePlannedShapePreview();
 
-    // sim.setMode(
-    //     SimulationController::SimulationMode::ManufacturingPlayback
-    // );
+  //  useManufacturingPlayback();
 
-    // sim.setMode(
-    //     SimulationController::SimulationMode::CADPreview
-    // );
+  //  useCADPreview();
 }
 
 
@@ -260,5 +254,51 @@ void AppController::handleAction(UserAction action)
     case UserAction::ToggleRenderMode:
         toggleRenderMode();
         break;
+    case UserAction::ToggleSimulationMode:
+        toggleSimulationMode();
+        break;
+    }
+}
+
+void AppController::useCADPreview()
+{
+    sim.setMode(
+        SimulationController::SimulationMode::CADPreview
+    );
+   
+}
+
+void AppController::usePlannedShapePreview()
+{
+    sim.setMode(
+        SimulationController::SimulationMode::PlannedShapePreview
+    );
+    
+}
+
+void AppController::useManufacturingPlayback()
+{
+    sim.setMode(
+        SimulationController::SimulationMode::ManufacturingPlayback
+    );
+    
+}
+
+void AppController::toggleSimulationMode()
+{
+    auto mode =
+        sim.getMode();
+
+    if (mode == SimulationController::SimulationMode::CADPreview)
+    {
+        usePlannedShapePreview();
+    }
+    else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
+    {
+        useManufacturingPlayback();
+    }
+    else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
+    {
+        useCADPreview();
     }
 }
