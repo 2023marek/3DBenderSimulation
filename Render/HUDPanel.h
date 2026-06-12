@@ -36,6 +36,7 @@ public:
     void setBackgroundAlpha(float alpha) { bgAlpha = alpha; }
     void setTextShader(ShaderGL* shader) { textShader = shader; }
 private:
+    HUDData data;
     unsigned int windowWidth;
     unsigned int windowHeight;
     
@@ -97,7 +98,9 @@ private:
      
     unsigned int textVAO = 0;
     unsigned int textVBO = 0;
+    
 
   
-    
+
+
 };

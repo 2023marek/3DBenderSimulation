@@ -111,24 +111,25 @@ void HUDPanel::initQuadMesh()
     glBindVertexArray(0);
 }
 
-void HUDPanel::update(const HUDData& data, const RenderMode& mode)
+void HUDPanel::update(const HUDData& newData, const RenderMode& mode)
 {
-    if (!visible) return;
+    if (!visible)
+        return;
 
-    statusStr = data.status;
-    speed = data.speed;
-    currentTime = data.time;
-    currentProgress = data.currentOpProgress;
-    overallProgress = data.overallProgress;
-    currentOpIndex = data.currentOpIndex;
-    totalOps = data.totalOperations;
-    nodeCount = data.nodeCount;
+    data = newData;
 
-    currentOpName = data.currentOpName;
+    statusStr = newData.status;
+    speed = newData.speed;
+    currentTime = newData.time;
+    currentProgress = newData.currentOpProgress;
+    overallProgress = newData.overallProgress;
+    currentOpIndex = newData.currentOpIndex;
+    totalOps = newData.totalOperations;
+    nodeCount = newData.nodeCount;
+    currentOpName = newData.currentOpName;
 
     modeStr = (mode == RenderMode::LINE) ? "LINE" : "MESH";
 }
-
 
 void HUDPanel::render()
 {
@@ -171,9 +172,15 @@ void HUDPanel::render()
 
     drawText(textX, textY + lineH * 0, "VISIBLE TEST", glm::vec4(1, 0, 0, 1));
     drawText(textX, textY + lineH * 1, "STATUS: " + statusStr, glm::vec4(1, 1, 1, 1));
-    drawText(textX, textY + lineH * 2, "SPEED: " + std::to_string(speed), glm::vec4(1, 1, 1, 1));
-    drawText(textX, textY + lineH * 3, "TIME: " + std::to_string(currentTime), glm::vec4(1, 1, 1, 1));
-    drawText(textX, textY + lineH * 4, "OP: " + currentOpName, glm::vec4(1, 1, 0, 1));
+    drawText(
+        textX,
+        textY + lineH * 2,
+        "MODE: " + data.simulationModeName,
+        glm::vec4(0.6f, 1.0f, 1.0f, 1.0f)
+    );
+    drawText(textX, textY + lineH * 3, "SPEED: " + std::to_string(speed), glm::vec4(1, 1, 1, 1));
+    drawText(textX, textY + lineH * 4, "TIME: " + std::to_string(currentTime), glm::vec4(1, 1, 1, 1));
+    drawText(textX, textY + lineH * 5, "OP: " + currentOpName, glm::vec4(1, 1, 0, 1));
 
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);

@@ -1190,3 +1190,99 @@ ManufacturingPlayback
 CADPreview
 ===
 UserAction::ToggleSimulationMode
+============================================================================
+=============================================================================
+Planned next phases
+Phase 7Z
+Add current simulation mode name to HUD.
+
+Phase 8A
+Clean AppController setup into helper functions:
+buildTestOperations()
+buildTestManufacturingPlan()
+configureInitialMode()
+
+Phase 8B
+Add planned-shape preview settings:
+show insertion marker
+show insertion frame
+show transformed insert debug
+
+Phase 8C
+Add InsertAtNodeIndex metadata support.
+No real insertion yet, only lookup/test.
+
+Phase 8D
+Add InsertAtNodeIndex preview implementation.
+Similar to InsertAtArcLength, but selected by sampled node index.
+
+Phase 8E
+Prepare ExplicitStartFrame insertion.
+This will allow helix/shape to start from a manually supplied frame.
+=============================================================================
+general concept, the project has two separate but connected systems:
+
+1. PlannedShapePreview
+   final intended geometry
+
+2. ManufacturingPlayback
+   manufacturing-history-driven process simulator
+   with four zones
+
+   ============================
+   The four-zone simulator is not secondary. It is the real process simulation core.
+   tail / incoming material
+
+IncomingStock
+    ?
+machineEntryFrame
+    ?
+PositionedStraight
+    ?
+ActiveZone
+    ?
+FrozenGeometry
+
+head / completed pipe
+=================
+Manufacturing history
+    FEED / ROTATE / BEND / HELIX / ROLL / MANUAL
+        ?
+ManufacturingPlayback
+        ?
+zone state update
+        ?
+render zones
+        ?
+collision/process checks
+
+
+======
+Whereas PlannedShapePreview is only:
+
+ManufacturingPlan
+    ?
+final composed shape preview
+===So the long-term concept should be:
+PlannedShapePreview
+    answers: "What final pipe shape do I want?"
+
+ManufacturingPlayback
+    answers: "How was this shape physically made through the machine?"
+
+
+    ===For helix/inserted forming later, we should not only preview it. We will need:
+
+HelixProcessPlayback
+or
+ContinuousFormingPlayback
+
+that updates the same four-zone/history model.
+
+==============================================================
+Phase 7Z — Add simulation mode name to HUD
+HUD shows current mode:
+
+CADPreview
+PlannedShapePreview
+ManufacturingPlayback

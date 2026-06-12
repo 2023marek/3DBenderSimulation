@@ -176,6 +176,30 @@ HUDData AppController::buildHUDData() const
     else
         data.status = "IDLE";
 
+    auto mode =
+        sim.getMode();
+
+    if (mode == SimulationController::SimulationMode::CADPreview)
+    {
+        data.simulationModeName =
+            "CAD PREVIEW";
+    }
+    else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
+    {
+        data.simulationModeName =
+            "PLANNED SHAPE";
+    }
+    else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
+    {
+        data.simulationModeName =
+            "MFG PLAYBACK";
+    }
+    else
+    {
+        data.simulationModeName =
+            "UNKNOWN";
+    }
+
     data.currentOpIndex = sim.getCurrentOperationIndex();
     data.totalOperations = sim.getTotalOperations();
 
@@ -194,6 +218,10 @@ HUDData AppController::buildHUDData() const
     {
         data.nodeCount = 0;
     }
+
+
+
+
 
     std::ostringstream oss;
 

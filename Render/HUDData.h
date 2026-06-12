@@ -37,4 +37,5 @@ struct HUDData
     std::string status = "IDLE";
     std::string currentOpName = "";
     std::string machineStateName = "IDLE";
+    std::string simulationModeName = "";
 };
