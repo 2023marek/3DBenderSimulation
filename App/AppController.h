@@ -1,7 +1,7 @@
 #pragma once
 
 #include <iostream>
-
+#include <vector>
 #include "Common/UserAction.h"
 #include "Render/RenderMode.h"
 #include "Core/SimulationController.h"
@@ -11,7 +11,8 @@
 #include "Core/Machine/MachineRenderData.h"
 #include "Core/Forming/ManufacturingPlanPreviewModel.h"
 #include "Core/PipeSystem.h"
-
+#include "Core/Operations.h"
+#include "Core/Forming/ManufacturingPlan.h"
 
 class AppController
 {
@@ -151,6 +152,12 @@ public:
 private:
     RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;
+    std::vector<Operation> buildTestOperations() const;
+
+    ManufacturingPlan buildTestManufacturingPlan(
+        const std::vector<Operation>& ops) const;
+
+    void configureInitialMode();
   
 }; 
       

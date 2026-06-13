@@ -15,38 +15,8 @@
 // =====================================
 AppController::AppController()
 {
-    // =====================================================
-    // TEST PROGRAM
-    //
-    // Classic rotary draw bending operation queue.
-    // Used by ManufacturingPlayback.
-    // =====================================================
-
-    std::vector<Operation> ops;
-
-    Operation op1;
-    op1.type = Operation::FEED;
-    op1.length = 198.0;
-
-    Operation op2;
-    op2.type = Operation::BEND;
-    op2.R = 20.0;
-    op2.angle = PI / 2.0;
-    op2.bendDirection = BendDirection::CCW;
-
-    Operation op3;
-    op3.type = Operation::ROTATE;
-    op3.angle = PI / 2.0;
-    op3.rotationDirection = RotationDirection::CCW;
-
-    Operation op4;
-    op4.type = Operation::FEED;
-    op4.length = 110.0;
-
-    ops.push_back(op1);
-    ops.push_back(op2);
-    ops.push_back(op3);
-    ops.push_back(op4);
+    std::vector<Operation> ops =
+        buildTestOperations();
 
     sim.loadProgram(
         ops
@@ -56,83 +26,16 @@ AppController::AppController()
         300.0
     );
 
-    // =====================================================
-    // PLANNED SHAPE PREVIEW PROGRAM
-    //
-    // Pass 1:
-    //     rotary draw bending pass generated from ops.
-    //
-    // Pass 2:
-    //     helix forming pass inserted at arc length.
-    //
-    // This preview is CAD-like final planned shape.
-    // It is separate from ManufacturingPlayback.
-    // =====================================================
-
-    ManufacturingPass rotaryPass =
-        RotaryDrawPassBuilder::buildPass(
-            ops,
-            "Rotary draw bending pass"
+    ManufacturingPlan plan =
+        buildTestManufacturingPlan(
+            ops
         );
-
-    HelixOperation helixPassOp;
-
-    helixPassOp.inputMode =
-        HelixOperation::InputMode::RadiusPitch;
-
-    helixPassOp.length = 200.0;
-    helixPassOp.helixRadius = 10.0;
-    helixPassOp.pitch = 15.0;
-    helixPassOp.feedSpeed = 40.0;
-
-    ManufacturingPass helixPass =
-        HelixFormingPassBuilder::buildPass(
-            helixPassOp,
-            "Heating element helix pass"
-        );
-
-    helixPass.placement =
-        PassPlacement::atArcLength(
-            202.0
-        );
-
-    ManufacturingPlan multiPassPlan;
-
-    multiPassPlan.addPass(
-        rotaryPass
-    );
-
-    multiPassPlan.addPass(
-        helixPass
-    );
 
     sim.getManufacturingPlanPreview().setPlan(
-        multiPassPlan
+        plan
     );
 
-    sim.getManufacturingPlanPreview().setDebugLogging(
-        false
-    );
-    // =====================================================
-    // ACTIVE MODE
-    //
-    // Use one:
-    //
-    // CADPreview:
-    //     ideal CAD from operation list.
-    //
-    // PlannedShapePreview:
-    //     final multi-pass planned shape.
-    //
-    // ManufacturingPlayback:
-    //     real four-zone process simulation.
-    // =====================================================
-
-    usePlannedShapePreview();
-
-  //  useManufacturingPlayback();
-
-  //  useCADPreview();
+    configureInitialMode();
 }
 
 
@@ -330,3 +233,89 @@ void AppController::toggleSimulationMode()
         useCADPreview();
     }
 }
+// Helpers
+    std::vector<Operation> AppController::buildTestOperations() const
+    {
+        std::vector<Operation> ops;
+
+        Operation op1;
+        op1.type = Operation::FEED;
+        op1.length = 198.0;
+
+        Operation op2;
+        op2.type = Operation::BEND;
+        op2.R = 20.0;
+        op2.angle = PI / 2.0;
+        op2.bendDirection = BendDirection::CCW;
+
+        Operation op3;
+        op3.type = Operation::ROTATE;
+        op3.angle = PI / 2.0;
+        op3.rotationDirection = RotationDirection::CCW;
+
+        Operation op4;
+        op4.type = Operation::FEED;
+        op4.length = 110.0;
+
+        ops.push_back(op1);
+        ops.push_back(op2);
+        ops.push_back(op3);
+        ops.push_back(op4);
+
+        return ops;
+    }
+
+    ManufacturingPlan AppController::buildTestManufacturingPlan(
+        const std::vector<Operation>& ops) const
+    {
+        ManufacturingPass rotaryPass =
+            RotaryDrawPassBuilder::buildPass(
+                ops,
+                "Rotary draw bending pass"
+            );
+
+        HelixOperation helixPassOp;
+
+        helixPassOp.inputMode =
+            HelixOperation::InputMode::RadiusPitch;
+
+        helixPassOp.length = 200.0;
+        helixPassOp.helixRadius = 10.0;
+        helixPassOp.pitch = 15.0;
+        helixPassOp.feedSpeed = 40.0;
+
+        ManufacturingPass helixPass =
+            HelixFormingPassBuilder::buildPass(
+                helixPassOp,
+                "Heating element helix pass"
+            );
+
+        helixPass.placement =
+            PassPlacement::atArcLength(
+                202.0
+            );
+
+        ManufacturingPlan plan;
+
+        plan.addPass(
+            rotaryPass
+        );
+
+        plan.addPass(
+            helixPass
+        );
+
+        return plan;
+    }
+
+    void AppController::configureInitialMode()
+    {
+        usePlannedShapePreview();
+
+        // Alternatives for testing:
+        //
+        // useManufacturingPlayback();
+        // useCADPreview();
+    }
+
+
