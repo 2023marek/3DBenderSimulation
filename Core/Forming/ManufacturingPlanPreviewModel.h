@@ -162,7 +162,36 @@ public:
     {
         return debugLogging;
     }
+    //Setters getters
+    void setShowInsertionMarker(bool enabled)
+    {
+        showInsertionMarker = enabled;
+    }
 
+    void setShowInsertionFrame(bool enabled)
+    {
+        showInsertionFrame = enabled;
+    }
+
+    void setShowTransformedInsertOverlay(bool enabled)
+    {
+        showTransformedInsertOverlay = enabled;
+    }
+
+    bool shouldShowInsertionMarker() const
+    {
+        return showInsertionMarker;
+    }
+
+    bool shouldShowInsertionFrame() const
+    {
+        return showInsertionFrame;
+    }
+
+    bool shouldShowTransformedInsertOverlay() const
+    {
+        return showTransformedInsertOverlay;
+    }
 private:
     double ds = 0.5;
 
@@ -181,6 +210,9 @@ private:
     mutable std::vector<PipeNode> transformedInsertedNodes;
     mutable bool usingTransformedPreviewNodes = false;
     bool debugLogging = true;
+    bool showInsertionMarker = true;
+    bool showInsertionFrame = true;
+    bool showTransformedInsertOverlay = false;
 
 private:
     void buildIfDirty() const

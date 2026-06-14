@@ -641,7 +641,7 @@ void GLView::paintGL()
             app->getManufacturingPlanPreview();
 
         const auto& previewNodes =
-           preview.getNodes();
+            preview.getNodes();
 
         //std::cout << "[GLView PLAN PREVIEW] nodes="
          //   << previewNodes.size()
@@ -671,7 +671,7 @@ void GLView::paintGL()
         }
 
 
-        if (preview.hasInsertionMarkerNode())
+        if (preview.shouldShowInsertionMarker() && preview.hasInsertionMarkerNode())
         {
             const PipeNode& marker =
                 preview.getInsertionMarkerNode();
@@ -691,7 +691,7 @@ void GLView::paintGL()
                 glm::vec3(0.2f, 0.9f, 0.3f)
             );
         }
-        if (preview.hasInsertionStartFrame())
+        if (preview.shouldShowInsertionFrame() && preview.hasInsertionStartFrame())
         {
             const Frame& insertionFrame =
                 preview.getInsertionStartFrame();
@@ -715,52 +715,60 @@ void GLView::paintGL()
                 glm::vec3(0.2f, 0.9f, 0.3f)
             );
         }
-       // const auto& transformedInsert =
-       //     preview.getTransformedInsertedNodes();
 
-      //  if (!transformedInsert.empty())
-      //  {
-        //    shader->setVec3(
-        //        "pipeColor",
-        //        glm::vec3(1.0f, 0.4f, 0.9f)
-        //    );
 
-        //    if (renderMode == RenderMode::LINE)
-        //    {
-        //        pipeRenderer.setMode(
-        //            RenderMode::LINE
-        //        );
+        if (preview.shouldShowTransformedInsertOverlay())
+        {
 
-        //        pipeRenderer.uploadLine(
-        //            nodesToFloatLine(
-        //                transformedInsert
-        //            )
-        //        );
+             const auto& transformedInsert =
+                preview.getTransformedInsertedNodes();
 
-        //        glLineWidth(
-        //            4.0f
-        //        );
+             if (!transformedInsert.empty())
+             {
+                 shader->setVec3(
+                     "pipeColor",
+                     glm::vec3(1.0f, 0.4f, 0.9f)
+                 );
 
-        //        pipeRenderer.draw();
-        //    }
-        //    else if (renderMode == RenderMode::MESH)
-        //    {
-        //        drawTubeZone(
-        //            transformedInsert,
-        //            5.5,
-        //            12
-        //        );
-        //    }
+                 if (renderMode == RenderMode::LINE)
+                 {
+                     pipeRenderer.setMode(
+                         RenderMode::LINE
+                     );
 
-        //    pipeRenderer.setMode(
-        //        renderMode
-        //    );
+                    pipeRenderer.uploadLine(
+                         nodesToFloatLine(
+                             transformedInsert
+                         )
+                     );
 
-       //    shader->setVec3(
-       //         "pipeColor",
-        //        glm::vec3(0.2f, 0.9f, 0.3f)
-        //    );
-       // }
+                     glLineWidth(
+                         4.0f
+                     );
+
+                     pipeRenderer.draw();
+                 }
+                 else if (renderMode == RenderMode::MESH)
+                 {
+                     drawTubeZone(
+                        transformedInsert,
+                         5.5,
+                         12
+                     );
+                 }
+
+                 pipeRenderer.setMode(
+                     renderMode
+                 );
+
+                shader->setVec3(
+                    "pipeColor",
+                     glm::vec3(0.2f, 0.9f, 0.3f)
+                 );
+             }
+
+        }
+
     }
 
 

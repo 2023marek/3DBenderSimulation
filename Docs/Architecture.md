@@ -1286,3 +1286,16 @@ HUD shows current mode:
 CADPreview
 PlannedShapePreview
 ManufacturingPlayback
+================================================================
+Phase 8B — Add preview debug visibility flags
+
+Control debug visuals separately:
+    insertion marker
+    insertion frame axes
+    transformed insert overlay
+This will let you switch off helper visuals when needed while keeping the planned preview clean.
+Control planned-preview debug visuals separately:
+
+show insertion marker
+show insertion frame axes
+show transformed insert overlay

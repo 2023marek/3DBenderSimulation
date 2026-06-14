@@ -35,6 +35,12 @@ AppController::AppController()
         plan
     );
 
+    auto& preview =
+        sim.getManufacturingPlanPreview();
+    preview.setShowInsertionMarker(true);
+    preview.setShowInsertionFrame(false);
+    preview.setShowTransformedInsertOverlay(true);
+   
     configureInitialMode();
 }
 
@@ -317,5 +323,7 @@ void AppController::toggleSimulationMode()
         // useManufacturingPlayback();
         // useCADPreview();
     }
+
+   
 
 

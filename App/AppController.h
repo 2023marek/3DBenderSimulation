@@ -25,12 +25,44 @@ public:
     void useManufacturingPlayback(); 
     //helper
     void toggleSimulationMode();
+	//Getters/setters
+    void setShowInsertionMarker(bool enabled)
+    {
+        showInsertionMarker = enabled;
+    }
+
+    void setShowInsertionFrame(bool enabled)
+    {
+        showInsertionFrame = enabled;
+    }
+
+    void setShowTransformedInsertOverlay(bool enabled)
+    {
+        showTransformedInsertOverlay = enabled;
+    }
+
+    bool shouldShowInsertionMarker() const
+    {
+        return showInsertionMarker;
+    }
+
+    bool shouldShowInsertionFrame() const
+    {
+        return showInsertionFrame;
+    }
+
+    bool shouldShowTransformedInsertOverlay() const
+    {
+        return showTransformedInsertOverlay;
+    }
 
     //ACCESSORS
     ManufacturingPlanPreviewModel& getManufacturingPlanPreview()
     {
         return sim.getManufacturingPlanPreview();
     }
+
+
 
     const ManufacturingPlanPreviewModel& getManufacturingPlanPreview() const
     {
@@ -158,6 +190,9 @@ private:
         const std::vector<Operation>& ops) const;
 
     void configureInitialMode();
+    bool showInsertionMarker = true;
+    bool showInsertionFrame = true;
+    bool showTransformedInsertOverlay = false;
   
 }; 
       
