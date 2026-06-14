@@ -311,7 +311,20 @@ void AppController::toggleSimulationMode()
         helixPass.placement =
             PassPlacement::atNodeIndex(
                 404
-            );
+           );
+
+       // Frame testFrame;
+
+       // testFrame.P = { 200.0, 80.0, 0.0 };
+       // testFrame.T = { 1.0, 0.0, 0.0 };
+       // testFrame.N = { 0.0, 1.0, 0.0 };
+       // testFrame.B = { 0.0, 0.0, 1.0 };
+
+      //  helixPass.placement =
+      //      PassPlacement::atFrame(
+       //         testFrame
+        //    );
+
 
         ManufacturingPlan plan;
 

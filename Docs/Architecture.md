@@ -1333,3 +1333,17 @@ helixPass.placement =
     produces
     before ---- HELIX ---- after
     using the same safe transformed-node preview path.
+
+
+    ================================================================
+    Phase 8F — Prepare ExplicitStartFrame insertion
+
+    Phase 8F will add support scaffolding only.We’ll prepare ExplicitStartFrame so later a
+    pass can start from a manually supplied frame, but we won’t yet make it the active path
+    unless you choose to test it.
+
+Goal:PassPlacement::atFrame(frame)
+    can resolve to a start frame
+
+No real insertion behavior change yet.
+No manufacturing playback change.

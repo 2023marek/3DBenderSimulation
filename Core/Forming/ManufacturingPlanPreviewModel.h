@@ -255,6 +255,7 @@ private:
                 *insertPass
             );
         }
+
         else
         {
             curve =
@@ -367,57 +368,41 @@ private:
             );
 
 
-        double resolvedArcLength = 0.0;
+      double resolvedArcLength = 0.0;
+Frame resolvedFrame;
 
-        if (!resolvePlacementArcLength(
-            pass,
-            baseCurve,
-            //pass.placement.arcLength
-            resolvedArcLength))
-        {
-            return false;
-        }
-
-
-        auto baseNodes =
-            PipeCurveSampler::sample(
-                baseCurve,
-                ds
-            );
-
-        auto frameQuery =
-            PipeCurveSampleQuery::findFrameAtArcLength(
-                baseNodes,
-                //pass.placement.arcLength
-                resolvedArcLength
-            );
-
-        if (!frameQuery.valid)
-            return false;
+if (!resolvePlacementStartFrame(
+        pass,
+        baseCurve,
+        resolvedFrame,
+        resolvedArcLength))
+{
+    return false;
+}
 
         insertionFrame =
-            frameQuery.frame;
+            resolvedFrame;
 
         hasInsertionFrame =
             true;
 
         resolvedInsertionFrame =
-            frameQuery.frame;
+            resolvedFrame;
 
         hasResolvedInsertionFrame =
             true;
 
         insertionMarkerNode.pos =
-            frameQuery.frame.P;
+            resolvedFrame.P;
 
         insertionMarkerNode.T =
-            frameQuery.frame.T;
+            resolvedFrame.T;
 
         insertionMarkerNode.N =
-            frameQuery.frame.N;
+            resolvedFrame.N;
 
         insertionMarkerNode.B =
-            frameQuery.frame.B;
+            resolvedFrame.B;
 
         hasInsertionMarker =
             true;
@@ -431,8 +416,41 @@ private:
         transformedInsertedNodes =
             PipeCurveTransform::transformNodesToFrame(
                 localInsertedNodes,
-                frameQuery.frame
+                resolvedFrame
             );
+
+        // After transformedInsertedNodes is created
+
+        if (pass.placement.mode
+            == PassPlacementMode::ExplicitStartFrame)
+        {
+            nodes =
+                transformedInsertedNodes;
+
+            usingTransformedPreviewNodes =
+                true;
+
+            hasInsertionMarker =
+                true;
+
+            insertionMarkerNode.pos =
+                resolvedFrame.P;
+            insertionMarkerNode.T =
+                resolvedFrame.T;
+            insertionMarkerNode.N =
+                resolvedFrame.N;
+            insertionMarkerNode.B =
+                resolvedFrame.B;
+
+            if (debugLogging)
+            {
+                std::cout << "[PLAN PREVIEW EXPLICIT INSERT] insertedNodes="
+                    << transformedInsertedNodes.size()
+                    << std::endl;
+            }
+
+            return true;
+        }
 
         PipeCurveSplitResult split =
             baseCurve.splitAtArcLength(
@@ -512,7 +530,7 @@ private:
                 << " finalNodes="
                 << nodes.size()
                 << std::endl;
-
+            
 
 
             std::cout << "[PLAN PREVIEW RESOLVED FRAME] arcLength="
@@ -559,7 +577,9 @@ private:
             if (pass.placement.mode
                 == PassPlacementMode::InsertAtArcLength
                 || pass.placement.mode
-                == PassPlacementMode::InsertAtNodeIndex)
+                == PassPlacementMode::InsertAtNodeIndex
+                || pass.placement.mode
+                == PassPlacementMode::ExplicitStartFrame)
             {
                 return &pass;
             }
@@ -617,6 +637,12 @@ private:
                     pass.placement.nodeIndex
                 );
 
+            if (pass.placement.mode
+                == PassPlacementMode::ExplicitStartFrame)
+            {
+                return false;
+            }
+
             if (debugLogging)
             {
                 std::cout << "[PLAN PREVIEW NODE PLACEMENT] nodeIndex="
@@ -632,5 +658,78 @@ private:
         }
 
         return false;
+    }
+
+
+    //Helper
+    bool resolvePlacementStartFrame(
+        const ManufacturingPass& pass,
+        const PipeCurve& baseCurve,
+        Frame& outFrame,
+        double& outArcLength) const
+    {
+        // =====================================================
+        // START FRAME RESOLUTION
+        //
+        // Converts placement into a concrete Frame.
+        //
+        // Supported:
+        // - InsertAtArcLength
+        // - InsertAtNodeIndex
+        // - ExplicitStartFrame
+        //
+        // outArcLength:
+        // - meaningful for arc/node placement
+        // - 0 for ExplicitStartFrame
+        // =====================================================
+
+        if (pass.placement.mode
+            == PassPlacementMode::ExplicitStartFrame)
+        {
+            outFrame =
+                pass.placement.startFrame;
+
+            outArcLength =
+                0.0;
+
+            if (debugLogging)
+            {
+                std::cout << "[PLAN PREVIEW EXPLICIT FRAME] P=("
+                    << outFrame.P.x << ", "
+                    << outFrame.P.y << ", "
+                    << outFrame.P.z << ")"
+                    << std::endl;
+            }
+
+            return true;
+        }
+
+        if (!resolvePlacementArcLength(
+            pass,
+            baseCurve,
+            outArcLength))
+        {
+            return false;
+        }
+
+        auto baseNodes =
+            PipeCurveSampler::sample(
+                baseCurve,
+                ds
+            );
+
+        auto frameQuery =
+            PipeCurveSampleQuery::findFrameAtArcLength(
+                baseNodes,
+                outArcLength
+            );
+
+        if (!frameQuery.valid)
+            return false;
+
+        outFrame =
+            frameQuery.frame;
+
+        return true;
     }
 };
