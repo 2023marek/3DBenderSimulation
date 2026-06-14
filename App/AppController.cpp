@@ -345,9 +345,14 @@ void AppController::toggleSimulationMode()
                 "Heating element helix pass"
             );
 
+      //  helixPass.placement =
+      //      PassPlacement::atArcLength(
+       //         202.0
+       //        );
+
         helixPass.placement =
-            PassPlacement::atArcLength(
-                202.0
+            PassPlacement::atNodeIndex(
+                404
             );
 
         ManufacturingPlan plan;

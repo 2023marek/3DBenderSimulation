@@ -1324,3 +1324,12 @@ PassPlacement::atNodeIndex(index)
 
 No real insertion yet.
 No rendering change yet.
+
+===============================================================
+Phase 8D — Implement InsertAtNodeIndex preview
+Goal:
+helixPass.placement =
+    PassPlacement::atNodeIndex(404);
+    produces
+    before ---- HELIX ---- after
+    using the same safe transformed-node preview path.

@@ -10,6 +10,7 @@
 #include "Core/Sampling/PipeCurveSampler.h"
 #include "Core/Sampling/PipeCurveSampleQuery.h"
 #include "Core/Curve/PipeCurveTransform.h"
+#include "Core/Sampling/PipeCurveNodeQuery.h"
 
 // =====================================================
 // MANUFACTURING PLAN PREVIEW MODEL
@@ -235,8 +236,8 @@ private:
         transformedInsertedNodes.clear();
 
         const ManufacturingPass* insertPass =
-            findFirstInsertAtArcLengthPass();
-
+            //findFirstInsertAtArcLengthPass();
+            findFirstInsertPlacementPass();
         if (insertPass)
         {
             curve =
@@ -365,6 +366,19 @@ private:
                 pass
             );
 
+
+        double resolvedArcLength = 0.0;
+
+        if (!resolvePlacementArcLength(
+            pass,
+            baseCurve,
+            //pass.placement.arcLength
+            resolvedArcLength))
+        {
+            return false;
+        }
+
+
         auto baseNodes =
             PipeCurveSampler::sample(
                 baseCurve,
@@ -374,7 +388,8 @@ private:
         auto frameQuery =
             PipeCurveSampleQuery::findFrameAtArcLength(
                 baseNodes,
-                pass.placement.arcLength
+                //pass.placement.arcLength
+                resolvedArcLength
             );
 
         if (!frameQuery.valid)
@@ -421,7 +436,8 @@ private:
 
         PipeCurveSplitResult split =
             baseCurve.splitAtArcLength(
-                pass.placement.arcLength
+               // pass.placement.arcLength
+                resolvedArcLength
             );
 
         if (!split.valid)
@@ -500,7 +516,7 @@ private:
 
 
             std::cout << "[PLAN PREVIEW RESOLVED FRAME] arcLength="
-                << pass.placement.arcLength
+                << resolvedArcLength// pass.placement.arcLength
                 << " P=("
                 << resolvedInsertionFrame.P.x << ", "
                 << resolvedInsertionFrame.P.y << ", "
@@ -515,6 +531,7 @@ private:
         }
         return true;
     }
+
     const ManufacturingPass* findFirstInsertAtArcLengthPass() const
     {
         for (const auto& pass : plan.passes)
@@ -530,5 +547,90 @@ private:
         }
 
         return nullptr;
+    }
+
+    const ManufacturingPass* findFirstInsertPlacementPass() const
+    {
+        for (const auto& pass : plan.passes)
+        {
+            if (!pass.enabled)
+                continue;
+
+            if (pass.placement.mode
+                == PassPlacementMode::InsertAtArcLength
+                || pass.placement.mode
+                == PassPlacementMode::InsertAtNodeIndex)
+            {
+                return &pass;
+            }
+        }
+
+        return nullptr;
+    }
+
+
+
+    //HELPER
+
+    bool resolvePlacementArcLength(
+        const ManufacturingPass& pass,
+        const PipeCurve& baseCurve,
+        double& outArcLength) const
+    {
+        // =====================================================
+        // PLACEMENT RESOLUTION
+        //
+        // Converts pass placement into arc length on base curve.
+        //
+        // Supported:
+        // - InsertAtArcLength
+        // - InsertAtNodeIndex
+        //
+        // Later:
+        // - ExplicitStartFrame
+        // =====================================================
+
+        if (pass.placement.mode
+            == PassPlacementMode::InsertAtArcLength)
+        {
+            outArcLength =
+                pass.placement.arcLength;
+
+            return true;
+        }
+
+        if (pass.placement.mode
+            == PassPlacementMode::InsertAtNodeIndex)
+        {
+            auto baseNodes =
+                PipeCurveSampler::sample(
+                    baseCurve,
+                    ds
+                );
+
+            if (baseNodes.empty())
+                return false;
+
+            outArcLength =
+                PipeCurveNodeQuery::arcLengthAtNodeIndex(
+                    baseNodes,
+                    pass.placement.nodeIndex
+                );
+
+            if (debugLogging)
+            {
+                std::cout << "[PLAN PREVIEW NODE PLACEMENT] nodeIndex="
+                    << pass.placement.nodeIndex
+                    << " arcLength="
+                    << outArcLength
+                    << " nodeCount="
+                    << baseNodes.size()
+                    << std::endl;
+            }
+
+            return true;
+        }
+
+        return false;
     }
 };

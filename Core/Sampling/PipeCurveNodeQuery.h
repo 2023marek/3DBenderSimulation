@@ -57,6 +57,30 @@ public:
         return result;
     }
 
+    static double arcLengthAtNodeIndex(
+        const std::vector<PipeNode>& nodes,
+        size_t index)
+    {
+        if (nodes.empty())
+            return 0.0;
+
+        if (index == 0)
+            return 0.0;
+
+        if (index >= nodes.size())
+            index = nodes.size() - 1;
+
+        double s = 0.0;
+
+        for (size_t i = 1; i <= index; ++i)
+        {
+            s +=
+                (nodes[i].pos - nodes[i - 1].pos).length();
+        }
+
+        return s;
+    }
+
 private:
     static Frame frameFromNode(
         const PipeNode& node)
