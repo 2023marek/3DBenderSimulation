@@ -1408,3 +1408,8 @@ Switch placement test mode in one place:
 ArcLength
 NodeIndex
 ExplicitFrame
+
+============================================================
+Phase 8H — Add placement mode name to HUD
+
+Goal:

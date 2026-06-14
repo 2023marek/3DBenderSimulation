@@ -4,6 +4,7 @@
 #include <iostream>
 #include <limits>
 #include <cmath>
+#include <string>
 
 #include "Core/Forming/ManufacturingPlan.h"
 #include "Core/Geometry/PipeNode.h"
@@ -193,6 +194,38 @@ public:
     {
         return showTransformedInsertOverlay;
     }
+
+    //HUD getter
+
+    std::string getActivePlacementModeName() const
+    {
+        const ManufacturingPass* pass =
+            findFirstInsertPlacementPass();
+
+        if (!pass)
+            return "APPEND";
+
+        if (pass->placement.mode
+            == PassPlacementMode::InsertAtArcLength)
+        {
+            return "ARC LENGTH";
+        }
+
+        if (pass->placement.mode
+            == PassPlacementMode::InsertAtNodeIndex)
+        {
+            return "NODE INDEX";
+        }
+
+        if (pass->placement.mode
+            == PassPlacementMode::ExplicitStartFrame)
+        {
+            return "EXPLICIT FRAME";
+        }
+
+        return "APPEND";
+    }
+
 private:
     double ds = 0.5;
 

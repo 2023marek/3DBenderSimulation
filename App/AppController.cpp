@@ -72,6 +72,7 @@ HUDData AppController::buildHUDData() const
     data.feeding = state.feeding;
     data.rotating = state.rotating;
     data.bending = state.bending;
+    
 
     data.machineStateName = "IDLE";
 
@@ -113,6 +114,10 @@ HUDData AppController::buildHUDData() const
             "UNKNOWN";
     }
 
+
+    data.placementModeName =
+        sim.getManufacturingPlanPreview()
+        .getActivePlacementModeName();
     data.currentOpIndex = sim.getCurrentOperationIndex();
     data.totalOperations = sim.getTotalOperations();
 

@@ -181,6 +181,12 @@ void HUDPanel::render()
     drawText(textX, textY + lineH * 3, "SPEED: " + std::to_string(speed), glm::vec4(1, 1, 1, 1));
     drawText(textX, textY + lineH * 4, "TIME: " + std::to_string(currentTime), glm::vec4(1, 1, 1, 1));
     drawText(textX, textY + lineH * 5, "OP: " + currentOpName, glm::vec4(1, 1, 0, 1));
+    drawText(
+        textX,
+        textY + lineH * 6,
+        "PLACE: " + data.placementModeName,
+        glm::vec4(0.8f, 0.9f, 1.0f, 1.0f)
+    );
 
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
