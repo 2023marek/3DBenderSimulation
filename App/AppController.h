@@ -13,6 +13,7 @@
 #include "Core/PipeSystem.h"
 #include "Core/Operations.h"
 #include "Core/Forming/ManufacturingPlan.h"
+#include "Core/Forming/PassPlacement.h"
 
 
 class AppController
@@ -194,6 +195,16 @@ private:
     bool showInsertionMarker = true;
     bool showInsertionFrame = true;
     bool showTransformedInsertOverlay = false;
+
+    enum class TestPlacementPreset
+    {
+        ArcLength,
+        NodeIndex,
+        ExplicitFrame
+    };
+
+    PassPlacement buildTestPlacement(
+        TestPlacementPreset preset) const;
   
 }; 
       

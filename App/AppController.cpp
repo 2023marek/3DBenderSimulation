@@ -10,6 +10,7 @@
 #include "Core/Forming/HelixFormingPassBuilder.h"
 #include "Core/Forming/RotaryDrawPassBuilder.h"
 #include "Core/Sampling/PipeCurveNodeQuery.h"
+#include "Core/Geometry/Frame.h"
 //#include "Core/Sampling/PipeCurveSampler.h"
 
 // =====================================
@@ -303,29 +304,25 @@ void AppController::toggleSimulationMode()
                 "Heating element helix pass"
             );
 
-      //  helixPass.placement =
-      //      PassPlacement::atArcLength(
-       //         202.0
-       //        );
+     
+
+       TestPlacementPreset activePlacement =
+          TestPlacementPreset::ArcLength;
+
+     //  TestPlacementPreset activePlacement =
+      //      TestPlacementPreset::ExplicitFrame;
+
+
+    //    TestPlacementPreset activePlacement =
+     //       TestPlacementPreset::NodeIndex;
 
         helixPass.placement =
-            PassPlacement::atNodeIndex(
-                404
-           );
+            buildTestPlacement(
+                activePlacement
+            );
 
-       // Frame testFrame;
-
-       // testFrame.P = { 200.0, 80.0, 0.0 };
-       // testFrame.T = { 1.0, 0.0, 0.0 };
-       // testFrame.N = { 0.0, 1.0, 0.0 };
-       // testFrame.B = { 0.0, 0.0, 1.0 };
-
-      //  helixPass.placement =
-      //      PassPlacement::atFrame(
-       //         testFrame
-        //    );
-
-
+       
+    
         ManufacturingPlan plan;
 
         plan.addPass(
@@ -351,6 +348,40 @@ void AppController::toggleSimulationMode()
         //
         // useManufacturingPlayback();
         // useCADPreview();
+    }
+
+    PassPlacement AppController::buildTestPlacement(
+        TestPlacementPreset preset) const
+    {
+        if (preset == TestPlacementPreset::ArcLength)
+        {
+            return PassPlacement::atArcLength(
+                202.0
+            );
+        }
+
+        if (preset == TestPlacementPreset::NodeIndex)
+        {
+            return PassPlacement::atNodeIndex(
+                404
+            );
+        }
+
+        if (preset == TestPlacementPreset::ExplicitFrame)
+        {
+            Frame frame;
+
+            frame.P = { 200.0, 80.0, 0.0 };
+            frame.T = { 1.0, 0.0, 0.0 };
+            frame.N = { 0.0, 1.0, 0.0 };
+            frame.B = { 0.0, 0.0, 1.0 };
+
+            return PassPlacement::atFrame(
+                frame
+            );
+        }
+
+        return PassPlacement::append();
     }
 
    

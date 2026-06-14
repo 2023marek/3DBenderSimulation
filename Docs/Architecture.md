@@ -1347,3 +1347,64 @@ Goal:PassPlacement::atFrame(frame)
 
 No real insertion behavior change yet.
 No manufacturing playback change.
+
+current workflow
+helixPass.placement = atNodeIndex(404)
+        ?
+find base curve nodes
+        ?
+node index 404 -> arc length 201.989
+        ?
+find frame at arc length
+        ?
+split base curve
+        ?
+before + transformed helix + after
+
+Explicit frame workflow
+
+helixPass.placement = atFrame(myFrame)
+        ?
+use supplied frame directly
+        ?
+transform helix to that frame
+        ?
+nodes = transformed helix only
+        ?
+print [PLAN PREVIEW EXPLICIT INSERT]
+ data flow diagram :
+
+
+PassPlacement
+?
+??? AppendToPrevious
+?       ?
+?   normal combined curve
+?
+??? InsertAtArcLength(s)
+?       ?
+?   base curve -> frame at s -> split at s
+?       ?
+?   before + transformed inserted pass + after
+?
+??? InsertAtNodeIndex(i)
+?       ?
+?   base curve nodes -> i -> arc length s
+?       ?
+?   same as InsertAtArcLength
+?
+??? ExplicitStartFrame(frame)
+        ?
+    use frame directly
+        ?
+    transformed inserted pass only
+
+================================================================
+Phase 8G — Add placement preset helper
+Goal: switch between ArcLength, NodeIndex, and ExplicitFrame tests cleanly without
+editing many code fragments.
+Switch placement test mode in one place:
+
+ArcLength
+NodeIndex
+ExplicitFrame
