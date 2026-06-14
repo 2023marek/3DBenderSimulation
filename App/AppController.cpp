@@ -9,6 +9,8 @@
 #include "Core/Forming/HelixOperation.h"
 #include "Core/Forming/HelixFormingPassBuilder.h"
 #include "Core/Forming/RotaryDrawPassBuilder.h"
+#include "Core/Sampling/PipeCurveNodeQuery.h"
+#include "Core/Sampling/PipeCurveSampler.h"
 
 // =====================================
 // CONSTRUCTOR
@@ -37,6 +39,7 @@ AppController::AppController()
 
     auto& preview =
         sim.getManufacturingPlanPreview();
+
     preview.setShowInsertionMarker(true);
     preview.setShowInsertionFrame(false);
     preview.setShowTransformedInsertOverlay(true);
@@ -280,6 +283,52 @@ void AppController::toggleSimulationMode()
                 "Rotary draw bending pass"
             );
 
+        auto rotaryNodes =
+            PipeCurveSampler::sample(
+                rotaryPass.outputCurve,
+                0.5
+            );
+
+        auto nodeQuery =
+            PipeCurveNodeQuery::findFrameAtNodeIndex(
+                rotaryNodes,
+                404
+            );
+
+        if (nodeQuery.valid)
+        {
+            std::cout << "[NODE INDEX TEST] index="
+                << nodeQuery.nodeIndex
+                << " nodeCount="
+                << nodeQuery.nodeCount
+                << " P=("
+                << nodeQuery.frame.P.x << ", "
+                << nodeQuery.frame.P.y << ", "
+                << nodeQuery.frame.P.z << ")"
+                << std::endl;
+        }
+        else
+        {
+            std::cout << "[NODE INDEX TEST] invalid index="
+                << nodeQuery.nodeIndex
+                << " nodeCount="
+                << nodeQuery.nodeCount
+                << std::endl;
+        }
+
+        PassPlacement testPlacement =
+            PassPlacement::atNodeIndex(
+                404
+            );
+
+        std::cout << "[NODE PLACEMENT TEST] mode="
+            << static_cast<int>(testPlacement.mode)
+            << " nodeIndex="
+            << testPlacement.nodeIndex
+            << std::endl;
+
+
+
         HelixOperation helixPassOp;
 
         helixPassOp.inputMode =
@@ -312,6 +361,10 @@ void AppController::toggleSimulationMode()
         );
 
         return plan;
+
+
+
+
     }
 
     void AppController::configureInitialMode()

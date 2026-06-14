@@ -1299,3 +1299,28 @@ Control planned-preview debug visuals separately:
 show insertion marker
 show insertion frame axes
 show transformed insert overlay
+=============================================================
+Phase 8C — Add InsertAtNodeIndex metadata test
+Goal:
+Prepare second insertion mode:
+
+PassPlacement::atNodeIndex(index)
+
+This will later allow insertion at a selected sampled node index, not just arc length.
+No real insertion yet.
+Only verify metadata and node lookup.
+
+This will let you later say:
+PassPlacement::atNodeIndex(10)
+
+ Start helix at sampled node 404
+ instead of:
+ Useful for manual selection / mouse picking later.
+
+ Goal:
+
+PassPlacement::atNodeIndex(index)
+    stores selected sampled node index
+
+No real insertion yet.
+No rendering change yet.

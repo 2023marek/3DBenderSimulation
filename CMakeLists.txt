@@ -113,6 +113,7 @@ set(CORE_HEADERS
     Core/Mesh/StlLoader.h
     Core/Sampling/PipeCurveSampler.h
     Core/Sampling/PipeCurveSampleQuery.h
+    Core/Sampling/PipeCurveNodeQuery.h
 
     
 )
