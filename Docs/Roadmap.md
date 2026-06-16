@@ -77,3 +77,13 @@ Create common segment representation:
 Do not refactor GeometricPipeModel yet.
 Do not refactor ManufacturingPipeSimulator yet.
 No rendering changes.
+
+ARCHITECTURE
+Space = Play
+P     = Pause
+R     = Reset
+S     = Step
+
+M     = Toggle LINE / MESH
+N     = Toggle simulation mode
+T     = Toggle placement preset

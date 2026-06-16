@@ -1488,3 +1488,135 @@ and add one console/HUD-safe preset name helper so logs are clearer:
 [APP PLACEMENT PRESET] ExplicitFrame
 
 ===============
+==============================================================================
+****************************************************************************************
+
+Space = Play
+P     = Pause
+R     = Reset
+S     = Step
+
+M     = Toggle LINE / MESH
+N     = Toggle simulation mode
+T     = Toggle placement preset
+
+
+## Simulation Modes
+
+### CADPreview
+
+Shows the ideal CAD pipe generated from the operation list.
+
+Purpose:
+
+- verify final geometric shape
+- inspect clean operation-based pipe
+- no manufacturing process simulation
+
+Does not show:
+
+- incoming stock
+- active bending zone
+- frozen geometry
+- process history
+
+---
+
+### PlannedShapePreview
+
+Shows the final planned multi-pass shape.
+
+Example:
+
+```text
+rotary draw bending pass
+    +
+inserted helix pass
+
+Purpose:
+
+preview final intended shape
+test pass placement
+test helix / future forming passes
+verify insertion point and insertion frame
+
+This mode is CAD-like.
+It is not manufacturing playback.
+
+
+ManufacturingPlayback
+
+Shows real process simulation through the machine.
+
+This mode owns the four-zone model:
+
+IncomingStock
+    ?
+machineEntryFrame
+    ?
+PositionedStraight
+    ?
+ActiveZone
+    ?
+FrozenGeometry
+
+Purpose:
+
+simulate manufacturing history
+process FEED / ROTATE / BEND
+show pipe movement through machine
+later: collision checking and process validation
+
+This is the real manufacturing simulator.
+
+
+And this section:
+
+```md
+## Pass Placement Modes
+
+### ArcLength
+
+Starts inserted pass at a distance along the previous/base curve.
+
+Example:
+
+```cpp
+PassPlacement::atArcLength(202.0);
+Meaning:
+Start inserted helix at s = 202 mm along the base pipe.
+Use for precise distance-based insertion.
+
+###NodeIndex
+
+Starts inserted pass at a sampled pipe node.
+
+Example:
+PassPlacement::atNodeIndex(404);
+Meaning:
+Find sampled node 404.
+Convert node index to arc length.
+Insert pass at that position.
+
+###ExplicitFrame
+
+Starts inserted pass from a manually supplied frame.
+
+Example:PassPlacement::atFrame(frame);
+
+Meaning:
+
+Use frame.P as start position.
+Use frame.T as forward axis.
+Use frame.N / frame.B as radial orientation.
+Current behavior:
+
+ExplicitFrame preview shows inserted pass only.
+It does not attach before/after base curve yet.
+
+
+****************************************************************************
+============================================================================
+=============================================================================
+
+
