@@ -1413,3 +1413,64 @@ ExplicitFrame
 Phase 8H — Add placement mode name to HUD
 
 Goal:
+P key cycles placement preset:
+
+ArcLength
+    ?
+NodeIndex
+    ?
+ExplicitFrame
+    ?
+ArcLength
+
+=========================================================================
+For test frame
+
+frame.P = { 200.0, 80.0, 0.0 };
+frame.T = { 1.0, 0.0, 0.0 };
+frame.N = { 0.0, 1.0, 0.0 };
+frame.B = { 0.0, 0.0, 1.0 };
+
+expected result:
+helix starts at P = (200, 80, 0)
+helix axis follows T = +X
+helix radial orientation uses N/B
+
+
+Diagram
+world origin
+(0,0,0)
+   ?
+   ?
+   ?
+   ??????????????????????????????? X
+                    ^
+                    |
+              P=(200,80,0)
+              helix starts here
+              axis direction = T
+
+    ExplicitFrame preview = helix only
+
+    ===
+    intentional on this stage:
+
+    ArcLength:
+    start on previous/base curve at distance s
+
+NodeIndex:
+    start on previous/base curve at sampled node i
+
+ExplicitFrame:
+    start at manually supplied independent Frame
+
+    Later variants will allow:
+
+    ExplicitFrameOnly
+    show inserted pass only
+
+ExplicitFrameAppendToBase
+    base curve + inserted pass from explicit frame
+
+ExplicitFrameWithAfter
+    inserted pass + transformed continuation

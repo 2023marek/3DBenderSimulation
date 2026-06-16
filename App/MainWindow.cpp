@@ -69,47 +69,70 @@ void MainWindow::onUpdate()
 
 void MainWindow::keyPressEvent(QKeyEvent* event)
 {
-    std::cout << "[KEY GLOBAL] key=" << event->key() << std::endl;
+    std::cout << "[KEY GLOBAL] key="
+        << event->key()
+        << std::endl;
 
     switch (event->key())
     {
     case Qt::Key_Space:
         std::cout << "[KEY] SPACE ? PLAY\n";
-        controller.handleAction(UserAction::Play);
+        controller.handleAction(
+            UserAction::Play
+        );
         break;
 
     case Qt::Key_P:
         std::cout << "[KEY] P ? PAUSE\n";
-        controller.handleAction(UserAction::Pause);
+        controller.handleAction(
+            UserAction::Pause
+        );
         break;
 
     case Qt::Key_R:
         std::cout << "[KEY] R ? RESET\n";
-        controller.handleAction(UserAction::Reset);
+        controller.handleAction(
+            UserAction::Reset
+        );
         break;
 
     case Qt::Key_S:
         std::cout << "[KEY] S ? STEP\n";
-        controller.handleAction(UserAction::Step);
+        controller.handleAction(
+            UserAction::Step
+        );
         break;
 
     case Qt::Key_M:
-        std::cout << "[KEY] M ? TOGGLE MODE\n";
-        controller.handleAction(UserAction::ToggleRenderMode);
+        std::cout << "[KEY] M ? TOGGLE RENDER MODE\n";
+        controller.handleAction(
+            UserAction::ToggleRenderMode
+        );
+
+        std::cout << "[RENDER MODE] "
+            << (controller.getRenderMode() == RenderMode::LINE
+                ? "LINE"
+                : "MESH")
+            << std::endl;
+        break;
 
     case Qt::Key_N:
+        std::cout << "[KEY] N ? TOGGLE SIMULATION MODE\n";
         controller.handleAction(
             UserAction::ToggleSimulationMode
         );
-        update();
         break;
 
-        std::cout << "[MODE SWITCH] "
-            << (controller.getRenderMode() == RenderMode::LINE ? "LINE" : "MESH")
-            << std::endl;
+    case Qt::Key_T:
+        std::cout << "[KEY] T ? TOGGLE PLACEMENT PRESET\n";
+        controller.handleAction(
+            UserAction::TogglePlacementPreset
+        );
+        break;
+
+    default:
         break;
     }
 
-    // force redraw
     view->update();
 }

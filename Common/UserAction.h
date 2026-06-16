@@ -7,5 +7,6 @@ enum class UserAction
     Reset,
     Step,
     ToggleRenderMode,
-    ToggleSimulationMode
+    ToggleSimulationMode,
+    TogglePlacementPreset
 };

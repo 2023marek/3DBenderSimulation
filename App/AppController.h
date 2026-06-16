@@ -180,10 +180,12 @@ public:
     void handleAction(UserAction action);
 
     HUDData buildHUDData() const;
-
-   
+    
+     void togglePlacementPreset();
 
 private:
+
+
     RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;
     std::vector<Operation> buildTestOperations() const;
@@ -196,6 +198,7 @@ private:
     bool showInsertionFrame = true;
     bool showTransformedInsertOverlay = false;
 
+   
     enum class TestPlacementPreset
     {
         ArcLength,
@@ -205,6 +208,12 @@ private:
 
     PassPlacement buildTestPlacement(
         TestPlacementPreset preset) const;
+
+    TestPlacementPreset activePlacementPreset =
+        TestPlacementPreset::NodeIndex;
+
+    std::vector<Operation> testOperations;
   
+    void rebuildTestManufacturingPlan();
 }; 
       

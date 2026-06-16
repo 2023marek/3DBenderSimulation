@@ -18,25 +18,20 @@
 // =====================================
 AppController::AppController()
 {
-    std::vector<Operation> ops =
+    testOperations =
         buildTestOperations();
 
     sim.loadProgram(
-        ops
+        testOperations
     );
 
     sim.getManufacturingPipe().setIncomingStockLength(
         300.0
     );
 
-    ManufacturingPlan plan =
-        buildTestManufacturingPlan(
-            ops
-        );
+    rebuildTestManufacturingPlan();
 
-    sim.getManufacturingPlanPreview().setPlan(
-        plan
-    );
+    configureInitialMode();
 
     auto& preview =
         sim.getManufacturingPlanPreview();
@@ -203,6 +198,11 @@ void AppController::handleAction(UserAction action)
     case UserAction::ToggleSimulationMode:
         toggleSimulationMode();
         break;
+
+    case UserAction::TogglePlacementPreset:
+        togglePlacementPreset();
+        break;
+
     }
 }
 
@@ -309,22 +309,11 @@ void AppController::toggleSimulationMode()
                 "Heating element helix pass"
             );
 
-     
-
-       TestPlacementPreset activePlacement =
-          TestPlacementPreset::ArcLength;
-
-     //  TestPlacementPreset activePlacement =
-      //      TestPlacementPreset::ExplicitFrame;
-
-
-    //    TestPlacementPreset activePlacement =
-     //       TestPlacementPreset::NodeIndex;
-
-        helixPass.placement =
-            buildTestPlacement(
-                activePlacement
-            );
+       helixPass.placement =
+           buildTestPlacement(
+               activePlacementPreset
+           );
+            
 
        
     
@@ -376,7 +365,7 @@ void AppController::toggleSimulationMode()
         {
             Frame frame;
 
-            frame.P = { 200.0, 80.0, 0.0 };
+            frame.P = { 200.0, 0.0, 0.0 };
             frame.T = { 1.0, 0.0, 0.0 };
             frame.N = { 0.0, 1.0, 0.0 };
             frame.B = { 0.0, 0.0, 1.0 };
@@ -387,6 +376,67 @@ void AppController::toggleSimulationMode()
         }
 
         return PassPlacement::append();
+
+
+        
+
+    }
+
+    void AppController::togglePlacementPreset()
+    {
+        if (activePlacementPreset
+            == TestPlacementPreset::ArcLength)
+        {
+            activePlacementPreset =
+                TestPlacementPreset::NodeIndex;
+        }
+        else if (activePlacementPreset
+            == TestPlacementPreset::NodeIndex)
+        {
+            activePlacementPreset =
+                TestPlacementPreset::ExplicitFrame;
+        }
+        else if (activePlacementPreset
+            == TestPlacementPreset::ExplicitFrame)
+        {
+            activePlacementPreset =
+                TestPlacementPreset::ArcLength;
+        }
+
+        rebuildTestManufacturingPlan();
+
+        std::cout << "[APP PLACEMENT PRESET] changed\n";
+    }
+
+    void AppController::rebuildTestManufacturingPlan()
+    {
+        ManufacturingPlan plan =
+            buildTestManufacturingPlan(
+                testOperations
+            );
+
+        auto& preview =
+            sim.getManufacturingPlanPreview();
+
+        preview.setPlan(
+            plan
+        );
+
+        preview.setDebugLogging(
+            true
+        );
+
+        preview.setShowInsertionMarker(
+            true
+        );
+
+        preview.setShowInsertionFrame(
+            true
+        );
+
+        preview.setShowTransformedInsertOverlay(
+            false
+        );
     }
 
    
