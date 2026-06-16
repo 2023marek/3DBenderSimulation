@@ -33,6 +33,12 @@ AppController::AppController()
 
     configureInitialMode();
 
+    std::cout << "[APP PLACEMENT PRESET] "
+        << testPlacementPresetToString(
+            activePlacementPreset
+        )
+        << std::endl;
+
     auto& preview =
         sim.getManufacturingPlanPreview();
 
@@ -365,7 +371,7 @@ void AppController::toggleSimulationMode()
         {
             Frame frame;
 
-            frame.P = { 200.0, 0.0, 0.0 };
+            frame.P = { 200.0, 80.0, 0.0 };
             frame.T = { 1.0, 0.0, 0.0 };
             frame.N = { 0.0, 1.0, 0.0 };
             frame.B = { 0.0, 0.0, 1.0 };
@@ -405,7 +411,11 @@ void AppController::toggleSimulationMode()
 
         rebuildTestManufacturingPlan();
 
-        std::cout << "[APP PLACEMENT PRESET] changed\n";
+        std::cout << "[APP PLACEMENT PRESET] "
+            << testPlacementPresetToString(
+                activePlacementPreset
+            )
+            << std::endl;
     }
 
     void AppController::rebuildTestManufacturingPlan()
@@ -437,6 +447,27 @@ void AppController::toggleSimulationMode()
         preview.setShowTransformedInsertOverlay(
             false
         );
+    }
+
+    const char* AppController::testPlacementPresetToString(
+        TestPlacementPreset preset) const
+    {
+        if (preset == TestPlacementPreset::ArcLength)
+        {
+            return "ArcLength";
+        }
+
+        if (preset == TestPlacementPreset::NodeIndex)
+        {
+            return "NodeIndex";
+        }
+
+        if (preset == TestPlacementPreset::ExplicitFrame)
+        {
+            return "ExplicitFrame";
+        }
+
+        return "Unknown";
     }
 
    

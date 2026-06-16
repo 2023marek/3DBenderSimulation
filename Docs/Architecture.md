@@ -1474,3 +1474,17 @@ ExplicitFrameAppendToBase
 
 ExplicitFrameWithAfter
     inserted pass + transformed continuation
+
+    =======================================================
+    Phase 8J — Clean placement toggle behavior
+    Make placement toggle predictable and documented.
+    We should clean/confirm:
+    N = simulation mode toggle
+M = LINE / MESH toggle
+T = placement preset toggle
+and add one console/HUD-safe preset name helper so logs are clearer:
+[APP PLACEMENT PRESET] ArcLength
+[APP PLACEMENT PRESET] NodeIndex
+[APP PLACEMENT PRESET] ExplicitFrame
+
+===============

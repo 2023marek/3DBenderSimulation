@@ -215,5 +215,8 @@ private:
     std::vector<Operation> testOperations;
   
     void rebuildTestManufacturingPlan();
+    //helper
+    const char* testPlacementPresetToString(
+        TestPlacementPreset preset) const;
 }; 
       

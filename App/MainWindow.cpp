@@ -108,6 +108,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         controller.handleAction(
             UserAction::ToggleRenderMode
         );
+        break;
 
         std::cout << "[RENDER MODE] "
             << (controller.getRenderMode() == RenderMode::LINE
