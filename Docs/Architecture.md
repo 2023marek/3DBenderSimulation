@@ -1620,3 +1620,9 @@ It does not attach before/after base curve yet.
 =============================================================================
 
 
+Phase 8M — Add placement debug visibility toggle
+
+D toggles planned preview debug visuals:
+
+marker
+frame axes

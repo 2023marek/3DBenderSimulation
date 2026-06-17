@@ -27,6 +27,7 @@ public:
     void useManufacturingPlayback(); 
     //helper
     void toggleSimulationMode();
+    void togglePlannedPreviewDebug();
 	//Getters/setters
     void setShowInsertionMarker(bool enabled)
     {
@@ -197,7 +198,7 @@ private:
     bool showInsertionMarker = true;
     bool showInsertionFrame = true;
     bool showTransformedInsertOverlay = false;
-
+    bool plannedPreviewDebugVisible = true;
    
     enum class TestPlacementPreset
     {

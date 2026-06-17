@@ -209,6 +209,10 @@ void AppController::handleAction(UserAction action)
         togglePlacementPreset();
         break;
 
+    case UserAction::TogglePlannedPreviewDebug:
+        togglePlannedPreviewDebug();
+        break;
+
     }
 }
 
@@ -468,6 +472,30 @@ void AppController::toggleSimulationMode()
         }
 
         return "Unknown";
+    }
+    void AppController::togglePlannedPreviewDebug()
+    {
+        plannedPreviewDebugVisible =
+            !plannedPreviewDebugVisible;
+
+        auto& preview =
+            sim.getManufacturingPlanPreview();
+
+        preview.setShowInsertionMarker(
+            plannedPreviewDebugVisible
+        );
+
+        preview.setShowInsertionFrame(
+            plannedPreviewDebugVisible
+        );
+
+        preview.setShowTransformedInsertOverlay(
+            false
+        );
+
+        std::cout << "[APP PREVIEW DEBUG] "
+            << (plannedPreviewDebugVisible ? "ON" : "OFF")
+            << std::endl;
     }
 
    

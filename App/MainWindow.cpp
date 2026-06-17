@@ -131,6 +131,13 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         );
         break;
 
+    case Qt::Key_D:
+        std::cout << "[KEY] D ? TOGGLE PREVIEW DEBUG\n";
+        controller.handleAction(
+            UserAction::TogglePlannedPreviewDebug
+        );
+        break;
+
     default:
         break;
     }

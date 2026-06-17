@@ -8,5 +8,6 @@ enum class UserAction
     Step,
     ToggleRenderMode,
     ToggleSimulationMode,
-    TogglePlacementPreset
+    TogglePlacementPreset,
+    TogglePlannedPreviewDebug
 };
