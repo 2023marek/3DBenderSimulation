@@ -1626,3 +1626,14 @@ D toggles planned preview debug visuals:
 
 marker
 frame axes
+
+==============================================================
+Phase 8N — Add preview debug state to HUD
+
+HUD shows whether planned preview debug visuals are ON/OFF.
+DEBUG: ON
+or
+DEBUG: OFF
+his helps when pressing D.
+============================================================================
+

@@ -29,7 +29,9 @@ struct HUDData
     // ===== Progress =====
     double currentOpProgress = 0.0;
     double overallProgress = 0.0;
+    //====================================debug
 
+    bool plannedPreviewDebugVisible = true;
     // ===== Geometry =====
     size_t nodeCount = 0;
 
@@ -39,4 +41,5 @@ struct HUDData
     std::string machineStateName = "IDLE";
     std::string simulationModeName = "";
     std::string placementModeName = "";
+    std::string previewDebugName = "ON";
 };

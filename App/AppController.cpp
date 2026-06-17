@@ -115,6 +115,8 @@ HUDData AppController::buildHUDData() const
             "UNKNOWN";
     }
 
+    data.previewDebugName =
+        plannedPreviewDebugVisible ? "ON" : "OFF";
 
     data.placementModeName =
         sim.getManufacturingPlanPreview()
