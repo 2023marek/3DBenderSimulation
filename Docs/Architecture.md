@@ -1636,4 +1636,21 @@ or
 DEBUG: OFF
 his helps when pressing D.
 ============================================================================
+Phase 8R — Add active placement preset to AppController HUD data path
 
+Goal:
+HUD placement text should reflect AppController active preset directly:
+ArcLength / NodeIndex / ExplicitFrame
+
+=============================================================================
+Phase 8T — Prepare explicit-frame attach modes
+Prepare future behavior for ExplicitFrame:
+
+1. InsertedOnly
+   current behavior
+
+2. AppendAfterFrame
+   explicit frame + inserted pass only
+
+3. AttachBaseAfterInsert
+   before/base + inserted pass + after

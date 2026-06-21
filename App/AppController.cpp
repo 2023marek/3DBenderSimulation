@@ -137,8 +137,8 @@ HUDData AppController::buildHUDData() const
         plannedPreviewDebugVisible ? "ON" : "OFF";
 
     data.placementModeName =
-        sim.getManufacturingPlanPreview()
-        .getActivePlacementModeName();
+      sim.getManufacturingPlanPreview().getActivePlacementModeName();
+   
     data.currentOpIndex = sim.getCurrentOperationIndex();
     data.totalOperations = sim.getTotalOperations();
 

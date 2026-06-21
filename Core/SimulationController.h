@@ -14,6 +14,13 @@ class SimulationController
 public:
     enum class SimulationMode
     {
+
+
+
+        // Final planned shape preview.
+        // CAD-like visualization of ManufacturingPlan.
+        // Not process playback.
+
         CADPreview,
 
         // Final multi-pass planned shape.

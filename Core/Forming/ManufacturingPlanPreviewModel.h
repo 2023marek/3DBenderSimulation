@@ -40,6 +40,28 @@
 //      ?
 // preview nodes
 // =====================================================
+// =====================================================
+// MANUFACTURING PLAN PREVIEW MODEL
+//
+// Purpose:
+// - build final planned shape preview from ManufacturingPlan
+// - support placement previews:
+//      ArcLength
+//      NodeIndex
+//      ExplicitFrame
+//
+// Important:
+// Thisoming stock
+// - posit is NOT ManufacturingPlayback.
+//
+// It does NOT simulate:
+// - incioned straight
+// - active bend zone
+// - frozen geometry
+//
+// ManufacturingPlayback owns the four-zone process model.
+// =====================================================
+//=========================================================
 
 class ManufacturingPlanPreviewModel
 {
@@ -578,6 +600,14 @@ if (!resolvePlacementStartFrame(
                 << localInsertedNodes.size()
                 << " transformedNodes="
                 << transformedInsertedNodes.size()
+                << std::endl;
+
+            std::cout << "[PLAN PREVIEW EXPLICIT INSERT] insertedNodes="
+                << transformedInsertedNodes.size()
+                << " attachMode="
+                << explicitFrameAttachModeToString(
+                    pass.placement.explicitFrameAttachMode
+                )
                 << std::endl;
         }
         return true;

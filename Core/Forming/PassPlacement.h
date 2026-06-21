@@ -32,6 +32,27 @@ enum class PassPlacementMode
     // Start this pass from an explicit frame.
     ExplicitStartFrame
 };
+
+
+enum class ExplicitFrameAttachMode
+{
+    // Current behavior:
+    // show only inserted pass transformed into explicit frame.
+    InsertedOnly,
+
+    // Future:
+    // start inserted pass from explicit frame.
+    // No before/after base curve.
+    AppendAfterFrame,
+
+    // Future:
+    // base before + inserted pass + transformed after.
+    AttachBaseAfterInsert
+};
+
+
+
+
 // Helper for debugging.
 inline const char* passPlacementModeToString(
     PassPlacementMode mode)
@@ -54,10 +75,33 @@ inline const char* passPlacementModeToString(
         return "Unknown";
     }
 }
+
+inline const char* explicitFrameAttachModeToString(
+    ExplicitFrameAttachMode mode)
+{
+    switch (mode)
+    {
+    case ExplicitFrameAttachMode::InsertedOnly:
+        return "InsertedOnly";
+
+    case ExplicitFrameAttachMode::AppendAfterFrame:
+        return "AppendAfterFrame";
+
+    case ExplicitFrameAttachMode::AttachBaseAfterInsert:
+        return "AttachBaseAfterInsert";
+
+    default:
+        return "Unknown";
+    }
+}
 struct PassPlacement
 {
     PassPlacementMode mode =
         PassPlacementMode::AppendToPrevious;
+
+    ExplicitFrameAttachMode explicitFrameAttachMode =
+        ExplicitFrameAttachMode::InsertedOnly;
+
 
     // Used by InsertAtArcLength.
     double arcLength = 0.0;
@@ -91,12 +135,24 @@ struct PassPlacement
         return p;
     }
 
-    static PassPlacement atFrame(const Frame& frame)
+    static PassPlacement atFrame(
+        const Frame& frame,
+        ExplicitFrameAttachMode attachMode =
+        ExplicitFrameAttachMode::InsertedOnly)
     {
         PassPlacement p;
-        p.mode = PassPlacementMode::ExplicitStartFrame;
-        p.startFrame = frame;
+
+        p.mode =
+            PassPlacementMode::ExplicitStartFrame;
+
+        p.startFrame =
+            frame;
+
+        p.explicitFrameAttachMode =
+            attachMode;
+
         return p;
     }
 	
 };
+
