@@ -424,16 +424,17 @@ private:
 
 
       double resolvedArcLength = 0.0;
-Frame resolvedFrame;
+    Frame resolvedFrame;
 
-if (!resolvePlacementStartFrame(
+
+    if (!resolvePlacementStartFrame(
         pass,
         baseCurve,
         resolvedFrame,
         resolvedArcLength))
-{
+    {
     return false;
-}
+    }
 
         insertionFrame =
             resolvedFrame;
@@ -479,37 +480,101 @@ if (!resolvePlacementStartFrame(
         if (pass.placement.mode
             == PassPlacementMode::ExplicitStartFrame)
         {
-            nodes =
-                transformedInsertedNodes;
-
-            usingTransformedPreviewNodes =
-                true;
-
-            hasInsertionMarker =
-                true;
-
-            insertionMarkerNode.pos =
-                resolvedFrame.P;
-            insertionMarkerNode.T =
-                resolvedFrame.T;
-            insertionMarkerNode.N =
-                resolvedFrame.N;
-            insertionMarkerNode.B =
-                resolvedFrame.B;
-
-            if (debugLogging)
+            if (pass.placement.explicitFrameAttachMode
+                == ExplicitFrameAttachMode::InsertedOnly)
             {
-                std::cout << "[PLAN PREVIEW EXPLICIT INSERT] insertedNodes="
-                    << transformedInsertedNodes.size()
-                    << " attachMode="
-                    << explicitFrameAttachModeToString(
-                        pass.placement.explicitFrameAttachMode
-                    )
-                    << std::endl;
+                nodes =
+                    transformedInsertedNodes;
+
+                usingTransformedPreviewNodes =
+                    true;
+
+                if (debugLogging)
+                {
+                    std::cout << "[PLAN PREVIEW EXPLICIT INSERT] insertedNodes="
+                        << transformedInsertedNodes.size()
+                        << " attachMode="
+                        << explicitFrameAttachModeToString(
+                            pass.placement.explicitFrameAttachMode
+                        )
+                        << std::endl;
+                }
+
+                return true;
             }
 
-            return true;
+            if (pass.placement.explicitFrameAttachMode
+                == ExplicitFrameAttachMode::AppendAfterFrame)
+            {
+                // =====================================================
+                // APPEND AFTER EXPLICIT FRAME
+                //
+                // Current behavior:
+                //     same visual result as InsertedOnly.
+                //
+                // Meaning:
+                //     inserted pass starts from explicit frame.
+                //     no base before/after curve yet.
+                //
+                // Future:
+                //     this can become a different preview/process
+                //     path from InsertedOnly.
+                // =====================================================
+
+                nodes =
+                    transformedInsertedNodes;
+
+                usingTransformedPreviewNodes =
+                    true;
+
+                if (debugLogging)
+                {
+                    std::cout << "[PLAN PREVIEW EXPLICIT APPEND] insertedNodes="
+                        << transformedInsertedNodes.size()
+                        << " attachMode="
+                        << explicitFrameAttachModeToString(
+                            pass.placement.explicitFrameAttachMode
+                        )
+                        << std::endl;
+                }
+
+                return true;
+            }
+
+            if (pass.placement.explicitFrameAttachMode
+                == ExplicitFrameAttachMode::AttachBaseAfterInsert)
+            {
+                // =====================================================
+                // FUTURE MODE
+                //
+                // Not implemented yet.
+                // For now, fallback safely to transformed inserted pass.
+                // =====================================================
+
+                nodes =
+                    transformedInsertedNodes;
+
+                usingTransformedPreviewNodes =
+                    true;
+
+                if (debugLogging)
+                {
+                    std::cout << "[PLAN PREVIEW EXPLICIT ATTACH TODO] insertedNodes="
+                        << transformedInsertedNodes.size()
+                        << " attachMode="
+                        << explicitFrameAttachModeToString(
+                            pass.placement.explicitFrameAttachMode
+                        )
+                        << std::endl;
+                }
+
+                return true;
+            }
         }
+
+
+
+
 
         PipeCurveSplitResult split =
             baseCurve.splitAtArcLength(

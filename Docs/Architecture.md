@@ -1673,3 +1673,8 @@ AttachBaseAfterInsert
 Suggested key:
 
 A = attach mode toggle
+======================================================
+Phase 8W — Implement AppendAfterFrame behavior
+Goal:
+ExplicitFrame + AppendAfterFrame
+    uses its own code path
