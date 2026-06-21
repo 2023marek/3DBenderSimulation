@@ -16,6 +16,24 @@
 // =====================================
 // CONSTRUCTOR
 // =====================================
+
+namespace
+{
+    constexpr double TEST_FEED_1_LENGTH = 198.0;
+    constexpr double TEST_BEND_RADIUS = 20.0;
+    constexpr double TEST_BEND_ANGLE = PI / 2.0;
+    constexpr double TEST_FEED_2_LENGTH = 110.0;
+
+    constexpr double TEST_INCOMING_STOCK_LENGTH = 300.0;
+
+    constexpr double TEST_HELIX_LENGTH = 200.0;
+    constexpr double TEST_HELIX_RADIUS = 10.0;
+    constexpr double TEST_HELIX_PITCH = 15.0;
+    constexpr double TEST_HELIX_FEED_SPEED = 40.0;
+
+    constexpr double TEST_INSERT_ARC_LENGTH = 202.0;
+    constexpr size_t TEST_INSERT_NODE_INDEX = 404;
+}
 AppController::AppController()
 {
     testOperations =
@@ -26,7 +44,7 @@ AppController::AppController()
     );
 
     sim.getManufacturingPipe().setIncomingStockLength(
-        300.0
+        TEST_INCOMING_STOCK_LENGTH
     );
 
     rebuildTestManufacturingPlan();
@@ -267,12 +285,12 @@ void AppController::toggleSimulationMode()
 
         Operation op1;
         op1.type = Operation::FEED;
-        op1.length = 198.0;
+        op1.length = TEST_FEED_1_LENGTH;
 
         Operation op2;
         op2.type = Operation::BEND;
-        op2.R = 20.0;
-        op2.angle = PI / 2.0;
+        op2.R = TEST_BEND_RADIUS;
+        op2.angle = TEST_BEND_ANGLE;
         op2.bendDirection = BendDirection::CCW;
 
         Operation op3;
@@ -282,7 +300,7 @@ void AppController::toggleSimulationMode()
 
         Operation op4;
         op4.type = Operation::FEED;
-        op4.length = 110.0;
+        op4.length = TEST_FEED_2_LENGTH;
 
         ops.push_back(op1);
         ops.push_back(op2);
@@ -310,10 +328,10 @@ void AppController::toggleSimulationMode()
         helixPassOp.inputMode =
             HelixOperation::InputMode::RadiusPitch;
 
-        helixPassOp.length = 200.0;
-        helixPassOp.helixRadius = 10.0;
-        helixPassOp.pitch = 15.0;
-        helixPassOp.feedSpeed = 40.0;
+        helixPassOp.length = TEST_HELIX_LENGTH;
+        helixPassOp.helixRadius = TEST_HELIX_RADIUS;
+        helixPassOp.pitch = TEST_HELIX_PITCH;
+        helixPassOp.feedSpeed = TEST_HELIX_FEED_SPEED;
 
         ManufacturingPass helixPass =
             HelixFormingPassBuilder::buildPass(
@@ -362,14 +380,14 @@ void AppController::toggleSimulationMode()
         if (preset == TestPlacementPreset::ArcLength)
         {
             return PassPlacement::atArcLength(
-                202.0
+                TEST_INSERT_ARC_LENGTH
             );
         }
 
         if (preset == TestPlacementPreset::NodeIndex)
         {
             return PassPlacement::atNodeIndex(
-                404
+                TEST_INSERT_NODE_INDEX
             );
         }
 
