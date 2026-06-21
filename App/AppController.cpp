@@ -235,6 +235,10 @@ void AppController::handleAction(UserAction action)
         togglePlannedPreviewDebug();
         break;
 
+    case UserAction::ToggleExplicitAttachMode:
+        toggleExplicitAttachMode();
+        break;
+
     }
 }
 
@@ -403,7 +407,8 @@ void AppController::toggleSimulationMode()
             frame.B = { 0.0, 0.0, 1.0 };
 
             return PassPlacement::atFrame(
-                frame
+                frame,
+                activeExplicitAttachMode
             );
         }
 
@@ -412,6 +417,37 @@ void AppController::toggleSimulationMode()
 
         
 
+    }
+
+
+    void AppController::toggleExplicitAttachMode()
+    {
+        if (activeExplicitAttachMode
+            == ExplicitFrameAttachMode::InsertedOnly)
+        {
+            activeExplicitAttachMode =
+                ExplicitFrameAttachMode::AppendAfterFrame;
+        }
+        else if (activeExplicitAttachMode
+            == ExplicitFrameAttachMode::AppendAfterFrame)
+        {
+            activeExplicitAttachMode =
+                ExplicitFrameAttachMode::AttachBaseAfterInsert;
+        }
+        else if (activeExplicitAttachMode
+            == ExplicitFrameAttachMode::AttachBaseAfterInsert)
+        {
+            activeExplicitAttachMode =
+                ExplicitFrameAttachMode::InsertedOnly;
+        }
+
+        rebuildTestManufacturingPlan();
+
+        std::cout << "[APP EXPLICIT ATTACH] "
+            << explicitFrameAttachModeToString(
+                activeExplicitAttachMode
+            )
+            << std::endl;
     }
 
     void AppController::togglePlacementPreset()
@@ -530,13 +566,8 @@ void AppController::toggleSimulationMode()
             return "-";
         }
 
-        PassPlacement placement =
-            buildTestPlacement(
-                activePlacementPreset
-            );
-
         return explicitFrameAttachModeToString(
-            placement.explicitFrameAttachMode
+            activeExplicitAttachMode
         );
     }
 

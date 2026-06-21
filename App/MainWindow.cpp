@@ -137,6 +137,12 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
             UserAction::TogglePlannedPreviewDebug
         );
         break;
+    case Qt::Key_A:
+        std::cout << "[KEY] A ? TOGGLE EXPLICIT ATTACH MODE\n";
+        controller.handleAction(
+            UserAction::ToggleExplicitAttachMode
+        );
+        break;
 
     default:
         break;

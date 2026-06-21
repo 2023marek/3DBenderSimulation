@@ -9,5 +9,6 @@ enum class UserAction
     ToggleRenderMode,
     ToggleSimulationMode,
     TogglePlacementPreset,
-    TogglePlannedPreviewDebug
+    TogglePlannedPreviewDebug,
+    ToggleExplicitAttachMode
 };

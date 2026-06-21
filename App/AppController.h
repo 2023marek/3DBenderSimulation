@@ -28,6 +28,7 @@ public:
     //helper
     void toggleSimulationMode();
     void togglePlannedPreviewDebug();
+    void toggleExplicitAttachMode();
 	//Getters/setters
     void setShowInsertionMarker(bool enabled)
     {
@@ -92,7 +93,7 @@ public:
             << (renderMode == RenderMode::LINE ? "LINE" : "MESH")
             << std::endl;
     }
-
+    
     // =====================================================
     // MANUFACTURING PIPE API
     // =====================================================
@@ -221,5 +222,7 @@ private:
         TestPlacementPreset preset) const;
     const char* activeAttachModeName() const;
     
+   ExplicitFrameAttachMode activeExplicitAttachMode =
+        ExplicitFrameAttachMode::InsertedOnly;
 }; 
       

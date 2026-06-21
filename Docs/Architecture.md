@@ -1660,3 +1660,16 @@ Prepare future behavior for ExplicitFrame:
 HUD shows explicit-frame attach mode:
 
 ATTACH: InsertedOnly
+
+===================================================
+Phase 8V — Add explicit attach mode preset toggle
+When placement preset is ExplicitFrame,
+cycle attach mode:
+
+InsertedOnly
+AppendAfterFrame
+AttachBaseAfterInsert
+
+Suggested key:
+
+A = attach mode toggle
