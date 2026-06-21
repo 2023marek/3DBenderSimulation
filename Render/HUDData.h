@@ -42,4 +42,5 @@ struct HUDData
     std::string simulationModeName = "";
     std::string placementModeName = "";
     std::string previewDebugName = "ON";
+    std::string attachModeName = "-";
 };

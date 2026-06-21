@@ -1654,3 +1654,9 @@ Prepare future behavior for ExplicitFrame:
 
 3. AttachBaseAfterInsert
    before/base + inserted pass + after
+
+   ====================================================
+   Phase 8U — Add attach mode name to HUD
+HUD shows explicit-frame attach mode:
+
+ATTACH: InsertedOnly

@@ -11,6 +11,7 @@
 #include "Core/Forming/RotaryDrawPassBuilder.h"
 #include "Core/Sampling/PipeCurveNodeQuery.h"
 #include "Core/Geometry/Frame.h"
+
 //#include "Core/Sampling/PipeCurveSampler.h"
 
 // =====================================
@@ -138,7 +139,8 @@ HUDData AppController::buildHUDData() const
 
     data.placementModeName =
       sim.getManufacturingPlanPreview().getActivePlacementModeName();
-   
+    data.attachModeName =
+        activeAttachModeName();
     data.currentOpIndex = sim.getCurrentOperationIndex();
     data.totalOperations = sim.getTotalOperations();
 
@@ -519,5 +521,22 @@ void AppController::toggleSimulationMode()
     }
 
    
+    // Support for HUD============================
+    const char* AppController::activeAttachModeName() const
+    {
+        if (activePlacementPreset
+            != TestPlacementPreset::ExplicitFrame)
+        {
+            return "-";
+        }
 
+        PassPlacement placement =
+            buildTestPlacement(
+                activePlacementPreset
+            );
+
+        return explicitFrameAttachModeToString(
+            placement.explicitFrameAttachMode
+        );
+    }
 

@@ -501,6 +501,10 @@ if (!resolvePlacementStartFrame(
             {
                 std::cout << "[PLAN PREVIEW EXPLICIT INSERT] insertedNodes="
                     << transformedInsertedNodes.size()
+                    << " attachMode="
+                    << explicitFrameAttachModeToString(
+                        pass.placement.explicitFrameAttachMode
+                    )
                     << std::endl;
             }
 
@@ -602,13 +606,7 @@ if (!resolvePlacementStartFrame(
                 << transformedInsertedNodes.size()
                 << std::endl;
 
-            std::cout << "[PLAN PREVIEW EXPLICIT INSERT] insertedNodes="
-                << transformedInsertedNodes.size()
-                << " attachMode="
-                << explicitFrameAttachModeToString(
-                    pass.placement.explicitFrameAttachMode
-                )
-                << std::endl;
+            
         }
         return true;
     }

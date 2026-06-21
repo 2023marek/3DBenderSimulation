@@ -200,6 +200,13 @@ void HUDPanel::render()
         glm::vec4(0.7f, 0.9f, 0.7f, 1.0f)
     );
 
+    drawText(
+        textX,
+        textY + lineH * 9,
+        "ATTACH: " + data.attachModeName,
+        glm::vec4(0.8f, 0.8f, 1.0f, 1.0f)
+    );
+
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
 }

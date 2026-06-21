@@ -219,7 +219,7 @@ private:
     //helper
     const char* testPlacementPresetToString(
         TestPlacementPreset preset) const;
-
+    const char* activeAttachModeName() const;
     
 }; 
       
