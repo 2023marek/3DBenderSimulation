@@ -1678,3 +1678,30 @@ Phase 8W — Implement AppendAfterFrame behavior
 Goal:
 ExplicitFrame + AppendAfterFrame
     uses its own code path
+========================================================
+Phase 8X — Implement AttachBaseAfterInsert fallback as base + helix
+Goal:
+ExplicitFrame + AttachBaseAfterInsert
+currently shows:
+
+base curve + explicit-frame helix
+No transformed after-curve yet.
+expected:
+rotary base pipe
++
+separate helix starting at explicit frame
+This helps prepare real base/insert attachment later.
+ExplicitFrame + AttachBaseAfterInsert
+    shows:
+        base rotary curve
+        +
+        explicit-frame helix
+No real attachment yet.
+No after-curve transformation yet.
+
+expected visual:
+rotary base pipe
+
+and separately:
+
+helix starting at explicit frame P

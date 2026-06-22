@@ -81,6 +81,7 @@ public:
         hasInsertionFrame = false;
         hasResolvedInsertionFrame = false;
         transformedInsertedNodes.clear();
+        previewNodeStrips.clear();
         usingTransformedPreviewNodes = false;
         dirty = true;
     }
@@ -173,7 +174,18 @@ public:
         buildIfDirty();
         return usingTransformedPreviewNodes;
     }
+    // Strip getter
+    const std::vector<std::vector<PipeNode>>& getPreviewNodeStrips() const
+    {
+        buildIfDirty();
+        return previewNodeStrips;
+    }
 
+    bool hasPreviewNodeStrips() const
+    {
+        buildIfDirty();
+        return !previewNodeStrips.empty();
+    }
     //FLAG
     //flag setter
     void setDebugLogging(
@@ -269,6 +281,7 @@ private:
     bool showInsertionMarker = true;
     bool showInsertionFrame = true;
     bool showTransformedInsertOverlay = false;
+    mutable std::vector<std::vector<PipeNode>> previewNodeStrips;
 
 private:
     void buildIfDirty() const
@@ -287,7 +300,7 @@ private:
         hasInsertionFrame = false;
         hasResolvedInsertionFrame = false;
         usingTransformedPreviewNodes = false;
-
+        previewNodeStrips.clear();
         transformedInsertedNodes.clear();
 
         const ManufacturingPass* insertPass =
@@ -545,26 +558,62 @@ private:
                 == ExplicitFrameAttachMode::AttachBaseAfterInsert)
             {
                 // =====================================================
-                // FUTURE MODE
+                // EXPLICIT FRAME + BASE FALLBACK
                 //
-                // Not implemented yet.
-                // For now, fallback safely to transformed inserted pass.
+                // Current safe behavior:
+                //
+                //     base curve
+                //          +
+                //     inserted pass transformed to explicit frame
+                //
+                // This does NOT connect the base end to the inserted pass.
+                // It only previews both shapes together.
+                //
+                // Future:
+                //     attach base before/after using explicit frame rules.
                 // =====================================================
 
+                auto baseNodes =
+                    PipeCurveSampler::sample(
+                        baseCurve,
+                        ds
+                    );
+
+                previewNodeStrips.clear();
+
+                if (!baseNodes.empty())
+                {
+                    previewNodeStrips.push_back(
+                        baseNodes
+                    );
+                }
+
+                if (!transformedInsertedNodes.empty())
+                {
+                    previewNodeStrips.push_back(
+                        transformedInsertedNodes
+                    );
+                }
+
+                // Keep nodes as transformed insert for HUD/node count fallback.
+                // GLView will render strips when available.
                 nodes =
                     transformedInsertedNodes;
 
                 usingTransformedPreviewNodes =
                     true;
 
+                usingTransformedPreviewNodes =
+                    true;
+
                 if (debugLogging)
                 {
-                    std::cout << "[PLAN PREVIEW EXPLICIT ATTACH TODO] insertedNodes="
+                    std::cout << "[PLAN PREVIEW EXPLICIT ATTACH STRIPS] strips="
+                        << previewNodeStrips.size()
+                        << " baseNodes="
+                        << baseNodes.size()
+                        << " insertedNodes="
                         << transformedInsertedNodes.size()
-                        << " attachMode="
-                        << explicitFrameAttachModeToString(
-                            pass.placement.explicitFrameAttachMode
-                        )
                         << std::endl;
                 }
 

@@ -643,6 +643,12 @@ void GLView::paintGL()
         const auto& previewNodes =
             preview.getNodes();
 
+        const auto& previewStrips =
+        preview.getPreviewNodeStrips();
+
+        bool useStrips =
+        !previewStrips.empty();
+
         //std::cout << "[GLView PLAN PREVIEW] nodes="
          //   << previewNodes.size()
           //  << std::endl;
@@ -651,9 +657,31 @@ void GLView::paintGL()
 
         if (renderMode == RenderMode::LINE)
         {
-            pipeRenderer.uploadLine(
-                nodesToFloatLine(previewNodes)
-            );
+            if (useStrips)
+            {
+                std::vector<std::vector<float>> strips;
+
+                for (const auto& strip : previewStrips)
+                {
+                    strips.push_back(
+                        nodesToFloatLine(
+                            strip
+                        )
+                    );
+                }
+
+                pipeRenderer.uploadLineStrips(
+                    strips
+                );
+            }
+            else
+            {
+                pipeRenderer.uploadLine(
+                    nodesToFloatLine(
+                        previewNodes
+                    )
+                );
+            }
 
             glLineWidth(2.0f);
             pipeRenderer.draw();
@@ -663,11 +691,25 @@ void GLView::paintGL()
 
         else if (renderMode == RenderMode::MESH)
         {
-            drawTubeZone(
-                previewNodes,
-                5.0,
-                12
-            );
+            if (useStrips)
+            {
+                for (const auto& strip : previewStrips)
+                {
+                    drawTubeZone(
+                        strip,
+                        5.0,
+                        12
+                    );
+                }
+            }
+            else
+            {
+                drawTubeZone(
+                    previewNodes,
+                    5.0,
+                    12
+                );
+            }
         }
 
 

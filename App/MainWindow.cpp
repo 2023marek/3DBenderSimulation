@@ -21,15 +21,15 @@ MainWindow::MainWindow()
     // BUTTONS
     // =========================
     QPushButton* btnPlay = new QPushButton("Play", this);
-    btnPlay->setGeometry(10, 220, 60, 30);
+    btnPlay->setGeometry(10, 320, 60, 30);
     btnPlay->setFocusPolicy(Qt::NoFocus);   // ? HERE
 
     QPushButton* btnPause = new QPushButton("Pause", this);
-    btnPause->setGeometry(80, 220, 60, 30);
+    btnPause->setGeometry(80, 320, 60, 30);
     btnPause->setFocusPolicy(Qt::NoFocus);  // ? HERE
 
     QPushButton* btnReset = new QPushButton("Reset", this);
-    btnReset->setGeometry(150, 220, 60, 30);
+    btnReset->setGeometry(150, 320, 60, 30);
     btnReset->setFocusPolicy(Qt::NoFocus);  // ? HERE
 
     // =========================
