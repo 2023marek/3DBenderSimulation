@@ -1705,3 +1705,36 @@ rotary base pipe
 and separately:
 
 helix starting at explicit frame P
+
+==========================================================
+Phase 8Y — Clean node count for preview strips
+Goal:
+HUD node count should be correct for both preview styles.
+Current normal preview:
+previewNodes:
+    before ---- HELIX ---- after
+
+HUD node count = previewNodes.size()
+Disconnected preview:
+previewNodeStrips:
+    strip 0 = base pipe
+    strip 1 = explicit helix
+
+HUD should count:
+    base nodes + helix nodes
+
+Diagram:
+Normal connected preview:
+
+[ nodes ]
+0 ---- 1 ---- 2 ---- 3 ---- 4 ---- 5
+
+count = nodes.size()
+
+
+Disconnected preview:
+
+[ strip 0 ]        [ strip 1 ]
+0---1---2---3      0---1---2
+
+count = strip0.size + strip1.size

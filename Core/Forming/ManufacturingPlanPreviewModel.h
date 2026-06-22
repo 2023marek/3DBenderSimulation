@@ -174,6 +174,38 @@ public:
         buildIfDirty();
         return usingTransformedPreviewNodes;
     }
+
+
+
+
+    //====Helper============================================
+   // size_t getPreviewNodeCount() const
+   // {
+   //     buildIfDirty();
+
+    //    if (!previewNodeStrips.empty())
+     //   {
+       //     size_t count = 0;
+
+         //   for (const auto& strip : previewNodeStrips)
+           // {
+             //   count += strip.size();
+           // }
+
+           // return count;
+       // }
+
+        //return nodes.size();
+   // }
+
+
+    // Helper 
+    size_t getPreviewNodeCount() const
+    {
+        buildIfDirty();
+        return countPreviewNodesNoBuild();
+    }
+     
     // Strip getter
     const std::vector<std::vector<PipeNode>>& getPreviewNodeStrips() const
     {
@@ -603,19 +635,23 @@ private:
                 usingTransformedPreviewNodes =
                     true;
 
-                usingTransformedPreviewNodes =
-                    true;
-
-                if (debugLogging)
+                if (debugLogging && !previewNodeStrips.empty())
                 {
-                    std::cout << "[PLAN PREVIEW EXPLICIT ATTACH STRIPS] strips="
-                        << previewNodeStrips.size()
-                        << " baseNodes="
-                        << baseNodes.size()
-                        << " insertedNodes="
-                        << transformedInsertedNodes.size()
+                    std::cout << "[PLAN PREVIEW STRIP COUNT] totalNodes="
+                        << countPreviewNodesNoBuild()
                         << std::endl;
                 }
+
+               // if (debugLogging)
+               // {
+                //    std::cout << "[PLAN PREVIEW EXPLICIT ATTACH STRIPS] strips="
+                 //       << previewNodeStrips.size()
+               //         << " baseNodes="
+               //         << baseNodes.size()
+               //         << " insertedNodes="
+              //          << transformedInsertedNodes.size()
+              //          << std::endl;
+             //   }
 
                 return true;
             }
@@ -906,5 +942,22 @@ private:
             frameQuery.frame;
 
         return true;
+    }
+
+    size_t countPreviewNodesNoBuild() const
+    {
+        if (!previewNodeStrips.empty())
+        {
+            size_t count = 0;
+
+            for (const auto& strip : previewNodeStrips)
+            {
+                count += strip.size();
+            }
+
+            return count;
+        }
+
+        return nodes.size();
     }
 };

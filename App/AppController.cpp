@@ -147,13 +147,24 @@ HUDData AppController::buildHUDData() const
     data.currentOpProgress = sim.getCurrentOperationProgress();
     data.overallProgress = sim.getOverallProgress();
 
-    if (sim.getMode() == SimulationController::SimulationMode::ManufacturingPlayback)
+    if (sim.getMode()
+        == SimulationController::SimulationMode::ManufacturingPlayback)
     {
-        data.nodeCount = sim.getManufacturingPipe().getNodes().size();
+        data.nodeCount =
+            sim.getManufacturingPipe().getNodes().size();
     }
-    else if (sim.getMode() == SimulationController::SimulationMode::CADPreview)
+    else if (sim.getMode()
+        == SimulationController::SimulationMode::CADPreview)
     {
-        data.nodeCount = sim.getCadPipeGeometry().getNodes().size();
+        data.nodeCount =
+            sim.getCadPipeGeometry().getNodes().size();
+    }
+    else if (sim.getMode()
+        == SimulationController::SimulationMode::PlannedShapePreview)
+    {
+        data.nodeCount =
+            sim.getManufacturingPlanPreview()
+            .getPreviewNodeCount();
     }
     else
     {
