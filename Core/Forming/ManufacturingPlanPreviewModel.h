@@ -589,72 +589,17 @@ private:
             if (pass.placement.explicitFrameAttachMode
                 == ExplicitFrameAttachMode::AttachBaseAfterInsert)
             {
-                // =====================================================
-                // EXPLICIT FRAME + BASE FALLBACK
-                //
-                // Current safe behavior:
-                //
-                //     base curve
-                //          +
-                //     inserted pass transformed to explicit frame
-                //
-                // This does NOT connect the base end to the inserted pass.
-                // It only previews both shapes together.
-                //
-                // Future:
-                //     attach base before/after using explicit frame rules.
-                // =====================================================
-
-                auto baseNodes =
-                    PipeCurveSampler::sample(
-                        baseCurve,
-                        ds
-                    );
-
-                previewNodeStrips.clear();
-
-                if (!baseNodes.empty())
+                if (applyExplicitAttachBaseAfterInsert(
+                    pass,
+                    baseCurve,
+                    resolvedFrame))
                 {
-                    previewNodeStrips.push_back(
-                        baseNodes
-                    );
+                    return true;
                 }
 
-                if (!transformedInsertedNodes.empty())
-                {
-                    previewNodeStrips.push_back(
-                        transformedInsertedNodes
-                    );
-                }
-
-                // Keep nodes as transformed insert for HUD/node count fallback.
-                // GLView will render strips when available.
-                nodes =
-                    transformedInsertedNodes;
-
-                usingTransformedPreviewNodes =
-                    true;
-
-                if (debugLogging && !previewNodeStrips.empty())
-                {
-                    std::cout << "[PLAN PREVIEW STRIP COUNT] totalNodes="
-                        << countPreviewNodesNoBuild()
-                        << std::endl;
-                }
-
-               // if (debugLogging)
-               // {
-                //    std::cout << "[PLAN PREVIEW EXPLICIT ATTACH STRIPS] strips="
-                 //       << previewNodeStrips.size()
-               //         << " baseNodes="
-               //         << baseNodes.size()
-               //         << " insertedNodes="
-              //          << transformedInsertedNodes.size()
-              //          << std::endl;
-             //   }
-
-                return true;
+                // fallback to current disconnected strips behavior
             }
+
         }
 
 
@@ -959,5 +904,23 @@ private:
         }
 
         return nodes.size();
+    }
+
+    bool applyExplicitAttachBaseAfterInsert(
+        const ManufacturingPass& pass,
+        const PipeCurve& baseCurve,
+        const Frame& resolvedFrame)  const
+    {
+        // TODO Phase 9B+
+        // Real behavior:
+        //
+        // 1. Decide insertion position on base curve.
+        // 2. Split base curve into before/after.
+        // 3. Transform inserted pass to resolvedFrame.
+        // 4. Transform after curve to inserted end frame.
+        // 5. Rebuild preview nodes.
+        //
+        // Current behavior remains handled by disconnected strips.
+        return false;
     }
 };

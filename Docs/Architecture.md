@@ -1738,3 +1738,373 @@ Disconnected preview:
 0---1---2---3      0---1---2
 
 count = strip0.size + strip1.size
+
+========================================================
+Phase 8Z — Document preview node models
+Goal:document the difference between
+
+connected preview nodes
+disconnected preview strips
+
+Diagram:
+Connected preview:
+
+nodes:
+before ---- HELIX ---- after
+
+=====
+Disconnected preview:
+
+previewNodeStrips:
+strip 0: base pipe
+
+strip 1: explicit-frame helix
+
+
+====
+basic terms:
+nodes
+    one continuous drawable pipe path
+
+previewNodeStrips
+    multiple independent drawable pipe paths
+
+strip
+    one independent pipe path
+
+bridge artifact
+    unwanted connection between end of one shape and start of another
+=============================================================================
+Phase 9A — Prepare real AttachBaseAfterInsert behavior
+Goal:
+Move from preview-only fallback:
+
+base strip
+helix strip
+
+toward real connected logic:
+
+base before
+    +
+explicit-frame inserted pass
+    +
+after curve
+
+====
+First small step:
+Phase 9A:
+    add comments + placeholder helper only
+    no behavior change
+
+    Planed pipeflow:
+Base curve
+0 -------------------------------- end
+          ^
+          explicit frame target
+
+Future:
+base before ---- inserted pass ---- transformed base after
+For Phase 9A, add helper stub:
+bool applyExplicitAttachBaseAfterInsert(
+    const ManufacturingPass& pass,
+    const PipeCurve& baseCurve,
+    const Frame& resolvedFrame)
+{
+    // TODO Phase 9B+
+    // Real behavior:
+    //
+    // 1. Decide insertion position on base curve.
+    // 2. Split base curve into before/after.
+    // 3. Transform inserted pass to resolvedFrame.
+    // 4. Transform after curve to inserted end frame.
+    // 5. Rebuild preview nodes.
+    //
+    // Current behavior remains handled by disconnected strips.
+    return false;
+}
+====================================================
+Frame
+    Local coordinate system attached to pipe.
+
+Frame = P + T/N/B
+
+P = position
+T = tangent / forward direction of pipe
+N = normal direction
+B = binormal direction
+
+Diagram:
+                 N
+                 ?
+                 |
+                 |
+                 P ----? T
+                /
+               /
+              B
+P = where the inserted shape starts
+T = direction the inserted shape grows forward
+N/B = radial orientation around the pipe
+======================================================================  
+
+Meaning of resolvedFrame
+resolvedFrame means:
+
+the final concrete frame where insertion should start
+
+It can come from different placement modes:
+ArcLength
+    s = 202 mm
+    ?
+    find frame on base curve at this distance
+    ?
+    resolvedFrame
+
+NodeIndex
+    nodeIndex = 404
+    ?
+    find node/frame at index
+    ?
+    resolvedFrame
+
+ExplicitFrame
+    user gives Frame directly
+    ?
+    resolvedFrame = user frame
+=======================================================
+Pipeflow:
+    PassPlacement
+      ?
+      ?
+resolvePlacementStartFrame(...)
+      ?
+      ?
+resolvedFrame = P,T,N,B
+      ?
+      ?
+inserted pass starts here
+
+====================================================
+Meaning of “transform”
+In this project, transform means:
+take geometry created in local/default coordinates
+and place it into another frame in world coordinates
+
+Local helix before transform:
+
+local coordinates
+
+P=(0,0,0)
+T=+X
+
+HELIX starts at origin:
+
+0 ---- coil ---->
+
+After transform to resolvedFrame:
+
+world coordinates
+
+resolvedFrame.P = insertion point
+resolvedFrame.T = pipe tangent direction
+
+HELIX starts at resolvedFrame.P:
+
+base pipe ---- P ---- coil ---->
+
+So this:
+PipeCurveTransform::transformNodesToFrame(
+    localInsertedNodes,
+    resolvedFrame
+);
+
+means:
+
+local inserted helix
+    ?
+move + rotate
+    ?
+helix starts at resolvedFrame
+
+======================
+Point 3 explained
+// 3. Transform inserted pass to resolvedFrame.
+//
+// The inserted pass, for example a helix, is usually generated
+// in its own local coordinate system:
+//
+//     local start position = (0, 0, 0)
+//     local forward axis   = +X
+//
+// But the selected insertion location may be somewhere on an
+// already existing pipe:
+//
+//     resolvedFrame.P = insertion point
+//     resolvedFrame.T = pipe tangent direction
+//     resolvedFrame.N = local normal direction
+//     resolvedFrame.B = local binormal direction
+//
+// Transform means:
+//     local helix coordinates
+//         ->
+//     world coordinates defined by resolvedFrame.
+//
+// Result:
+//     first helix node starts at resolvedFrame.P
+//     helix forward direction follows resolvedFrame.T
+//     helix radial orientation uses resolvedFrame.N/B.
+
+Diagram:
+
+Before transform:
+
+local helix:
+
+(0,0,0) ---- HELIX ---->
+   T=+X
+
+
+Target insertion frame:
+
+base pipe ---- P
+               \
+                T direction
+
+
+After transform:
+
+base pipe ---- P ---- HELIX ---->
+               ^
+               resolvedFrame.P
+    =======================================
+
+               Point 4 explained
+Expanded comment:
+// 4. Transform after curve to inserted end frame.
+//
+// After inserting a new pass, the remaining base curve cannot
+// simply stay in its old position.
+//
+// Why?
+//
+// Because the inserted pass changes where the continuation
+// should start.
+//
+// Correct flow:
+//
+//     base before
+//         +
+//     transformed inserted pass
+//         +
+//     after curve transformed to inserted end frame
+//
+// The end frame of the inserted pass becomes the new start frame
+// for the remaining pipe geometry.
+//
+// This keeps the pipe continuous:
+//
+//     before ---- inserted ---- after
+//
+// instead of:
+//
+//     before ---- inserted
+//     old after curve still somewhere else
+
+Diagram:
+
+Wrong:
+
+before ---- HELIX
+
+after curve still starts at old split frame
+---- after
+
+
+Correct:
+
+before ---- HELIX ---- after
+                  ^
+                  inserted end frame
+                  after curve starts here
+
+More detailed pipeflow:
+Base curve before insertion:
+
+A ---------------- P ---------------- Z
+                  split
+                  
+A -> P = before curve
+P -> Z = after curve
+
+
+Insert helix at P:
+
+A ---------------- P ---- HELIX_END
+
+Now after curve must be moved:
+
+old after:
+P ---------------- Z
+
+transformed after:
+HELIX_END -------- Z'
+
+Final:
+A ---- P ---- HELIX ---- HELIX_END ---- transformed after
+
+====================================
+Why this matters
+
+Without step 4, you get disconnected or wrong geometry:
+
+before ---- HELIX
+P ---- old after
+
+With step 4:
+
+before ---- HELIX ---- after
+
+This is exactly the same problem we already fixed earlier for:
+ArcLength / NodeIndex insertion
+where the after-curve had to be transformed to the helix end frame.
+
+==============================
+
+Again
+Phase 9A — Prepare real AttachBaseAfterInsert behavior
+Goal:
+Move from preview-only fallback:
+
+base strip
+helix strip
+
+toward real connected logic:
+
+base before
+    +
+explicit-frame inserted pass
+    +
+after curve
+
+===
+First small step:
+Phase 9A:
+    add comments + placeholder helper only
+    no behavior change
+
+    Planned pipeflow:
+    Base curve
+0 -------------------------------- end
+          ^
+          explicit frame target
+
+Future:
+base before ---- inserted pass ---- transformed base after
+
+========================================================
+Phase 9B — Route AttachBaseAfterInsert into helper
+Goal:
+No behavior change yet.
+
+ExplicitFrame + AttachBaseAfterInsert
+    calls applyExplicitAttachBaseAfterInsert(...)
