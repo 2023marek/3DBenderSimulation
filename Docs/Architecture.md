@@ -2108,3 +2108,15 @@ No behavior change yet.
 
 ExplicitFrame + AttachBaseAfterInsert
     calls applyExplicitAttachBaseAfterInsert(...)
+
+
+    =====================================================
+    Phase 9C — Formalize AttachBaseAfterInsert behavior
+
+Goal:
+Make this behavior intentional:
+ExplicitFrame + AttachBaseAfterInsert
+    split base at s=0
+    before empty
+    inserted helix
+    after full base curve transformed to helix end frame
