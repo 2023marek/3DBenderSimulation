@@ -642,4 +642,14 @@ const ManufacturingPipeSimulator& SimulationController::pipe() const
 {
     return pipeSystem.manufacturingPipe();
 }
+
+ManufacturingHistory& SimulationController::getManufacturingHistory()
+{
+    return manufacturingHistory;
+}
+
+const ManufacturingHistory& SimulationController::getManufacturingHistory() const
+{
+    return manufacturingHistory;
+}
     

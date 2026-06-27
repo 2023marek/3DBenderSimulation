@@ -7,7 +7,7 @@
 #include "Core/Manufacturing/RotationKinematicMode.h"
 #include "Core/PipeSystem.h"
 #include "Core/Forming/ManufacturingPlanPreviewModel.h"
-
+#include "Core/Forming/ManufacturingHistory.h"
 
 class SimulationController
 {
@@ -219,7 +219,12 @@ public:
         return machineSystem.getRenderData();
     }
 
-
+    public:
+        
+        //HELPER===========================
+        
+        ManufacturingHistory& getManufacturingHistory();
+        const ManufacturingHistory& getManufacturingHistory() const;
 private:
     // =====================================================
     // Mode / speed
@@ -257,6 +262,8 @@ private:
     // Full loaded program copy
     std::vector<Operation> loadedOperations;
 
+
+
 private:
     // =====================================================
     // Internal execution
@@ -272,4 +279,7 @@ private:
 
     void updatePipeGeometryCAD();
     void updatePipeGeometryManufacturing();
+
+    ManufacturingHistory manufacturingHistory;
+  
 };

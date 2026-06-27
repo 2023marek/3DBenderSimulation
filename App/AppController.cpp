@@ -67,7 +67,6 @@ namespace
     }
 }
 
-
 AppController::AppController()
 {
     testOperations =
@@ -620,4 +619,5 @@ void AppController::toggleSimulationMode()
         );
     }
 
-    
+  
+

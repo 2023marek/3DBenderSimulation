@@ -2763,3 +2763,36 @@ Move temporary manufacturing-history test into clean debug helper
 Keep AppController constructor clean.
 Keep ManufacturingHistory compile test available.
 No playback/rendering behavior change.
+
+==============================================
+Phase 2A — Manufacturing History becomes part of the simulator
+Goal:
+Right now:
+ManufacturingHistory
+        ?
+temporary compile test only
+
+ASCII diagram:
+AppController
+      ?
+      ?
+SimulationController
+      ?
+      ??? ManufacturingPipeSimulator
+      ??? ManufacturingPlanPreview
+      ??? ManufacturingHistory
+
+      Only architecture:
+
+Add a ManufacturingHistory member to SimulationController.
+
+User program
+      ?
+      ?
+ManufacturingHistory
+      ?
+      ?
+ManufacturingPipeSimulator
+      ?
+      ?
+Renderer
