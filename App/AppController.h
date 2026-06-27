@@ -14,6 +14,7 @@
 #include "Core/Operations.h"
 #include "Core/Forming/ManufacturingPlan.h"
 #include "Core/Forming/PassPlacement.h"
+#include "Core/Forming/ManufacturingHistory.h"
 
 
 class AppController
@@ -224,5 +225,7 @@ private:
     
    ExplicitFrameAttachMode activeExplicitAttachMode =
         ExplicitFrameAttachMode::InsertedOnly;
+
+  
 }; 
       

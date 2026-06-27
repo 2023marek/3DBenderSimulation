@@ -12,6 +12,13 @@
 #include "Core/Sampling/PipeCurveSampleQuery.h"
 #include "Core/Curve/PipeCurveTransform.h"
 #include "Core/Sampling/PipeCurveNodeQuery.h"
+// IMPORTANT:
+// This model is allowed to use CAD-like placement tools.
+// It may splice, preview, insert, or transform planned curves.
+//
+// It must not be treated as proof that the machine can
+// physically manufacture the same shape.
+//```
 
 // =====================================================
 // MANUFACTURING PLAN PREVIEW MODEL

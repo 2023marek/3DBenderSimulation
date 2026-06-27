@@ -3,7 +3,28 @@
 #include <cstddef>
 
 #include "Core/Geometry/Frame.h"
-
+// =====================================================
+// PASS PLACEMENT
+//
+// Describes where a ManufacturingPass is placed inside
+// PlannedShapePreview.
+//
+// IMPORTANT:
+// This is a CAD/planning-preview concept.
+//
+// It is used to answer:
+//     "Where should this planned pass appear in the final
+//      intended shape?"
+//
+// It does NOT mean:
+//     "This is how the real machine physically performs
+//      the operation."
+//
+// Real manufacturing continuation belongs to:
+//     ManufacturingPlayback
+//     ManufacturingPipeSimulator
+//     manufacturing history / four-zone process model
+// =====================================================
 // =====================================================
 // PASS PLACEMENT
 //

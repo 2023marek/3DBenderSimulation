@@ -11,6 +11,7 @@
 #include "Core/Forming/RotaryDrawPassBuilder.h"
 #include "Core/Sampling/PipeCurveNodeQuery.h"
 #include "Core/Geometry/Frame.h"
+#include "Core/Forming/AdditionalFormingPass.h"
 
 //#include "Core/Sampling/PipeCurveSampler.h"
 
@@ -35,6 +36,38 @@ namespace
     constexpr double TEST_INSERT_ARC_LENGTH = 202.0;
     constexpr size_t TEST_INSERT_NODE_INDEX = 404;
 }
+
+namespace
+{
+    void debugTestManufacturingHistory()
+    {
+        ManufacturingHistory history;
+
+        ManufacturingPass dummyPrimaryPass;
+        history.primaryPasses.push_back(dummyPrimaryPass);
+
+        AdditionalFormingPass extra;
+        extra.name = "Additional helix forming pass";
+
+        ManufacturingPass dummyHelixPass;
+        extra.pass = dummyHelixPass;
+
+        extra.entryFrame.P = { 0.0, 0.0, 0.0 };
+        extra.entryFrame.T = { 1.0, 0.0, 0.0 };
+        extra.entryFrame.N = { 0.0, 1.0, 0.0 };
+        extra.entryFrame.B = { 0.0, 0.0, 1.0 };
+
+        history.additionalPasses.push_back(extra);
+
+        std::cout << "[MFG HISTORY TEST] primary="
+            << history.primaryPasses.size()
+            << " additional="
+            << history.additionalPasses.size()
+            << std::endl;
+    }
+}
+
+
 AppController::AppController()
 {
     testOperations =
@@ -50,7 +83,12 @@ AppController::AppController()
 
     rebuildTestManufacturingPlan();
 
+    debugTestManufacturingHistory();
+
+
     configureInitialMode();
+
+   
 
     std::cout << "[APP PLACEMENT PRESET] "
         << testPlacementPresetToString(
@@ -582,3 +620,4 @@ void AppController::toggleSimulationMode()
         );
     }
 
+    

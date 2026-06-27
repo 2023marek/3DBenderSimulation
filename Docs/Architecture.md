@@ -2120,3 +2120,646 @@ ExplicitFrame + AttachBaseAfterInsert
     before empty
     inserted helix
     after full base curve transformed to helix end frame
+
+    =========================================================
+    Phase 9D — Reclassify insertion placement as planned-preview only
+    Goal:
+    ArcLength / NodeIndex / ExplicitFrame placement
+belongs to PlannedShapePreview.
+
+It is not real manufacturing playback
+=====
+## Planned placement vs real manufacturing
+
+PassPlacement is a planned-preview concept.
+
+It is used by `PlannedShapePreview` to compose and inspect intended geometry:
+
+```text
+base planned curve
+    +
+inserted planned pass
+
+This is useful for CAD-like design and planning.
+It does not represent the real process of bending an already formed pipe.
+
+
+=========
+Real manufacturing must be represented by manufacturing history
+
+formed pipe state
+    ?
+additional forming operation
+    ?
+updated manufacturing state
+===
+The real simulator keeps the four-zone model:
+IncomingStock
+    ?
+PositionedStraight
+    ?
+ActiveZone
+    ?
+FrozenGeometry
+
+Threfore:
+
+ArcLength / NodeIndex / ExplicitFrame
+    = planned preview placement
+
+FEED / ROTATE / BEND / HELIX / MANUAL
+    = manufacturing process history
+
+===
+---
+
+## 3. Add comment in `ManufacturingPlanPreviewModel.h`
+
+Near class header:
+
+```cpp
+// IMPORTANT:
+// This model is allowed to use CAD-like placement tools.
+// It may splice, preview, insert, or transform planned curves.
+//
+// It must not be treated as proof that the machine can
+// physically manufacture the same shape.
+//```
+
+---
+
+# Phase 9D complete when
+
+```text
+1. Comments added.
+2. Architecture.md updated.
+3. Build succeeds.
+4. No behavior change.
+
+
+================================================================
+Phase 9E — Prepare additional forming pass model
+for the real case:
+
+already formed pipe
+    +
+additional bend / helix / manual operation
+
+
+
+===================================================================
+3D forming system
+1.Three-roller forming (section rolling / pyramid rolling
+
+Three rollers arranged in a triangle (two bottom, one top — or vice versa)
+
+
+
+2.Two-roller continuous bending
+How it works:
+
+Pipe is fed continuously between rollers
+One roller changes position dynamically
+The pipe exits already curved
+
+What it does:
+
+Produces continuous arcs or spirals
+Radius can be adjusted during motion ? variable curvature
+
+
+
+
+3. Rotary draw bending (precision bending)
+
+This is one of the most important systems for 3D pipe forming.
+
+How it works:
+
+Pipe is clamped to a rotating die
+It’s drawn around a fixed radius
+Often uses a mandrel inside the pipe to prevent collapse
+
+4.Roll bending with multiple axes (3D roll bending)
+
+How it works:
+
+Similar to 3-roller system but:
+Rollers can move in multiple directions
+Pipe can be rotated during forming
+What it does:
+Creates true 3D curves (not just in one plane)
+
+5.Stretch bending
+How it works:
+Pipe is clamped at both ends
+Pulled (stretched) while being wrapped over a form
+
+6.Press bending
+A die presses the pipe into a shape in one motion
+
+
+ =================================================================
+ ======================================================================
+
+ Practical formula set for numeric curvature calculation, process control, and
+ simulation of 3-roller pipe bending.
+1. Basic curvature
+where
+?=curvature
+R=bend radius
+Units
+R[mm],?[mm?1]
+2. Curvature from three measured points
+For simulation or machine feedback, if you know three pipe centerline points:
+
+P1?(x1?,y1?),P2?(x2?,y2?),P3?(x3?,y3?)
+then
+a=?P2??P1??
+a=?P2??P1??
+c=?P3??P1??
+Traingle area:
+A=21??(x2??x1?)(y3??y1?)?(y2??y1?)(x3??x1?)?
+Curvature:
+?=4A?/abc
+Radius:
+R=abc/4A?
+
+3.Cfrom centerline function
+if centerline is :
+y=y(x)
+then for small slopes
+??y''
+
+Roller displacement to curvature approximation
+let
+?=vertical displacement of center roller
+L=distance between support rollers
+For small deflection:
+R?L*L/8?
+
+Therefore:
+??8??/L*L
+This is one of the simplest control formulas.
+More accurate circular-arc geometry
+If the roller system creates sagitta ?
+R=L*L/8*?+?/2?
+therefore:
+?=1/L*L/8*?+?/2
+For small ?, the ?/2 term is small
+Feedback control equation
+For CNC bending:
+e??=?target???measured?
+Roller displacement update:
+?new?=?old?+Kp?e??+Ki??e??dt+K*d?de?/??dt
+?new?=?old?+Kp?(?target???measured?)
+Discrete simulation update
+Divide pipe into small segments:
+si?=i?s
+Curvature field:
+?i?=?(si?)
+Angle update:
+?i+1?=?i?+?i??s
+position update:
+xi+1?=xi?+?scos?i?
+ti+1?=ti?+?s?i?
+
+
+For a helix, curvature alone is not enough. A circle is fully described by curvature, but a helix requires:
+
+Curvature (?)
+Torsion (?)
+
+Curvature tells how strongly the centerline bends.
+
+Torsion tells how strongly the curve twists out of its bending plane.
+Helix parameterization
+
+A circular helix can be written as:
+x=rcost
+y=rsint
+z=bt
+
+Where:
+
+r = helix radius
+b = vertical rise parameter
+
+
+Pitch
+
+Usually we use pitch P:
+
+P=2?b
+
+Thus:
+
+b=P/2?
+
+Arc length
+
+One revolution:
+Lrev?=sqrt((2?r)^2+P^2)
+?
+Very important for CNC feed calculation.
+Helix curvature
+
+The exact curvature is:
+
+Using pitch:
+?=r?/r^2+(P/?2?)^2
+Radius of curvature
+Rc?=1/??
+Thus:
+Rc?=r^2+b^2?/r
+Notice:
+
+Curvature radius ? helix radius.
+
+This is a common mistake.
+
+Helix torsion
+
+The exact torsion is:
+?=b/r^2+b^2
+Using pitch:
+?=P/(2?)?/r^2+(P/?2?)^2
+Relationship between curvature and torsion
+
+For a circular helix:
+??/?=b?/r
+or
+?/??=P/?2?r
+
+Helix angle
+?=tan^?1*(P/2?r?)
+
+Then:
+
+?=cos^2??/r
+
+?=sin?cos??/r
+Useful for machine control.
+
+Curvature vector
+For simulation:
+?=?n
+where
+n
+is the principal normal.
+
+Magnitude:
+???=?
+Frenet-Serret equations
+
+These are the fundamental equations for helix simulation.
+
+dT?/ds=?N
+dN/ds=??T+?B
+
+dB/?ds=??N
+
+Where:
+
+T = tangent
+N = normal
+B = binormal
+
+Discrete simulation
+
+For numerical integration:
+
+?i+1?=?i?+?i??s
+Twist:
+?i+1?=?i?+?i??s
+xi+1?=xi?+?sTx?
+yi+1?=yi?+?sTy?
+zi+1?=zi?+?sTz?
+
+This is how many tube-forming simulations are implemented.
+
+Roller-bending machine interpretation
+
+For a 3-roll machine producing a helix:
+
+You control two independent quantities:
+
+Curvature
+
+Created by roller penetration:
+??8??/L^2
+where
+
+L = roller spacing
+? = roller displacement
+Torsion
+
+Created by controlled pipe rotation:
+??d??/ds
+where:
+
+? = pipe rotation angle
+s = feed length
+
+This is one of the most important formulas for 3D roll bending.
+
+Machine control equations
+
+Feed speed:
+v=ds/dt?
+
+Rotation speed:
+?=d??/dt
+Then:?=??/v
+This is the practical CNC formula.
+
+Inverse problem (most useful)
+Suppose you want:
+
+helix radius r
+pitch P
+
+Compute:
+b=P?/2?
+Then:
+?=r/r^2+b^2?
+?=b/r^2+b^2?
+
+Then machine commands become:
+?=?L^2?/8
+?=?v
+This is essentially the mathematical core of generating a helical pipe on a CNC 3-roll bending machine:
+
+Desired helix geometry ? (?,?) ? roller position ? and pipe rotation speed ?.
+==============================================================================================
+Two rollers
+“two rollers” system as a continuous-feed bending process: one roller/guide drives or supports the pipe, 
+another adjustable roller creates curvature while the pipe moves. I’ll build the 
+math from geometry ? curvature ? force/moment ? control.
+
+Mathematically, a two-roller continuous pipe bending system can be modeled as a moving beam/pipe where 
+one adjustable roller imposes a lateral displacement or contact force while the pipe
+is continuously fed.
+
+Basic variables
+
+s=pipe feed length
+v=ds/dt?=feed speed
+
+?=adjustable roller displacement
+L=effective distance between contact/support points
+R=bend radius
+?=1?/R
+Geometry approximation
+
+If the pipe is forced into an arc between two effective contact points, the simplest sagitta relation is:
+R=L^2?/8?+2??
+So curvature is:
+?=?1?/L^2?/8?+?/2
+
+For small displacement:
+??8?/?L^2
+This is the first useful control equation.
+
+Continuous feed equation
+
+Because the pipe moves continuously:
+s=vt
+So curvature becomes a function of feed length:
+?(s)
+or time:
+?(t)
+If roller displacement changes during feeding:
+?=?(t)
+then:
+?(t)?8?(t)/?L^2
+and since s=vt:
+?(s)?8?(s)?/L^2
+
+
+Pipe centerline calculation
+
+For 2D bending, the pipe shape is computed from curvature.
+
+Angle update:
+d?/ds?=?(s)
+Position update:
+dx/ds?=cos?
+dy/ds?=sin?
+
+So numerically:
+?i+1?=?i?+?i??s
+xi+1?=xi?+?scos?i
+yi+1?=yi?+?ssin?i?
+Control law
+
+If you measure actual curvature:
+e??=?target???measured?
+then roller correction:
+?new?=?old?+Kp?e??
+More complete PID:
+?new?=?old?+Kp?e??+Ki??e??dt+Kd?de???/dt
+
+For variable-radius bending
+
+If desired radius changes along the pipe:
+R=R(s)
+then:
+?(s)=1/R(s)
+Required roller displacement:
+?(s)??(s)L^2?/8
+or:
+?(s)?L^2/8R(s)
+
+================================================================
+
+Strech bending
+compact math foundation for stretch bending a pipe into a helix, like a coil/heating element.
+target helix geometry
+Let:
+r=helix radius
+P=pitch per revolution
+b=P?/2?
+
+
+Parametric centerline:
+x(u)=rcosu
+y(u)=rsinu
+z(u)=bu
+where u is the angular parameter.
+
+Arc length per radian:
+ds/du?=sqrt(r^2+b^2)
+Arc length per revolution:
+Lrev?=2?sqrt(r^2+b^2)
+Number of turns:
+N=?Lpipe??/Lrev
+
+Helix curvature and torsion
+
+For a circular helix:
+?=r/r^2+b^2?
+?=b/r^2+b^2
+Radius of curvature:
+Rc?=1/??=r^2+b^2/?r
+Important:
+Rc !?=r 
+The pipe does not bend with radius equal to helix radius unless pitch is zero.
+
+Helix angle
+
+Helix angle:
+
+?=tan^?1*(P/2?r?)
+?
+Also:
+?=cos^2??/r
+?=sin?cos??/r
+
+Stretch bending idea
+
+In stretch bending, the pipe is pulled with axial tension while bent around a form.
+
+Total axial strain at a fiberHelix simulation update
+
+Given target:
+
+integrate centerline using Frenet frame:
+
+dT/ds?=?N
+dN?/ds=??T+?B
+
+dB/ds?=??N
+
+Discrete form
+Ti+1?=Ti?+?s?Ni?
+Ni+1?=Ni?+?s(??Ti?+?Bi?)
+Bi+1?=Bi???s?Ni?
+ri+1?=ri?+?sTi?
+Normalize frame vectors each step
+
+Machine-control meaning
+
+For stretch bending into a helix, control variables are usually:
+T=axial tension
+?=bending curvature
+?=twist / spatial rotation rate
+
+Feed speed:
+
+v=ds?/dt
+Rotation speed:
+?=d?/dt
+
+Torsion control approximation:
+
+?=??/v
+
+So:
+
+?=?v
+
+================================================================
+input D, t, E, sigma_y, eps_allow
+
+input helix radius r, pitch P, pipe length Lpipe
+input feed speed v
+
+d = D - 2*t
+A = pi/4 * (D^2 - d^2)
+I = pi/64 * (D^4 - d^4)
+
+b = P / (2*pi)
+
+kappa = r / (r^2 + b^2)
+tau   = b / (r^2 + b^2)
+
+Rc = 1 / kappa
+
+eps_b = kappa * D/2
+
+eps0_min = eps_b
+eps0_max = eps_allow - eps_b
+
+if eps0_min > eps0_max:
+    geometry is not feasible
+
+choose eps0 between eps0_min and eps0_max
+
+T = E * A * eps0
+
+eps_outer = eps0 + eps_b
+eps_inner = eps0 - eps_b
+
+omega = tau * v
+
+simulate Frenet frame:
+    Tvec, Nvec, Bvec
+    for each ds:
+        Tvec += ds*kappa*Nvec
+        Nvec += ds*(-kappa*Tvec + tau*Bvec)
+        Bvec += ds*(-tau*Nvec)
+        normalize
+        position += ds*Tvec
+	?
+Core final result:
+
+(r,P)?(?,?)?(?b,?0,T)?(?,v)?helical pipe
+
+That is the mathematical base for a stretch-bending helix simulator.
+
+=================================================
+===================================================
+
+
+	ManufacturingPass
+    should know the forming process type
+
+RotaryDrawPass
+TwoRollerContinuousPass
+StretchBendingPass
+HelixFormingPass
+
+Core/Forming/
+    machine/process description
+
+Core/Control/
+    CNC control formulas
+    feed speed
+    rotation speed
+    roller displacement
+    curvature target
+
+Core/Geometry/
+    generated centerline
+    Frenet frame
+    helix integration
+
+Core/Physical/
+    later:
+    springback
+    material parameters
+    strain
+
+    curvature:
+kappa = 1 / R
+
+two-roller small displacement:
+kappa ? 8 * delta / L^2
+
+helix:
+b = P / (2*pi)
+
+kappa = r / (r^2 + b^2)
+tau   = b / (r^2 + b^2)
+
+rotation speed:
+omega = tau * v
+
+=========================================================
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Phase 1C
+Move temporary manufacturing-history test into clean debug helper
+Keep AppController constructor clean.
+Keep ManufacturingHistory compile test available.
+No playback/rendering behavior change.
