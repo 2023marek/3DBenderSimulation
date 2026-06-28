@@ -3093,3 +3093,49 @@ AppController.cpp
           ?
 Core/Forming/ManufacturingHistoryDebug
  ??? prints summary
+=======================================================
+
+Phase 2E
+Add ManufacturingHistory reset/build helper
+Goal:
+Move this logic out of AppController:
+
+ManufacturingPlan
+   ?
+ManufacturingHistory
+  Pipeflow;
+
+  plan.passes[0] ? primaryPasses
+plan.passes[1] ? additionalPasses
+=======================================================
+Phase 2E another cleanup/refactor phase: move “plan ? history” 
+construction into a reusable helper so AppController only requests 
+the conversion.
+
+Goal:
+Move ManufacturingPlan ? ManufacturingHistory logic out of AppController.
+Before:
+
+AppController.cpp
+   ??? creates ManufacturingPlan
+   ??? fills ManufacturingHistory
+   ??? prints debug
+
+
+After:
+
+AppController.cpp
+   ??? creates ManufacturingPlan
+   ??? calls buildManufacturingHistoryFromPlan()
+              ?
+              ?
+Core/Forming/ManufacturingHistoryBuilder
+
+pipeflow:
+ManufacturingPlan
+   ??? passes[0] ???????????????? history.primaryPasses[0]
+   ?                                primary forming
+   ?
+   ??? passes[1] ???????????????? history.additionalPasses[0].pass
+                                    additional forming
+

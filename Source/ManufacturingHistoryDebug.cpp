@@ -2,7 +2,31 @@
 
 #include <iostream>
 
+namespace
+{
+    const char* manufacturingProcessTypeToString(
+        TubeFormingProcessType type
+    )
+    {
+        switch (type)
+        {
+        case TubeFormingProcessType::RotaryDrawBending:
+            return "RotaryDraw";
 
+        case TubeFormingProcessType::HelixForming:
+            return "Helix";
+
+        case TubeFormingProcessType::TwoRollerContinuous:
+            return "TwoRollerContinuous";
+
+        case TubeFormingProcessType::StretchBending:
+            return "StretchBending";
+
+        default:
+            return "Unknown";
+        }
+    }
+}
 
 void debugPrintManufacturingHistory(
     const ManufacturingHistory& history
