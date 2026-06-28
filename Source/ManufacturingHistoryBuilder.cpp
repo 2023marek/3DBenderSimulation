@@ -1,27 +1,44 @@
+
+#include <sstream>
 #include "Core/Forming/ManufacturingHistoryBuilder.h"
+
 namespace
 {
-    const char* additionalPassNameFromProcessType(
-        TubeFormingProcessType type
+    std::string additionalPassNameFromProcessType(
+        TubeFormingProcessType type,
+        size_t additionalIndex
     )
     {
+        std::ostringstream out;
+
+        out << "Additional pass "
+            << additionalIndex + 1
+            << ": ";
+
         switch (type)
         {
         case TubeFormingProcessType::RotaryDrawBending:
-            return "Additional rotary draw forming pass";
+            out << "rotary draw forming pass";
+            break;
 
         case TubeFormingProcessType::HelixForming:
-            return "Additional helix forming pass";
+            out << "helix forming pass";
+            break;
 
         case TubeFormingProcessType::TwoRollerContinuous:
-            return "Additional two-roller forming pass";
+            out << "two-roller forming pass";
+            break;
 
         case TubeFormingProcessType::StretchBending:
-            return "Additional stretch-bending forming pass";
+            out << "stretch-bending forming pass";
+            break;
 
         default:
-            return "Additional forming pass";
+            out << "forming pass";
+            break;
         }
+
+        return out.str();
     }
 }
 
@@ -47,10 +64,13 @@ void buildManufacturingHistoryFromPlan(
             plan.passes[passIndex];
 
         AdditionalFormingPass extra;
+        const size_t additionalIndex =
+            passIndex - 1;
 
         extra.name =
             additionalPassNameFromProcessType(
-                pass.processType
+                pass.processType,
+                additionalIndex
             );
 
         extra.pass =

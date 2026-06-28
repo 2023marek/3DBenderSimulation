@@ -3228,3 +3228,20 @@ ManufacturingPlan
    ??? passes[3] ?????????? history.additionalPasses[2]
    ?
    ??? passes[N] ?????????? history.additionalPasses[N - 1]
+==================================================================
+   Phase 2H
+   Make additional pass names readable when there are many.
+   plan.passes[1] ?? additionalPasses[0] ?? "Additional pass 1: helix forming pass"
+plan.passes[2] ?? additionalPasses[1] ?? "Additional pass 2: helix forming pass"
+plan.passes[3] ?? additionalPasses[2] ?? "Additional pass 3: stretch-bending forming pass"
+pipeflow unchanged
+raw pipe
+   ?
+primary pass
+   ?
+additional pass 1
+   ?
+additional pass 2
+   ?
+future final pipe
+
