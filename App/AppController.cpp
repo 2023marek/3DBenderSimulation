@@ -37,35 +37,6 @@ namespace
     constexpr size_t TEST_INSERT_NODE_INDEX = 404;
 }
 
-namespace
-{
-    void debugTestManufacturingHistory()
-    {
-        ManufacturingHistory history;
-
-        ManufacturingPass dummyPrimaryPass;
-        history.primaryPasses.push_back(dummyPrimaryPass);
-
-        AdditionalFormingPass extra;
-        extra.name = "Additional helix forming pass";
-
-        ManufacturingPass dummyHelixPass;
-        extra.pass = dummyHelixPass;
-
-        extra.entryFrame.P = { 0.0, 0.0, 0.0 };
-        extra.entryFrame.T = { 1.0, 0.0, 0.0 };
-        extra.entryFrame.N = { 0.0, 1.0, 0.0 };
-        extra.entryFrame.B = { 0.0, 0.0, 1.0 };
-
-        history.additionalPasses.push_back(extra);
-
-        std::cout << "[MFG HISTORY TEST] primary="
-            << history.primaryPasses.size()
-            << " additional="
-            << history.additionalPasses.size()
-            << std::endl;
-    }
-}
 
 AppController::AppController()
 {
@@ -82,7 +53,7 @@ AppController::AppController()
 
     rebuildTestManufacturingPlan();
 
-    debugTestManufacturingHistory();
+   
 
 
     configureInitialMode();
@@ -541,6 +512,45 @@ void AppController::toggleSimulationMode()
         preview.setPlan(
             plan
         );
+
+        ManufacturingHistory& history =
+            sim.getManufacturingHistory();
+
+        history.clear();
+
+        if (!plan.passes.empty())
+        {
+            history.primaryPasses.push_back(
+                plan.passes[0]
+            );
+        }
+
+        if (plan.passes.size() > 1)
+        {
+            AdditionalFormingPass extra;
+
+            extra.name =
+                "Additional helix forming pass";
+
+            extra.pass =
+                plan.passes[1];
+
+            extra.entryFrame.P = { 0.0, 0.0, 0.0 };
+            extra.entryFrame.T = { 1.0, 0.0, 0.0 };
+            extra.entryFrame.N = { 0.0, 1.0, 0.0 };
+            extra.entryFrame.B = { 0.0, 0.0, 1.0 };
+
+            history.additionalPasses.push_back(
+                extra
+            );
+        }
+
+        std::cout << "[MFG HISTORY REAL PASSES] primary="
+            << history.primaryPasses.size()
+            << " additional="
+            << history.additionalPasses.size()
+            << std::endl;
+
 
         preview.setDebugLogging(
             true

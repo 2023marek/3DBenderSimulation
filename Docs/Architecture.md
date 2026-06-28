@@ -2796,3 +2796,43 @@ ManufacturingPipeSimulator
       ?
       ?
 Renderer
+
+=======================================================
+Phase 2B.
+Goal:
+Stop using dummy ManufacturingPass objects.
+Store the real rotary + helix passes in simulator-owned
+ManufacturingHistory.
+ASCII
+AppController
+   ?
+   ??? build rotaryPass
+   ??? build helixPass
+   ?
+   ?
+ManufacturingPlanPreview
+   ?
+   ??? visual planned shape preview
+
+SimulationController
+   ?
+   ?
+ManufacturingHistory
+   ??? primaryPasses[0]    = real rotaryPass
+   ??? additionalPasses[0] = real helixPass
+
+   Pipeflow meaning
+
+   raw heater tube
+      ?
+      ?
+primary rotary draw pass
+      ?
+      ?
+already formed pipe
+      ?
+      ?
+additional helix forming pass
+      ?
+      ?
+future updated manufactured pipe
