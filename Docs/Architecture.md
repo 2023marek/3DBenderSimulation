@@ -2836,3 +2836,260 @@ additional helix forming pass
       ?
       ?
 future updated manufactured pipe
+
+meanig now:
+ManufacturingPlan
+   ?
+   ??? pass[0] real rotary pass
+   ??? pass[1] real helix pass
+          ?
+          ?
+ManufacturingHistory
+   ??? primaryPasses[0]
+   ??? additionalPasses[0]
+
+   Pipeflow:
+
+   raw heater tube
+      ?
+      ?
+rotary draw pass
+      ?
+      ?
+formed pipe state
+      ?
+      ?
+additional helix pass
+      ?
+      ?
+future continued manufacturing
+
+===================================================
+Phase 2C
+Add ManufacturingHistory debug summary
+Goal:
+Print what kind of passes are stored,
+not only how many.
+
+Expected future console
+[MFG HISTORY]
+primary passes: 1
+  [0] RotaryDraw
+
+additional passes: 1
+  [0] Additional helix forming pass
+      process: Helix
+Phase 2C as a pure debug/visibility phase: add a reusable summary 
+printer for ManufacturingHistory, call it after real passes are 
+stored, and leave playback/rendering untouched.
+Goal:
+Print ManufacturingHistory content clearly,
+not only counts.
+SimulationController
+      ?
+      ?
+ManufacturingHistory
+      ?
+      ??? primaryPasses
+      ?       ??? [0] Rotary / primary forming pass
+      ?
+      ??? additionalPasses
+              ??? [0] Additional helix forming pass
+
+raw pipe
+   ?
+   ?
+primaryPasses[0]
+   ?
+   ?
+already formed pipe
+   ?
+   ?
+additionalPasses[0]
+   ?
+   ?
+future continued pipe state
+
+
+===============================================
+Anonymous space
+This is called an anonymous namespace.
+
+It means:
+
+"Everything inside this namespace is private to this .cpp file."
+
+Without namespace
+Suppose you simply write
+
+void debugTestManufacturingHistory()
+{
+    ...
+}
+
+This function has external linkage.
+
+The linker sees
+
+debugTestManufacturingHistory()
+
+as a global symbol.
+
+Imagine later you create another file
+
+SimulationController.cpp
+
+and accidentally write
+
+void debugTestManufacturingHistory()
+{
+    ...
+}
+
+Now the linker finds
+
+debugTestManufacturingHistory()
+
+twice.
+
+Result:
+
+multiple definition
+
+Link error.
+
+Anonymous namespace
+
+Now instead
+
+namespace
+{
+    void debugTestManufacturingHistory()
+    {
+    }
+}
+
+means
+
+This function exists ONLY inside AppController.cpp
+
+No other cpp file can see it.
+
+It cannot collide.
+==
+Think of it like "private"
+Classes have
+private:
+Anonymous namespaces are almost
+private:
+for an entire cpp file.
+==
+Small example
+Suppose you have
+AppController.cpp
+SimulationController.cpp
+PipeRenderer.cpp
+Each can contain
+namespace
+{
+    int counter = 0;
+}
+Each one has its own
+counter
+They are completely independent.
+
+Why not put it in the class?
+We could have
+class AppController
+{
+private:
+    void debugTestManufacturingHistory();
+};
+
+That would work.
+
+But ask:
+Does this helper belong to AppController?
+Not really.
+It is only temporary debug code.
+It doesn't use
+
+this
+It doesn't modify AppController.
+So making it a class member would unnecessarily enlarge 
+the public design of the class.
+================================
+
+
+AppController.cpp
+??????????????????????????????????????
+? namespace                          ?
+? {                                  ?
+?   manufacturingProcessTypeToString ?
+? }                                  ?
+??????????????????????????????????????
+        ?
+        ?
+visible only inside AppController.cpp
+
+Other .cpp files cannot call it.
+Other .cpp files cannot conflict with it.
+Without namespace:
+AppController.cpp                  OtherFile.cpp
+manufacturingProcessTypeToString   manufacturingProcessTypeToString
+        ?                                  ?
+        ????????????? conflict ?????????????
+AppController.cpp                  OtherFile.cpp
+local helper                       local helper
+        ?                                  ?
+        ????? no conflict, separate ????????
+
+About public:
+
+If we move this to a reusable helper file in Phase 2D, then it 
+becomes intentionally shared:
+
+ManufacturingHistoryDebug.h
+??????????????????????????????????????
+? public declaration                 ?
+?                                    ?
+? void debugPrintManufacturingHistory?
+??????????????????????????????????????
+        ?
+        ?
+AppController.cpp can call it
+SimulationController.cpp can call it
+future test files can call it
+================================
+Phase 2D
+Move ManufacturingHistory debug summary into its own helper file
+Goal;
+AppController should not own history-printing logic.
+Create reusable debug utility.
+AppController
+    ?
+    ?
+debugPrintManufacturingHistory(history)
+    ?
+    ?
+Core/Forming/ManufacturingHistoryDebug
+
+Move debug printing out of AppController.cpp
+
+Before:
+
+AppController.cpp
+ ??? builds history
+ ??? owns debug printer
+ ??? prints summary
+
+
+After:
+
+AppController.cpp
+ ??? builds history
+ ??? calls helper
+          ?
+          ?
+Core/Forming/ManufacturingHistoryDebug
+ ??? prints summary

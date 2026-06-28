@@ -6,5 +6,6 @@ enum class TubeFormingProcessType
     ManualRework,
     HelixForming,
     StretchBending,
-    RollerForming
+    RollerForming,
+    TwoRollerContinuous
 };

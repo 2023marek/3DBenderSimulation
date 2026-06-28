@@ -12,6 +12,7 @@
 #include "Core/Sampling/PipeCurveNodeQuery.h"
 #include "Core/Geometry/Frame.h"
 #include "Core/Forming/AdditionalFormingPass.h"
+#include "Core/Forming/ManufacturingHistoryDebug.h"
 
 //#include "Core/Sampling/PipeCurveSampler.h"
 
@@ -36,6 +37,7 @@ namespace
     constexpr double TEST_INSERT_ARC_LENGTH = 202.0;
     constexpr size_t TEST_INSERT_NODE_INDEX = 404;
 }
+
 
 
 AppController::AppController()
@@ -551,6 +553,10 @@ void AppController::toggleSimulationMode()
             << history.additionalPasses.size()
             << std::endl;
 
+        debugPrintManufacturingHistory(
+            history
+        );
+
 
         preview.setDebugLogging(
             true
@@ -628,6 +634,8 @@ void AppController::toggleSimulationMode()
             activeExplicitAttachMode
         );
     }
+
+    
 
   
 

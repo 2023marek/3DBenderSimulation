@@ -48,6 +48,7 @@ set(RENDER_SOURCES
     Source/ShaderGL.cpp
     Source/ShaderManager.cpp
     Source/TubeMesh.cpp
+    Source/ManufacturingHistoryDebug.cpp
 )
 
 set(RENDER_HEADERS
@@ -89,6 +90,7 @@ set(CORE_HEADERS
     Core/Forming/ManufacturingPlan.h
     Core/Forming/AdditionalFormingPass.h
     Core/Forming/ManufacturingHistory.h
+    Core/Forming/ManufacturingHistoryDebug.h
     Core/Forming/ManufacturingPlanPreviewModel.h
     Core/Forming/HelixOperation.h
     Core/Forming/HelixCurveBuilder.h
