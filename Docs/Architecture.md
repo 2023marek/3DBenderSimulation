@@ -3139,3 +3139,92 @@ ManufacturingPlan
    ??? passes[1] ???????????????? history.additionalPasses[0].pass
                                     additional forming
 
+=====================================================
+
+
+Phase 2F
+Name additional forming pass from process type
+
+Goal:
+Stop hardcoding:
+"Additional helix forming pass"
+
+Generate name from actual pass.processType.
+
+pipeflow unchanged:
+plan.passes[0] ? primaryPasses
+plan.passes[1] ? additionalPasses[0]
+
+Stop hardcoding:
+"Additional helix forming pass"
+
+Use process type:
+Helix ? "Additional helix forming pass"
+RotaryDraw ? "Additional rotary draw forming pass"
+TwoRoller ? "Additional two-roller forming pass"
+
+ASCII:
+
+ManufacturingPass
+      ?
+      ?
+processType
+      ?
+      ?
+additional pass name
+      ?
+      ?
+ManufacturingHistory
+pipeflow unchanged
+ManufacturingPlan
+   ??? passes[0] ??? primaryPasses[0]
+   ??? passes[1] ??? additionalPasses[0]
+                         ?
+                         ??? generated name
+
+======================================================
+Phase 2G
+Support all extra passes, not only pass[1]
+Goal:
+Current:
+plan.passes[0] ? primary
+plan.passes[1] ? one additional
+
+Next:
+plan.passes[0] ? primary
+plan.passes[1..N] ? additional passes
+
+
+ASCII:
+ManufacturingPlan
+   ??? passes[0] ?????????? primaryPasses[0]
+   ??? passes[1] ?????????? additionalPasses[0]
+   ??? passes[2] ?????????? additionalPasses[1]
+   ??? passes[N] ?????????? additionalPasses[N-1]
+pipeflow
+raw pipe
+   ?
+primary pass
+   ?
+additional pass 1
+   ?
+additional pass 2
+   ?
+additional pass N
+   ?
+future manufactured pipe
+
+Phase 2G a small generalization: replace the fixed passes[1] logic 
+with a loop over all passes after the primary pass.
+
+Goal:
+Support all extra passes, not only plan.passes[1].
+ManufacturingPlan
+   ?
+   ??? passes[0] ?????????? history.primaryPasses[0]
+   ?
+   ??? passes[1] ?????????? history.additionalPasses[0]
+   ??? passes[2] ?????????? history.additionalPasses[1]
+   ??? passes[3] ?????????? history.additionalPasses[2]
+   ?
+   ??? passes[N] ?????????? history.additionalPasses[N - 1]

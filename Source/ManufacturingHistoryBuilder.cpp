@@ -1,4 +1,29 @@
 #include "Core/Forming/ManufacturingHistoryBuilder.h"
+namespace
+{
+    const char* additionalPassNameFromProcessType(
+        TubeFormingProcessType type
+    )
+    {
+        switch (type)
+        {
+        case TubeFormingProcessType::RotaryDrawBending:
+            return "Additional rotary draw forming pass";
+
+        case TubeFormingProcessType::HelixForming:
+            return "Additional helix forming pass";
+
+        case TubeFormingProcessType::TwoRollerContinuous:
+            return "Additional two-roller forming pass";
+
+        case TubeFormingProcessType::StretchBending:
+            return "Additional stretch-bending forming pass";
+
+        default:
+            return "Additional forming pass";
+        }
+    }
+}
 
 void buildManufacturingHistoryFromPlan(
     const ManufacturingPlan& plan,
@@ -14,15 +39,22 @@ void buildManufacturingHistoryFromPlan(
         );
     }
 
-    if (plan.passes.size() > 1)
+    for (size_t passIndex = 1;
+        passIndex < plan.passes.size();
+        ++passIndex)
     {
+        const ManufacturingPass& pass =
+            plan.passes[passIndex];
+
         AdditionalFormingPass extra;
 
         extra.name =
-            "Additional helix forming pass";
+            additionalPassNameFromProcessType(
+                pass.processType
+            );
 
         extra.pass =
-            plan.passes[1];
+            pass;
 
         extra.entryFrame.P = { 0.0, 0.0, 0.0 };
         extra.entryFrame.T = { 1.0, 0.0, 0.0 };
