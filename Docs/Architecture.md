@@ -3245,3 +3245,29 @@ additional pass 2
    ?
 future final pipe
 
+===================================================
+Phase 2I
+Add entry-frame debug print for additional passes
+
+Goal:
+Show where each additional forming pass starts.
+
+additionalPasses[0]
+   ??? name: Additional pass 1: helix forming pass
+   ??? process: Helix
+   ??? entryFrame
+        ??? P position
+        ??? T tangent
+        ??? N normal
+        ??? B binormal
+
+ formed pipe
+    ?
+entryFrame
+    ?
+additional forming pass
+
+only improve debug output: print entryFrame vectors for each
+additional pass, without changing history construction or
+simulation behavior.
+

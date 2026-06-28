@@ -1,5 +1,5 @@
 #include "Core/Forming/ManufacturingHistoryDebug.h"
-
+#include "Core/Math/Vec3D.h"
 #include <iostream>
 
 namespace
@@ -25,6 +25,19 @@ namespace
         default:
             return "Unknown";
         }
+    }
+
+
+    void debugPrintVec3(
+        const char* label,
+        const Vec3D& v
+    )
+    {
+        std::cout << "      " << label << "=("
+            << v.x << ", "
+            << v.y << ", "
+            << v.z << ")"
+            << std::endl;
     }
 }
 
@@ -62,5 +75,10 @@ void debugPrintManufacturingHistory(
             << " process="
             << manufacturingProcessTypeToString(extra.pass.processType)
             << std::endl;
+
+        debugPrintVec3("P", extra.entryFrame.P);
+        debugPrintVec3("T", extra.entryFrame.T);
+        debugPrintVec3("N", extra.entryFrame.N);
+        debugPrintVec3("B", extra.entryFrame.B);
     }
 }
