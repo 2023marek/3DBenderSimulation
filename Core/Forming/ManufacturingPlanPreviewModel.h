@@ -12,6 +12,7 @@
 #include "Core/Sampling/PipeCurveSampleQuery.h"
 #include "Core/Curve/PipeCurveTransform.h"
 #include "Core/Sampling/PipeCurveNodeQuery.h"
+#include "Core/Forming/PassPlacementResolver.h"
 // IMPORTANT:
 // This model is allowed to use CAD-like placement tools.
 // It may splice, preview, insert, or transform planned curves.
@@ -485,7 +486,7 @@ private:
         resolvedFrame,
         resolvedArcLength))
     {
-    return false;
+        return false;
     }
 
         insertionFrame =
@@ -831,67 +832,21 @@ private:
         Frame& outFrame,
         double& outArcLength) const
     {
-        // =====================================================
-        // START FRAME RESOLUTION
-        //
-        // Converts placement into a concrete Frame.
-        //
-        // Supported:
-        // - InsertAtArcLength
-        // - InsertAtNodeIndex
-        // - ExplicitStartFrame
-        //
-        // outArcLength:
-        // - meaningful for arc/node placement
-        // - 0 for ExplicitStartFrame
-        // =====================================================
-
-        if (pass.placement.mode
-            == PassPlacementMode::ExplicitStartFrame)
-        {
-            outFrame =
-                pass.placement.startFrame;
-
-            outArcLength =
-                0.0;
-
-            if (debugLogging)
-            {
-                std::cout << "[PLAN PREVIEW EXPLICIT FRAME] P=("
-                    << outFrame.P.x << ", "
-                    << outFrame.P.y << ", "
-                    << outFrame.P.z << ")"
-                    << std::endl;
-            }
-
-            return true;
-        }
-
-        if (!resolvePlacementArcLength(
-            pass,
-            baseCurve,
-            outArcLength))
-        {
-            return false;
-        }
-
-        auto baseNodes =
-            PipeCurveSampler::sample(
+        PassPlacementResolution result =
+            resolvePassPlacementFrame(
+                pass.placement,
                 baseCurve,
                 ds
             );
 
-        auto frameQuery =
-            PipeCurveSampleQuery::findFrameAtArcLength(
-                baseNodes,
-                outArcLength
-            );
-
-        if (!frameQuery.valid)
+        if (!result.valid)
             return false;
 
         outFrame =
-            frameQuery.frame;
+            result.frame;
+
+        outArcLength =
+            result.arcLength;
 
         return true;
     }

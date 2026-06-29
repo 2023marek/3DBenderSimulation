@@ -3270,4 +3270,144 @@ additional forming pass
 only improve debug output: print entryFrame vectors for each
 additional pass, without changing history construction or
 simulation behavior.
+====================================Phase 2J
 
+
+Prepare real entryFrame calculation placeholder
+
+Phase 2J:
+PassPlacement / ManufacturingPlanPreviewModel
+        = CAD / planned preview placement
+
+AdditionalFormingPass.entryFrame
+        = real manufacturing continuation start frame
+
+Do not let ManufacturingHistory depend directly on PreviewModel.
+But we can reuse the same placement-resolution idea.
+
+Current preview flow
+ManufacturingPlan
+      ?
+      ?
+ManufacturingPlanPreviewModel
+      ?
+      ??? PassPlacement::InsertAtArcLength
+      ??? PassPlacement::InsertAtNodeIndex
+      ??? PassPlacement::ExplicitStartFrame
+              ?
+              ?
+        resolved Frame
+But better architecture for Phase 2J:
+
+Core/Forming/PassPlacementResolver
+        ?
+        ??? resolve arc length
+        ??? resolve node index
+        ??? resolve explicit frame
+        ??? return Frame
+
+Then both systems can use it:
+ManufacturingPlanPreviewModel
+        ?
+        ?
+PassPlacementResolver
+        ?
+        ?
+ManufacturingHistoryBuilder
+
+Pipeflow
+primary pass output curve
+        ?
+        ?
+sample / query curve
+        ?
+        ?
+resolved entryFrame
+        ?
+        ?
+additional forming pass starts here
+
+So Phase 2J should not yet calculate perfect real
+manufacturing frames.It should prepare reusable frame-resolution logic.
+Before:
+ManufacturingPlanPreviewModel
+    ??? private resolvePlacementStartFrame()
+
+After:
+ManufacturingPlanPreviewModel
+    ??? PassPlacementResolver
+              ?
+              ? future reuse
+ManufacturingHistoryBuilder
+
+========================================
+Current 
+
+                    ManufacturingPlan
+                            ?
+                            ?
+              ManufacturingPlanPreviewModel
+                            ?
+                    resolvePlacement()
+                            ?
+                            ?
+                          Frame
+
+
+Only Preview can do it.
+
+Target architecture
+After Phase 2J:
+
+
+
+                    ManufacturingPlan
+                            ?
+                            ?
+                 PassPlacementResolver
+                            ?
+                placement ? Frame
+                            ?
+      ?????????????????????????????????????????????
+      ?                     ?                     ?
+ PreviewModel       ManufacturingHistory     Future Playback
+
+
+ Notice something important:
+ The resolver does not know anything about Preview.
+It only knows geometry.
+That makes it reusable.
+
+pipeflow
+CAD Curve
+     ?
+     ?
+PassPlacement
+     ?
+     ?
+PreviewModel
+     ?
+     ?
+Frame
+
+
+
+Future pipeflow:
+CAD Curve
+     ?
+     ?
+PassPlacement
+     ?
+     ?
+PassPlacementResolver
+     ?
+     ?
+Frame
+     ?
+     ?????????? Preview
+     ?
+     ?????????? ManufacturingHistory
+     ?
+     ?????????? Playback
+     ?
+     ?????????? Collision

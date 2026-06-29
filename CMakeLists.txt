@@ -45,6 +45,7 @@ set(RENDER_SOURCES
     Source/HUDPanel.cpp
     Source/CameraGL.cpp
     Source/ControlCamera.cpp
+    Source/PassPlacementResolver.cpp
     Source/ShaderGL.cpp
     Source/ShaderManager.cpp
     Source/TubeMesh.cpp
@@ -99,6 +100,7 @@ set(CORE_HEADERS
     Core/Forming/HelixFormingPassBuilder.h
     Core/Forming/RotaryDrawPassBuilder.h
     Core/Forming/PassPlacement.h
+    Core/Forming/PassPlacementResolver.h
     Core/Geometry/Frame.h
     Core/Geometry/PipeNode.h
     Core/Geometry/PipeSegment.h

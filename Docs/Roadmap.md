@@ -978,3 +978,73 @@ Collision framework
 
 ========================================================================
 
+  bool resolvePlacementStartFrame(
+        const ManufacturingPass& pass,
+        const PipeCurve& baseCurve,
+        Frame& outFrame,
+        double& outArcLength) const
+    {
+        // =====================================================
+        // START FRAME RESOLUTION
+        //
+        // Converts placement into a concrete Frame.
+        //
+        // Supported:
+        // - InsertAtArcLength
+        // - InsertAtNodeIndex
+        // - ExplicitStartFrame
+        //
+        // outArcLength:
+        // - meaningful for arc/node placement
+        // - 0 for ExplicitStartFrame
+        // =====================================================
+
+        if (pass.placement.mode
+            == PassPlacementMode::ExplicitStartFrame)
+        {
+            outFrame =
+                pass.placement.startFrame;
+
+            outArcLength =
+                0.0;
+
+            if (debugLogging)
+            {
+                std::cout << "[PLAN PREVIEW EXPLICIT FRAME] P=("
+                    << outFrame.P.x << ", "
+                    << outFrame.P.y << ", "
+                    << outFrame.P.z << ")"
+                    << std::endl;
+            }
+
+            return true;
+        }
+
+        if (!resolvePlacementArcLength(
+            pass,
+            baseCurve,
+            outArcLength))
+        {
+            return false;
+        }
+
+        auto baseNodes =
+            PipeCurveSampler::sample(
+                baseCurve,
+                ds
+            );
+
+        auto frameQuery =
+            PipeCurveSampleQuery::findFrameAtArcLength(
+                baseNodes,
+                outArcLength
+            );
+
+        if (!frameQuery.valid)
+            return false;
+
+        outFrame =
+            frameQuery.frame;
+
+        return true;
+    }
