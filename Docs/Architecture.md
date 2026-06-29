@@ -3510,3 +3510,41 @@ PassPlacementResolver
 Frame + resolvedArcLength
       ?
 AdditionalFormingPass debug info
+
+===========================================================
+===========================================================
+
+Phase 2M
+Implement AppendToPrevious in PassPlacementResolver
+
+Pipeflow:
+previous pass curve
+      ?
+end frame
+      ?
+AppendToPrevious
+      ?
+next pass entryFrame
+
+PassPlacementMode::AppendToPrevious
+should resolve to the end frame of the already-built base curve.
+
+ASCII:
+previous pass / base curve
+????????????????????????????? end frame
+                                ?
+                                ?
+                         AppendToPrevious
+                                ?
+                                ?
+                         next pass starts here
+
+Pipeflow:
+raw pipe
+   ?
+primary pass
+   ?
+base curve end frame
+   ?
+additional pass
+

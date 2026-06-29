@@ -52,7 +52,7 @@ namespace
         switch (mode)
         {
         case PassPlacementMode::AppendToPrevious:
-            return "Append";
+            return "AppendToPrevious";
 
         case PassPlacementMode::InsertAtArcLength:
             return "InsertAtArcLength";

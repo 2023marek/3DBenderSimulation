@@ -31,6 +31,28 @@ PassPlacementResolution resolvePassPlacementFrame(
     if (baseNodes.empty())
         return result;
 
+
+    if (placement.mode
+        == PassPlacementMode::AppendToPrevious)
+    {
+        const PipeNode& lastNode =
+            baseNodes.back();
+
+        result.valid = true;
+        result.frame.P = lastNode.pos;
+        result.frame.T = lastNode.T;
+        result.frame.N = lastNode.N;
+        result.frame.B = lastNode.B;
+
+        result.arcLength =
+            PipeCurveNodeQuery::arcLengthAtNodeIndex(
+                baseNodes,
+                baseNodes.size() - 1
+            );
+
+        return result;
+    }
+
     double resolvedArcLength = 0.0;
 
     if (placement.mode
