@@ -3411,3 +3411,60 @@ Frame
      ?????????? Playback
      ?
      ?????????? Collision
+
+
+   finally after improvements.
+   1111111111111111111111111111111111111111111
+   111111111111111111111111111111111111111111111111111111111
+
+What we achieved:
+PassPlacement
+      ?
+PassPlacementResolver
+      ?
+Frame + arcLength
+
+Pipeflow:
+
+base curve
+   ?
+placement rule
+   ?
+resolved frame
+   ?
+preview now
+   ?
+future additional-pass entryFrame
+=============================================================================
+Phase 2K
+Use PassPlacementResolver for AdditionalFormingPass.entryFrame
+
+Goal:
+AdditionalFormingPass.entryFrame
+should come from pass.placement,
+not from hardcoded identity frame.
+Before:
+additional pass
+    ??? entryFrame = identity
+        P=(0,0,0)
+        T=(1,0,0)
+        N=(0,1,0)
+        B=(0,0,1)
+After:
+base curve before this pass
+        ?
+pass.placement
+        ?
+PassPlacementResolver
+        ?
+AdditionalFormingPass.entryFrame
+Pipeflow:
+primary pass output curve
+        ?
+base curve for additional pass
+        ?
+placement rule
+        ?
+resolved entryFrame
+        ?
+additional forming pass
