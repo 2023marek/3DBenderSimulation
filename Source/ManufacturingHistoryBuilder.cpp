@@ -112,14 +112,32 @@ void buildManufacturingHistoryFromPlan(
                 baseCurve,
                 0.5
             );
+        extra.resolvedPlacementMode =
+            pass.placement.mode;
+
+        extra.resolvedNodeIndex =
+            pass.placement.nodeIndex;
+
+        extra.requestedArcLength =
+            pass.placement.arcLength;
 
         if (placementResult.valid)
         {
             extra.entryFrame =
                 placementResult.frame;
+
+            extra.resolvedArcLength =
+                placementResult.arcLength;
+
+            extra.hasResolvedPlacement =
+                true;
         }
         else
         {
+
+            extra.hasResolvedPlacement =
+            false;
+        
             extra.entryFrame.P = { 0.0, 0.0, 0.0 };
             extra.entryFrame.T = { 1.0, 0.0, 0.0 };
             extra.entryFrame.N = { 0.0, 1.0, 0.0 };

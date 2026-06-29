@@ -25,6 +25,9 @@ namespace
         default:
             return "Unknown";
         }
+
+
+
     }
 
 
@@ -38,6 +41,31 @@ namespace
             << v.y << ", "
             << v.z << ")"
             << std::endl;
+    }
+
+
+
+    const char* placementModeToString(
+        PassPlacementMode mode
+    )
+    {
+        switch (mode)
+        {
+        case PassPlacementMode::AppendToPrevious:
+            return "Append";
+
+        case PassPlacementMode::InsertAtArcLength:
+            return "InsertAtArcLength";
+
+        case PassPlacementMode::InsertAtNodeIndex:
+            return "InsertAtNodeIndex";
+
+        case PassPlacementMode::ExplicitStartFrame:
+            return "ExplicitStartFrame";
+
+        default:
+            return "Unknown";
+        }
     }
 }
 
@@ -76,9 +104,26 @@ void debugPrintManufacturingHistory(
             << manufacturingProcessTypeToString(extra.pass.processType)
             << std::endl;
 
+        std::cout << "      placementMode="
+            << placementModeToString(extra.resolvedPlacementMode)
+            << " resolved="
+            << extra.hasResolvedPlacement
+            << std::endl;
+
+        std::cout << "      nodeIndex="
+            << extra.resolvedNodeIndex
+            << " requestedArcLength="
+            << extra.requestedArcLength
+            << " resolvedArcLength="
+            << extra.resolvedArcLength
+            << std::endl;
         debugPrintVec3("P", extra.entryFrame.P);
         debugPrintVec3("T", extra.entryFrame.T);
         debugPrintVec3("N", extra.entryFrame.N);
         debugPrintVec3("B", extra.entryFrame.B);
+
+
     }
+
+
 }

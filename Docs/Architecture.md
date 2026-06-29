@@ -3468,3 +3468,45 @@ placement rule
 resolved entryFrame
         ?
 additional forming pass
+
+
+====
+So now both systems agree:
+
+PassPlacementResolver
+      ??? PreviewModel frame
+      ??? ManufacturingHistory entryFrame
+primary rotary pass
+      ?
+base curve at NodeIndex
+      ?
+resolved entryFrame
+      ?
+additional helix pass
+
+===========================================================
+===========================================================
+
+Phase 2L
+Print placement resolution info in ManufacturingHistory debug
+
+Goal:
+Debug should show not only entryFrame,
+but also how this entryFrame was resolved.
+ASCII:
+AdditionalFormingPass
+   ??? pass
+   ??? entryFrame
+   ??? placement resolution info
+        ??? mode
+        ??? nodeIndex / requested arcLength
+        ??? resolvedArcLength
+
+Pipeflow:
+PassPlacement
+      ?
+PassPlacementResolver
+      ?
+Frame + resolvedArcLength
+      ?
+AdditionalFormingPass debug info

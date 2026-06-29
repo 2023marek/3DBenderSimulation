@@ -4,6 +4,7 @@
 
 #include "Core/Forming/ManufacturingPass.h"
 #include "Core/Geometry/Frame.h"
+#include "Core/Forming/PassPlacement.h"
 
 // =====================================================
 // ADDITIONAL FORMING PASS
@@ -39,4 +40,15 @@ struct AdditionalFormingPass
     // - process constraints
     // - collision validation
     bool enabled = true;
+    // Debug / trace info.
+// Explains how entryFrame was resolved.
+    PassPlacementMode resolvedPlacementMode =
+    PassPlacementMode::AppendToPrevious;
+
+    size_t resolvedNodeIndex = 0;
+
+    double requestedArcLength = 0.0;
+    double resolvedArcLength = 0.0;
+
+    bool hasResolvedPlacement = false;
 };
