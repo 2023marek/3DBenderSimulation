@@ -2,7 +2,7 @@
 
 #include <string>
 #include <vector>
-
+#include <cstddef>
 #include "Core/Geometry/Frame.h"
 
 // =====================================================
@@ -41,4 +41,8 @@ struct ManufacturingHistorySummary
 {
     std::vector<PrimaryPassSummary> primaryPasses;
     std::vector<AdditionalPassPlacementSummary> additionalPasses;
+
+    size_t primaryPassCount = 0;
+    size_t additionalPassCount = 0;
+    size_t totalPassCount = 0;
 };

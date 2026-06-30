@@ -137,14 +137,16 @@ void debugPrintManufacturingHistory(
 )
 {
     std::cout << "[MFG HISTORY]" << std::endl;
-
+    
     ManufacturingHistorySummary summary =
         buildManufacturingHistorySummary(
             history
         );
-
+    std::cout << "  total passes: "
+        << summary.totalPassCount
+        << std::endl;
     std::cout << "  primary passes: "
-        << summary.primaryPasses.size()
+        << summary.primaryPassCount
         << std::endl;
 
     for (size_t i = 0; i < summary.primaryPasses.size(); ++i)
@@ -160,7 +162,7 @@ void debugPrintManufacturingHistory(
     }
 
     std::cout << "  additional passes: "
-        << summary.additionalPasses.size()
+        << summary.additionalPassCount
         << std::endl;
 
     for (size_t i = 0; i < summary.additionalPasses.size(); ++i)
@@ -193,4 +195,5 @@ void debugPrintManufacturingHistory(
         debugPrintVec3("N", extra.entryFrame.N);
         debugPrintVec3("B", extra.entryFrame.B);
     }
+   
 }

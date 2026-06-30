@@ -146,5 +146,15 @@ buildManufacturingHistorySummary(
             history
         );
 
+    summary.primaryPassCount =
+        summary.primaryPasses.size();
+
+    summary.additionalPassCount =
+        summary.additionalPasses.size();
+
+    summary.totalPassCount =
+        summary.primaryPassCount
+        + summary.additionalPassCount;
+
     return summary;
 }

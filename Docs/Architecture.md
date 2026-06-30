@@ -3762,5 +3762,25 @@ ManufacturingHistorySummary
       ?
 console now / HUD later
 
-ASCII
+
+
+==============================
+Phase 2Y
+Add summary counts helper
+
+Goal:
+Make HUD/debug able to quickly show:
+primary count
+additional count
+total pass count
+
+ManufacturingHistorySummary
+   ??? primaryPasses
+   ??? additionalPasses
+   ?
+   ??? primaryPassCount
+   ??? additionalPassCount
+   ??? totalPassCount
+
+
 
