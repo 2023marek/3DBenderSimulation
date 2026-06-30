@@ -3782,5 +3782,88 @@ ManufacturingHistorySummary
    ??? additionalPassCount
    ??? totalPassCount
 
+   ===========================================
+   Phase 2Z
+Guard manufacturing history debug output
+Goal:
+Allow enabling/disabling this console block cleanly.
+
+Goal;
+Keep ManufacturingHistory debug printing available,
+but make it easy to turn on/off.
+
+ASCII:
+AppController
+   ?
+   ??? build ManufacturingHistory
+   ?
+   ??? if debug flag enabled
+           ?
+        print history summary
+
+===============================================================
+Phase 3A
+Review ManufacturingPipeSimulator 4-zone render data
+
+Goal:
+Return from history/preview cleanup
+to the real manufacturing pipeflow core.
+
+Pipefloat target:
+incoming stock
+   ?
+positioned straight
+   ?
+active bend zone
+   ?
+current bend trace
+   ?
+frozen geometry
+
+=========================================================
+Phase 3B review.
+main rule:
+ManufacturingPipeSimulator owns process state.
+Renderer owns drawing only.
+Correct ownership:
+ManufacturingPipeSimulator
+      ?
+      ?
+ManufacturingRenderData
+      ??? incomingStockNodes
+      ??? positionedStraightNodes
+      ??? currentBendTraceNodes
+      ??? activeZoneNodes
+      ??? frozenNodes
+legacy path:
+ManufacturingRenderData
+      ?
+flattenManufacturingRenderData()
+      ?
+renderNodes
+      ?
+old single-strip drawing
+Separated zones preserve manufacturing meaning.
+Flattened renderNodes loses zone meaning.
+
+ASCII:
+Correct:
+
+incoming | positioned | trace | active | frozen
+   ?           ?          ?       ?        ?
+   ?           ?          ?       ?        ?
+draw separately with zone colors / styles
 
 
+Legacy:
+
+incoming + positioned + trace + active + frozen
+              ?
+              ?
+       one flat node list
+              ?
+              ?
+       zone meaning partly lost
+
+       Phase 3C
+Add comments marking flattenManufacturingRenderData as legacy compatibility

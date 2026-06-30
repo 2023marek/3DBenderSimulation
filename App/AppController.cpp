@@ -39,6 +39,8 @@ namespace
 
     constexpr double TEST_INSERT_ARC_LENGTH = 202.0;
     constexpr size_t TEST_INSERT_NODE_INDEX = 404;
+    constexpr bool DEBUG_PRINT_MANUFACTURING_HISTORY =
+        true;
 }
 
 
@@ -529,15 +531,18 @@ void AppController::toggleSimulationMode()
             history
         );
 
-        std::cout << "[MFG HISTORY REAL PASSES] primary="
-            << history.primaryPasses.size()
-            << " additional="
-            << history.additionalPasses.size()
-            << std::endl;
+        if (DEBUG_PRINT_MANUFACTURING_HISTORY)
+        {
+            std::cout << "[MFG HISTORY REAL PASSES] primary="
+                << history.primaryPasses.size()
+                << " additional="
+                << history.additionalPasses.size()
+                << std::endl;
 
-        debugPrintManufacturingHistory(
-            history
-        );
+            debugPrintManufacturingHistory(
+                history
+            );
+        }
 
        
 

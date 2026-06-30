@@ -1159,6 +1159,30 @@ private:
             << std::endl;
     }
 
+    // =====================================================
+// LEGACY MANUFACTURING RENDER FLATTENING
+//
+// ManufacturingRenderData already stores the correct
+// process-aware separated zones:
+//
+//     incomingStockNodes
+//     positionedStraightNodes
+//     currentBendTraceNodes
+//     activeZoneNodes
+//     frozenNodes
+//
+// This flattening helper exists only for legacy paths
+// that still expect one continuous renderNodes list.
+//
+// New rendering code should prefer the separated zone
+// data directly.
+//
+// Do not add manufacturing logic here.
+// Do not reconstruct zones here.
+// ManufacturingPipeSimulator owns zone generation.
+// Renderer owns drawing only.
+// =====================================================
+
     void flattenManufacturingRenderData()
     {
         renderNodes.clear();

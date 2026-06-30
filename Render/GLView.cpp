@@ -843,8 +843,8 @@ void GLView::paintGL()
         {
             drawTubeZone(data.incomingStockNodes, 5.0, 12);
             drawTubeZone(data.positionedStraightNodes, 5.0, 12);
-            drawTubeZone(data.currentBendTraceNodes, 5.0, 12);
             drawTubeZone(data.frozenNodes, 5.0, 12);
+            drawTubeZone(data.currentBendTraceNodes, 5.0, 12);
             drawTubeZone(data.activeZoneNodes, 5.0, 12);
         }
     }
@@ -884,11 +884,11 @@ void GLView::uploadPipeGeometry()
     );
 
     strips.push_back(
-        nodesToFloatLine(data.currentBendTraceNodes)
+        nodesToFloatLine(data.frozenNodes)
     );
 
     strips.push_back(
-        nodesToFloatLine(data.frozenNodes)
+        nodesToFloatLine(data.currentBendTraceNodes)
     );
 
     strips.push_back(
