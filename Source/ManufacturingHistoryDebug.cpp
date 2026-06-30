@@ -138,58 +138,59 @@ void debugPrintManufacturingHistory(
 {
     std::cout << "[MFG HISTORY]" << std::endl;
 
-    std::cout << "  primary passes: "
-        << history.primaryPasses.size()
-        << std::endl;
-
-    for (size_t i = 0; i < history.primaryPasses.size(); ++i)
-    {
-        const ManufacturingPass& pass =
-            history.primaryPasses[i];
-
-        std::cout << "    [" << i << "] process="
-            << manufacturingProcessTypeToString(pass.processType)
-            << std::endl;
-    }
-
-    auto additionalSummaries =
-        buildAdditionalPassPlacementSummaries(
+    ManufacturingHistorySummary summary =
+        buildManufacturingHistorySummary(
             history
         );
 
-    std::cout << "  additional passes: "
-        << additionalSummaries.size()
+    std::cout << "  primary passes: "
+        << summary.primaryPasses.size()
         << std::endl;
 
-    for (size_t i = 0; i < additionalSummaries.size(); ++i)
+    for (size_t i = 0; i < summary.primaryPasses.size(); ++i)
     {
-        const AdditionalPassPlacementSummary& summary =
-            additionalSummaries[i];
+        const PrimaryPassSummary& primary =
+            summary.primaryPasses[i];
+
+        std::cout << "    [" << i << "] process="
+            << primary.processName
+            << " enabled="
+            << primary.enabled
+            << std::endl;
+    }
+
+    std::cout << "  additional passes: "
+        << summary.additionalPasses.size()
+        << std::endl;
+
+    for (size_t i = 0; i < summary.additionalPasses.size(); ++i)
+    {
+        const AdditionalPassPlacementSummary& extra =
+            summary.additionalPasses[i];
 
         std::cout << "    [" << i << "] name="
-            << summary.name
+            << extra.name
             << " process="
-            << summary.processName
+            << extra.processName
             << std::endl;
 
         std::cout << "      placementMode="
-            << summary.placementModeName
+            << extra.placementModeName
             << " resolved="
-            << summary.resolved
+            << extra.resolved
             << std::endl;
 
         std::cout << "      requested="
-            << summary.requestedValueText
+            << extra.requestedValueText
             << std::endl;
 
         std::cout << "      resolvedArcLength="
-            << summary.resolvedArcLength
+            << extra.resolvedArcLength
             << std::endl;
 
-        debugPrintVec3("P", summary.entryFrame.P);
-        debugPrintVec3("T", summary.entryFrame.T);
-        debugPrintVec3("N", summary.entryFrame.N);
-        debugPrintVec3("B", summary.entryFrame.B);
+        debugPrintVec3("P", extra.entryFrame.P);
+        debugPrintVec3("T", extra.entryFrame.T);
+        debugPrintVec3("N", extra.entryFrame.N);
+        debugPrintVec3("B", extra.entryFrame.B);
     }
-
 }

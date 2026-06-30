@@ -3711,3 +3711,56 @@ formingProcessTypeToLabel()
         ?
         ?
 "Additional pass 1: HelixForming"
+
+===================================================
+Phase 2W
+Add primary pass summaries
+Goal:
+SummaryBuilder should describe primary passes too,
+not only additional passes.
+Pipeflow:
+
+ManufacturingHistory
+   ??? primaryPasses
+   ?       ?
+   ?   PrimaryPassSummary
+   ?
+   ??? additionalPasses
+           ?
+       AdditionalPassPlacementSummary
+
+       ManufacturingHistorySummaryBuilder should summarize:
+- primary passes
+- additional passes
+
+ASCII:
+ManufacturingHistory
+   ?
+   ??? primaryPasses
+   ?       ?
+   ?       ?
+   ?   PrimaryPassSummary
+   ?
+   ??? additionalPasses
+           ?
+           ?
+       AdditionalPassPlacementSummary
+
+       =====================================================
+       Phase 2X
+Add full ManufacturingHistorySummary object
+Goal:
+Instead of returning primary and additional summaries separately,
+create one combined summary object for future HUD.
+
+Pipeflow:
+ManufacturingHistory
+      ?
+ManufacturingHistorySummary
+      ??? primaryPasses
+      ??? additionalPasses
+      ?
+console now / HUD later
+
+ASCII
+

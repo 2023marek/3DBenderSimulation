@@ -99,3 +99,52 @@ buildAdditionalPassPlacementSummaries(
 
     return summaries;
 }
+
+std::vector<PrimaryPassSummary>
+buildPrimaryPassSummaries(
+    const ManufacturingHistory& history
+)
+{
+    std::vector<PrimaryPassSummary> summaries;
+
+    for (const ManufacturingPass& pass :
+        history.primaryPasses)
+    {
+        PrimaryPassSummary summary;
+
+        summary.processName =
+            formingProcessTypeToLabel(
+                pass.processType
+            );
+
+        summary.enabled =
+            pass.enabled;
+
+        summaries.push_back(
+            summary
+        );
+    }
+
+    return summaries;
+}
+
+
+ManufacturingHistorySummary
+buildManufacturingHistorySummary(
+    const ManufacturingHistory& history
+)
+{
+    ManufacturingHistorySummary summary;
+
+    summary.primaryPasses =
+        buildPrimaryPassSummaries(
+            history
+        );
+
+    summary.additionalPasses =
+        buildAdditionalPassPlacementSummaries(
+            history
+        );
+
+    return summary;
+}

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "Core/Geometry/Frame.h"
 
@@ -15,6 +16,11 @@
 // This only converts manufacturing-history data into
 // easy-to-display text/numeric values.
 // =====================================================
+struct PrimaryPassSummary
+{
+    std::string processName;
+    bool enabled = true;
+};
 
 struct AdditionalPassPlacementSummary
 {
@@ -29,4 +35,10 @@ struct AdditionalPassPlacementSummary
     double resolvedArcLength = 0.0;
 
     Frame entryFrame;
+};
+
+struct ManufacturingHistorySummary
+{
+    std::vector<PrimaryPassSummary> primaryPasses;
+    std::vector<AdditionalPassPlacementSummary> additionalPasses;
 };
