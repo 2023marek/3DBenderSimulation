@@ -51,6 +51,7 @@ set(RENDER_SOURCES
     Source/TubeMesh.cpp
     Source/ManufacturingHistoryDebug.cpp
     Source/ManufacturingHistoryBuilder.cpp
+    Source/ManufacturingHistorySummaryBuilder.cpp
 )
 
 set(RENDER_HEADERS
@@ -92,6 +93,8 @@ set(CORE_HEADERS
     Core/Forming/ManufacturingPlan.h
     Core/Forming/AdditionalFormingPass.h
     Core/Forming/ManufacturingHistory.h
+    Core/Forming/ManufacturingHistorySummary.h
+    Core/Forming/ManufacturingHistorySummaryBuilder.h
     Core/Forming/ManufacturingHistoryBuilder.h
     Core/Forming/ManufacturingHistoryDebug.h
     Core/Forming/ManufacturingPlanPreviewModel.h

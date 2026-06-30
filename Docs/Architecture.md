@@ -3592,3 +3592,38 @@ better output:
 placementMode=InsertAtNodeIndex resolved=1
 requestedNodeIndex=404
 resolvedArcLength=201.989
+
+=======================================================
+Phase 2Q
+Add resolved placement info to HUD/debug overlay later-ready data
+
+Goal:
+Prepare history placement information so it can later be shown in HUD,
+not only console.
+
+
+Prepare placement-resolution info for future HUD/debug overlay.
+Do not draw it yet.
+
+ASCII:
+ManufacturingHistory
+      ?
+      ?
+PlacementDebugSummary
+      ?
+      ??? modeName
+      ??? resolved
+      ??? requestedValueText
+      ??? resolvedArcLength
+      ??? entryFrame
+              ?
+              ? later
+            HUDPanel
+AdditionalFormingPass
+      ?
+summary data
+      ?
+console now
+      ?
+HUD later
+
