@@ -1,5 +1,6 @@
 #include "Core/Forming/ManufacturingHistoryDebug.h"
 #include "Core/Math/Vec3D.h"
+#include "Core/Forming/ManufacturingHistorySummaryBuilder.h"
 #include <iostream>
 
 namespace
@@ -151,31 +152,44 @@ void debugPrintManufacturingHistory(
             << std::endl;
     }
 
+    auto additionalSummaries =
+        buildAdditionalPassPlacementSummaries(
+            history
+        );
+
     std::cout << "  additional passes: "
-        << history.additionalPasses.size()
+        << additionalSummaries.size()
         << std::endl;
 
-    for (size_t i = 0; i < history.additionalPasses.size(); ++i)
+    for (size_t i = 0; i < additionalSummaries.size(); ++i)
     {
-        const AdditionalFormingPass& extra =
-            history.additionalPasses[i];
+        const AdditionalPassPlacementSummary& summary =
+            additionalSummaries[i];
 
         std::cout << "    [" << i << "] name="
-            << extra.name
+            << summary.name
             << " process="
-            << manufacturingProcessTypeToString(extra.pass.processType)
+            << summary.processName
             << std::endl;
 
-        debugPrintPlacementDetails(
-            extra
-        );
-        debugPrintVec3("P", extra.entryFrame.P);
-        debugPrintVec3("T", extra.entryFrame.T);
-        debugPrintVec3("N", extra.entryFrame.N);
-        debugPrintVec3("B", extra.entryFrame.B);
+        std::cout << "      placementMode="
+            << summary.placementModeName
+            << " resolved="
+            << summary.resolved
+            << std::endl;
 
+        std::cout << "      requested="
+            << summary.requestedValueText
+            << std::endl;
 
+        std::cout << "      resolvedArcLength="
+            << summary.resolvedArcLength
+            << std::endl;
+
+        debugPrintVec3("P", summary.entryFrame.P);
+        debugPrintVec3("T", summary.entryFrame.T);
+        debugPrintVec3("N", summary.entryFrame.N);
+        debugPrintVec3("B", summary.entryFrame.B);
     }
-
 
 }

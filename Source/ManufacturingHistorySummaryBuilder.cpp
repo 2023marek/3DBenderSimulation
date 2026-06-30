@@ -1,31 +1,10 @@
 #include "Core/Forming/ManufacturingHistorySummaryBuilder.h"
-
+#include "Core/Forming/FormingProcessLabels.h"
 #include <sstream>
 
 namespace
 {
-    const char* processTypeToString(
-        TubeFormingProcessType type
-    )
-    {
-        switch (type)
-        {
-        case TubeFormingProcessType::RotaryDrawBending:
-            return "RotaryDraw";
-
-        case TubeFormingProcessType::HelixForming:
-            return "Helix";
-
-        case TubeFormingProcessType::TwoRollerContinuous:
-            return "TwoRollerContinuous";
-
-        case TubeFormingProcessType::StretchBending:
-            return "StretchBending";
-
-        default:
-            return "Unknown";
-        }
-    }
+   
 
     const char* placementModeToString(
         PassPlacementMode mode
@@ -106,7 +85,11 @@ buildAdditionalPassPlacementSummaries(
             extra.name;
 
         summary.processName =
-            processTypeToString(
+           // processTypeToString(
+           //     extra.pass.processType
+           // )
+
+            formingProcessTypeToLabel(
                 extra.pass.processType
             );
 

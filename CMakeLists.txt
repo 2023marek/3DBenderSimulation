@@ -52,6 +52,7 @@ set(RENDER_SOURCES
     Source/ManufacturingHistoryDebug.cpp
     Source/ManufacturingHistoryBuilder.cpp
     Source/ManufacturingHistorySummaryBuilder.cpp
+    Source/FormingProcessLabels.cpp
 )
 
 set(RENDER_HEADERS
@@ -89,6 +90,7 @@ set(CORE_HEADERS
     Core/RotationDirection.h
     Core/Forming/TubeFormingProcessType.h
     Core/Forming/FormingOperation.h
+    Core/Forming/FormingProcessLabels.h
     Core/Forming/ManufacturingPass.h
     Core/Forming/ManufacturingPlan.h
     Core/Forming/AdditionalFormingPass.h

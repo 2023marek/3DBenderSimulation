@@ -1048,3 +1048,30 @@ Collision framework
 
         return true;
     }
+
+
+
+
+    ===========================
+     const char* processTypeToString(
+        TubeFormingProcessType type
+    )
+    {
+        switch (type)
+        {
+        case TubeFormingProcessType::RotaryDrawBending:
+            return "RotaryDraw";
+
+        case TubeFormingProcessType::HelixForming:
+            return "HelixForming";
+
+        case TubeFormingProcessType::TwoRollerContinuous:
+            return "TwoRollerContinuous";
+
+        case TubeFormingProcessType::StretchBending:
+            return "StretchBending";
+
+        default:
+            return "Unknown";
+        }
+    }

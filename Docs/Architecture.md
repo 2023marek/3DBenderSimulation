@@ -3627,3 +3627,43 @@ console now
       ?
 HUD later
 
+==============================================
+Phase 2R: use history summary data in debug printer
+
+Goal:
+Make console debug and future HUD use the same summary data.
+
+Pipeflow:
+
+ManufacturingHistory
+      ?
+ManufacturingHistorySummaryBuilder
+      ?
+console debug now
+      ?
+HUD later
+====================================================================
+
+
+Phase 2T
+Move shared process-name conversion into one helper
+
+Goal:
+
+Avoid duplicate TubeFormingProcessType ? string functions
+in Debug, SummaryBuilder, Builder, etc.
+
+One shared helper for:
+TubeFormingProcessType ? readable label
+
+ASCII
+TubeFormingProcessType
+        ?
+        ?
+FormingProcessLabels
+        ?
+        ??? ManufacturingHistoryDebug
+        ??? ManufacturingHistorySummaryBuilder
+        ??? ManufacturingHistoryBuilder
+
+
