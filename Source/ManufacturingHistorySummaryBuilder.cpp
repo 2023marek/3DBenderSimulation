@@ -1,33 +1,13 @@
 #include "Core/Forming/ManufacturingHistorySummaryBuilder.h"
 #include "Core/Forming/FormingProcessLabels.h"
+#include "Core/Forming/PassPlacementLabels.h"
 #include <sstream>
 
 namespace
 {
    
 
-    const char* placementModeToString(
-        PassPlacementMode mode
-    )
-    {
-        switch (mode)
-        {
-        case PassPlacementMode::AppendToPrevious:
-            return "AppendToPrevious";
-
-        case PassPlacementMode::InsertAtArcLength:
-            return "InsertAtArcLength";
-
-        case PassPlacementMode::InsertAtNodeIndex:
-            return "InsertAtNodeIndex";
-
-        case PassPlacementMode::ExplicitStartFrame:
-            return "ExplicitStartFrame";
-
-        default:
-            return "Unknown";
-        }
-    }
+  
 
     std::string buildRequestedValueText(
         const AdditionalFormingPass& extra
@@ -94,7 +74,7 @@ buildAdditionalPassPlacementSummaries(
             );
 
         summary.placementModeName =
-            placementModeToString(
+            passPlacementModeToLabel(
                 extra.resolvedPlacementMode
             );
 

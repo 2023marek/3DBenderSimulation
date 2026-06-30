@@ -3,6 +3,7 @@
 #include "Core/Forming/ManufacturingHistoryBuilder.h"
 #include "Core/Forming/PassPlacementResolver.h"
 #include "Core/Curve/PipeCurve.h"
+#include "Core/Forming/FormingProcessLabels.h"
 namespace
 {
     std::string additionalPassNameFromProcessType(
@@ -14,30 +15,8 @@ namespace
 
         out << "Additional pass "
             << additionalIndex + 1
-            << ": ";
-
-        switch (type)
-        {
-        case TubeFormingProcessType::RotaryDrawBending:
-            out << "rotary draw forming pass";
-            break;
-
-        case TubeFormingProcessType::HelixForming:
-            out << "helix forming pass";
-            break;
-
-        case TubeFormingProcessType::TwoRollerContinuous:
-            out << "two-roller forming pass";
-            break;
-
-        case TubeFormingProcessType::StretchBending:
-            out << "stretch-bending forming pass";
-            break;
-
-        default:
-            out << "forming pass";
-            break;
-        }
+            << ": "
+            << formingProcessTypeToLabel(type);
 
         return out.str();
     }

@@ -53,6 +53,7 @@ set(RENDER_SOURCES
     Source/ManufacturingHistoryBuilder.cpp
     Source/ManufacturingHistorySummaryBuilder.cpp
     Source/FormingProcessLabels.cpp
+    Source/PassPlacementLabels.cpp
 )
 
 set(RENDER_HEADERS
@@ -105,6 +106,7 @@ set(CORE_HEADERS
     Core/Forming/HelixFormingPassBuilder.h
     Core/Forming/RotaryDrawPassBuilder.h
     Core/Forming/PassPlacement.h
+    Core/Forming/PassPlacementLabels.h
     Core/Forming/PassPlacementResolver.h
     Core/Geometry/Frame.h
     Core/Geometry/PipeNode.h

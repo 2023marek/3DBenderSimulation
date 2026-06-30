@@ -3666,4 +3666,48 @@ FormingProcessLabels
         ??? ManufacturingHistorySummaryBuilder
         ??? ManufacturingHistoryBuilder
 
+========================================================
+Phase 2U
+Add shared placement-mode label helper
+Goal:
+Avoid duplicate PassPlacementMode ? string functions.
+Use one helper for console now and HUD later.
 
+ASCCII:
+PassPlacementMode
+        ?
+        ?
+PassPlacementLabels
+        ?
+        ??? ManufacturingHistoryDebug
+        ??? ManufacturingHistorySummaryBuilder
+        ??? future HUD/debug overlay
+
+=========================================================
+Phase 2V
+Use shared process labels in additional pass naming
+
+Goal:
+Remove remaining hardcoded names like:
+"helix forming pass"
+"rotary draw forming pass"
+
+Use shared forming process labels as base.
+
+We want:
+TubeFormingProcessType
+      ?
+formingProcessTypeToLabel()
+      ?
+Additional pass name
+
+
+ASCII:
+
+ManufacturingPass.processType
+        ?
+        ?
+formingProcessTypeToLabel()
+        ?
+        ?
+"Additional pass 1: HelixForming"
