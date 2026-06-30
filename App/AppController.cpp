@@ -15,6 +15,8 @@
 #include "Core/Forming/ManufacturingHistoryDebug.h"
 #include "Core/Forming/ManufacturingHistoryBuilder.h"
 
+
+
 //#include "Core/Sampling/PipeCurveSampler.h"
 
 // =====================================
@@ -306,6 +308,9 @@ void AppController::toggleSimulationMode()
         useCADPreview();
     }
 }
+
+
+
 // Helpers
     std::vector<Operation> AppController::buildTestOperations() const
     {
@@ -533,6 +538,8 @@ void AppController::toggleSimulationMode()
         debugPrintManufacturingHistory(
             history
         );
+
+       
 
 
         preview.setDebugLogging(

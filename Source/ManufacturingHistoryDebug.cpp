@@ -67,6 +67,68 @@ namespace
             return "Unknown";
         }
     }
+
+
+    void debugPrintPlacementDetails(
+        const AdditionalFormingPass& extra
+    )
+    {
+        std::cout << "      placementMode="
+            << placementModeToString(
+                extra.resolvedPlacementMode
+            )
+            << " resolved="
+            << extra.hasResolvedPlacement
+            << std::endl;
+
+        if (extra.resolvedPlacementMode
+            == PassPlacementMode::InsertAtNodeIndex)
+        {
+            std::cout << "      requestedNodeIndex="
+                << extra.resolvedNodeIndex
+                << std::endl;
+
+            std::cout << "      resolvedArcLength="
+                << extra.resolvedArcLength
+                << std::endl;
+
+            return;
+        }
+
+        if (extra.resolvedPlacementMode
+            == PassPlacementMode::InsertAtArcLength)
+        {
+            std::cout << "      requestedArcLength="
+                << extra.requestedArcLength
+                << std::endl;
+
+            std::cout << "      resolvedArcLength="
+                << extra.resolvedArcLength
+                << std::endl;
+
+            return;
+        }
+
+        if (extra.resolvedPlacementMode
+            == PassPlacementMode::AppendToPrevious)
+        {
+            std::cout << "      resolvedArcLength="
+                << extra.resolvedArcLength
+                << " (end of previous curve)"
+                << std::endl;
+
+            return;
+        }
+
+        if (extra.resolvedPlacementMode
+            == PassPlacementMode::ExplicitStartFrame)
+        {
+            std::cout << "      explicit start frame"
+                << std::endl;
+
+            return;
+        }
+    }
 }
 
 void debugPrintManufacturingHistory(
@@ -104,19 +166,9 @@ void debugPrintManufacturingHistory(
             << manufacturingProcessTypeToString(extra.pass.processType)
             << std::endl;
 
-        std::cout << "      placementMode="
-            << placementModeToString(extra.resolvedPlacementMode)
-            << " resolved="
-            << extra.hasResolvedPlacement
-            << std::endl;
-
-        std::cout << "      nodeIndex="
-            << extra.resolvedNodeIndex
-            << " requestedArcLength="
-            << extra.requestedArcLength
-            << " resolvedArcLength="
-            << extra.resolvedArcLength
-            << std::endl;
+        debugPrintPlacementDetails(
+            extra
+        );
         debugPrintVec3("P", extra.entryFrame.P);
         debugPrintVec3("T", extra.entryFrame.T);
         debugPrintVec3("N", extra.entryFrame.N);

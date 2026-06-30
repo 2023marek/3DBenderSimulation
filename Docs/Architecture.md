@@ -3548,3 +3548,47 @@ base curve end frame
    ?
 additional pass
 
+==============================================================
+Phase 2N
+Add debug test for AppendToPrevious placement
+
+Goal:
+Temporarily switch/add one pass using AppendToPrevious
+and confirm resolver returns end frame of previous curve.
+
+pipeflow:
+
+primary pass
+      ?
+end frame
+      ?
+AppendToPrevious
+      ?
+additional pass entryFrame
+
+base curve
+????????????????????????????? last node
+                                ?
+                                ?
+                         AppendToPrevious
+                                ?
+                                ?
+                         resolved entryFrame
+
+==================================================================
+Phase 2P
+Clean ManufacturingHistory debug output label names
+Goal:
+Make debug text clearer:
+requestedArcLength only meaningful for ArcLength mode.
+For NodeIndex, print nodeIndex as main value.
+
+
+current output:
+placementMode=InsertAtNodeIndex resolved=1
+nodeIndex=404 requestedArcLength=0 resolvedArcLength=201.989
+
+better output:
+placementMode=InsertAtNodeIndex resolved=1
+requestedNodeIndex=404
+resolvedArcLength=201.989
