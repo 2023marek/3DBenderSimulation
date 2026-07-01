@@ -3867,3 +3867,269 @@ incoming + positioned + trace + active + frozen
 
        Phase 3C
 Add comments marking flattenManufacturingRenderData as legacy compatibility
+
+
+=====================================================
+Phase 3F
+Goal:
+Avoid repeating manufacturing zone order manually
+in LINE and MESH paths.
+
+Current duplication:
+uploadPipeGeometry() LINE order
+paintGL() MESH order
+
+Target:
+one clear helper/comment defines order:
+
+incoming
+positioned
+frozen
+trace
+active
+
+ASCII:
+ManufacturingRenderData
+      ?
+      ?
+zone order helper
+      ?
+      ??? LINE upload
+      ??? MESH draw
+============================================================
+Phase 3G.
+Create one helper for LINE zone strip order.
+ASCII:
+ManufacturingRenderData
+      ?
+      ?
+buildManufacturingLineStrips()
+      ?
+      ?
+pipeRenderer.uploadLineStrips()
+==================================================================
+=================================================================
+===================================================================
+====================================================================
+Option 1
+Anonymous namespace
+namespace
+{
+    helper(...)
+}
+belongs to GLView.cpp
+not to GLView.
+ASCII:
+
+GLView.cpp
+
+helper()
+
+GLView
+
+paintGL()
+uploadPipeGeometry()
+
+No ownership relation.
+
+Option 2
+
+Private member
+
+class GLView
+{
+private:
+
+    drawManufacturingMeshZones();
+};
+
+ASCII:
+GLView
+
++----------------------------+
+| uploadPipeGeometry()       |
+| paintGL()                  |
+| drawTubeZone()             |
+| drawManufacturingMeshZones()|
++----------------------------+
+
+Now it is clearly
+
+part of GLView.
+
+Which one is better?
+
+Ask one question:
+
+Does this function need GLView?
+
+If NO
+namespace helper
+is usually better.
+
+Example
+
+double degToRad(double);
+
+No GLView needed.
+
+Perfect namespace helper.
+
+If YES
+
+private member
+is usually better.
+
+Example
+drawManufacturingMeshZones()
+Why?
+
+Because inside it we call
+drawTubeZone(...)
+and
+drawTubeZone()
+already belongs to
+GLView.
+So conceptually
+drawManufacturingMeshZones()
+
+belongs to GLView too.
+Compare our two helpers
+
+buildManufacturingLineStrips()
+
+Only builds a vector.
+
+No OpenGL.
+
+No camera.
+
+No renderer.
+
+Just data conversion.
+
+That naturally fits a namespace helper.
+
+ASCII:
+ManufacturingRenderData
+        ?
+        ?
+buildManufacturingLineStrips()
+        ?
+        ?
+std::vector<std::vector<float>>
+Phase 3H
+drawManufacturingMeshZones()
+Calls
+drawTubeZone(...)
+which calls
+tubeMesh.generate(...)
+pipeRenderer.uploadMesh(...)
+pipeRenderer.draw()
+These are all GLView responsibilities.
+ASCII:
+GLView
+ ?
+ ??? drawTubeZone()
+ ??? uploadPipeGeometry()
+ ??? paintGL()
+ ??? drawManufacturingMeshZones()
+ It makes sense that all rendering actions live together 
+ inside GLView.
+
+ A rule I personally follow
+ Pure calculation?
+        ?
+namespace helper
+
+Uses object state or other member functions?
+        ?
+private member function
+
+This keeps the code easier to understand and maintain.
+
+
+Another possibility is a forward declaration.
+void world();
+
+void hello()
+{
+    world();
+}
+
+void world()
+{
+}
+
+This tells the compiler
+
+Trust me.
+
+There will be a function called world() later.
+
+==================
+The anonymous namespace means
+
+"This function belongs only to this .cpp file."
+
+It is not a member of any class.
+
+Think of it like this:
+
+GLView.cpp
+
++--------------------------------------------+
+| namespace                                  |
+| {                                          |
+|     helper A                               |
+|     helper B                               |
+| }                                          |
+|                                            |
+| GLView::paintGL()                          |
+| GLView::uploadPipeGeometry()               |
++--------------------------------------------+
+
+These helpers are simply "local workers".
+
+They don't belong to GLView.
+
+Why did it fail?
+Because the helper tried to call
+nodesToFloatLine(...)
+
+the file look like here
+namespace
+{
+    helper()
+    {
+        nodesToFloatLine();   // compiler: What is this??
+    }
+}
+
+// 300 lines later...
+
+nodesToFloatLine(...)
+
+The compiler reads a file from top to bottom.
+
+It does not know what comes later.
+
+
+==============================================
+
+Phase 3H.
+goal
+Extract MESH manufacturing zone draw order into one helper.
+
+ASCII:
+ManufacturingRenderData
+      ?
+      ?
+drawManufacturingMeshZones()
+      ?
+      ??? incoming
+      ??? positioned
+      ??? frozen
+      ??? trace
+      ??? active
+

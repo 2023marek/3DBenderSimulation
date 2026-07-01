@@ -11,7 +11,7 @@ class AppController;
 #include "Core/Geometry/PipeNode.h"
 #include "Render/MachineRenderer.h"
 #include "Core/Geometry/Frame.h"
-
+#include "Core/Manufacturing/ManufacturingTypes.h"
 
 
 class GLView : public QOpenGLWidget
@@ -19,13 +19,7 @@ class GLView : public QOpenGLWidget
     Q_OBJECT
 
 public:
-    GLView() {
-        setFocusPolicy(Qt::StrongFocus);
-        camera.pitch = 20.0f;
-        camera.yaw = -45.0f;
-        setFocusPolicy(Qt::StrongFocus);
-		
-    }
+    GLView();
   
    
     
@@ -127,6 +121,9 @@ private:
     PipeRenderer pipeRenderer;
 
     TubeMesh tubeMesh;
+    void drawManufacturingMeshZones(
+        const ManufacturingRenderData& data
+    );
 
     //GLuint meshVAO = 0 ;
    // GLuint meshVBO = 0;

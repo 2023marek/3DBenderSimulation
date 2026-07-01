@@ -8,12 +8,53 @@
 #include "Core/Manufacturing/ManufacturingPipeSimulator.h"
 #include "Core/Machine/MachineRenderData.h"
 
+
 #include "Core/BendDirection.h"
 //#include "Render/ShaderGL.h"
 #include "Core/Geometry/PipeNode.h"
 #include <QOpenGLContext>
 #include <iostream>
 
+GLView::GLView()
+{
+    setFocusPolicy(Qt::StrongFocus);
+    camera.pitch = 20.0f;
+    camera.yaw = -45.0f;
+}
+
+static std::vector<float> nodesToFloatLine(
+    const std::vector<PipeNode>& nodes)
+{
+    std::vector<float> data;
+    data.reserve(nodes.size() * 3);
+
+    for (const auto& n : nodes)
+    {
+        data.push_back(static_cast<float>(n.pos.x));
+        data.push_back(static_cast<float>(n.pos.y));
+        data.push_back(static_cast<float>(n.pos.z));
+    }
+
+    return data;
+}
+
+namespace
+{
+    std::vector<std::vector<float>> buildManufacturingLineStrips(
+        const ManufacturingRenderData& data
+    )
+    {
+        std::vector<std::vector<float>> strips;
+
+        strips.push_back(nodesToFloatLine(data.incomingStockNodes));
+        strips.push_back(nodesToFloatLine(data.positionedStraightNodes));
+        strips.push_back(nodesToFloatLine(data.frozenNodes));
+        strips.push_back(nodesToFloatLine(data.currentBendTraceNodes));
+        strips.push_back(nodesToFloatLine(data.activeZoneNodes));
+
+        return strips;
+    }
+}
 
 
 
@@ -88,7 +129,47 @@ static std::vector<float> pointsToFloatLine(
     return data;
 }
 
+void GLView::drawManufacturingMeshZones(
+    const ManufacturingRenderData& data
+)
+{
+    // Manufacturing zone draw order:
+    // 1. incoming stock
+    // 2. positioned straight
+    // 3. frozen geometry
+    // 4. current bend trace
+    // 5. active zone last
 
+    drawTubeZone(
+        data.incomingStockNodes,
+        5.0,
+        12
+    );
+
+    drawTubeZone(
+        data.positionedStraightNodes,
+        5.0,
+        12
+    );
+
+    drawTubeZone(
+        data.frozenNodes,
+        5.0,
+        12
+    );
+
+    drawTubeZone(
+        data.currentBendTraceNodes,
+        5.0,
+        12
+    );
+
+    drawTubeZone(
+        data.activeZoneNodes,
+        5.0,
+        12
+    );
+}
 
 
 
@@ -216,22 +297,12 @@ void GLView::drawDebugFrame(
 
   //  return data;
 //}
-//HELPER
-static std::vector<float> nodesToFloatLine(
-    const std::vector<PipeNode>& nodes)
-{
-    std::vector<float> data;
-    data.reserve(nodes.size() * 3);
+//H 
 
-    for (const auto& n : nodes)
-    {
-        data.push_back(static_cast<float>(n.pos.x));
-        data.push_back(static_cast<float>(n.pos.y));
-        data.push_back(static_cast<float>(n.pos.z));
-    }
 
-    return data;
-}
+
+
+
 
 //===================================
 // 
@@ -815,7 +886,14 @@ void GLView::paintGL()
 
 
 
-
+    // Manufacturing zone draw order:
+// 1. incoming stock
+// 2. positioned straight
+// 3. frozen geometry
+// 4. current bend trace
+// 5. active zone last
+//
+// Keep LINE and MESH paths in the same order.
 
 
     // =====================================================
@@ -841,11 +919,9 @@ void GLView::paintGL()
         }
         else if (renderMode == RenderMode::MESH)
         {
-            drawTubeZone(data.incomingStockNodes, 5.0, 12);
-            drawTubeZone(data.positionedStraightNodes, 5.0, 12);
-            drawTubeZone(data.frozenNodes, 5.0, 12);
-            drawTubeZone(data.currentBendTraceNodes, 5.0, 12);
-            drawTubeZone(data.activeZoneNodes, 5.0, 12);
+            drawManufacturingMeshZones(
+                data
+            );
         }
     }
     if (showMachineReference)
@@ -873,30 +949,15 @@ void GLView::uploadPipeGeometry()
     const auto& data =
         mfgPipe.getManufacturingRenderData();
 
-    std::vector<std::vector<float>> strips;
-
-    strips.push_back(
-        nodesToFloatLine(data.incomingStockNodes)
+    pipeRenderer.uploadLineStrips(
+        buildManufacturingLineStrips(data)
     );
-
-    strips.push_back(
-        nodesToFloatLine(data.positionedStraightNodes)
-    );
-
-    strips.push_back(
-        nodesToFloatLine(data.frozenNodes)
-    );
-
-    strips.push_back(
-        nodesToFloatLine(data.currentBendTraceNodes)
-    );
-
-    strips.push_back(
-        nodesToFloatLine(data.activeZoneNodes)
-    );
-
-    pipeRenderer.uploadLineStrips(strips);
 }
+
+
+
+
+
 void GLView::mousePressEvent(QMouseEvent* event)
 {
     lastMousePos = event->pos();
@@ -969,6 +1030,15 @@ glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
             cadNodes.end()
         );
     }
+
+    // Manufacturing zone draw order:
+// 1. incoming stock
+// 2. positioned straight
+// 3. frozen geometry
+// 4. current bend trace
+// 5. active zone last
+//
+// Keep LINE and MESH paths in the same order.
     else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
     {
         const auto& data =
@@ -986,8 +1056,8 @@ glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
 
         append(data.incomingStockNodes);
         append(data.positionedStraightNodes);
+            append(data.frozenNodes);
         append(data.currentBendTraceNodes);
-        append(data.frozenNodes);
         append(data.activeZoneNodes);
     }
 
