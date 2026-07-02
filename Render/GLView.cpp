@@ -80,6 +80,43 @@ namespace
 
     constexpr float MANUFACTURING_LINE_WIDTH =
         2.0f;
+
+
+    // cad constns
+    constexpr float CAD_LINE_WIDTH =
+        2.0f;
+
+    constexpr double CAD_PIPE_RADIUS =
+        5.0;
+
+    constexpr int CAD_PIPE_RADIAL_SEGMENTS =
+        12;
+
+    constexpr float PLAN_PREVIEW_LINE_WIDTH =
+        2.0f;
+
+    constexpr double PLAN_PREVIEW_PIPE_RADIUS =
+        5.0;
+
+    constexpr int PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS =
+        12;
+
+
+    //===
+    const glm::vec3 MANUFACTURING_INCOMING_COLOR =
+        glm::vec3(0.45f, 0.45f, 0.45f);
+
+    const glm::vec3 MANUFACTURING_POSITIONED_COLOR =
+        glm::vec3(0.9f, 0.8f, 0.2f);
+
+    const glm::vec3 MANUFACTURING_FROZEN_COLOR =
+        glm::vec3(0.2f, 0.9f, 0.3f);
+
+    const glm::vec3 MANUFACTURING_TRACE_COLOR =
+        glm::vec3(0.2f, 0.7f, 1.0f);
+
+    const glm::vec3 MANUFACTURING_ACTIVE_COLOR =
+        glm::vec3(1.0f, 0.25f, 0.15f);
 }
 
 
@@ -211,6 +248,27 @@ void GLView::drawManufacturingMeshZones(
         MANUFACTURING_PIPE_RADIUS,
         MANUFACTURING_PIPE_RADIAL_SEGMENTS
     );
+
+
+    shader->setVec3("pipeColor", MANUFACTURING_INCOMING_COLOR);
+    drawTubeZone(data.incomingStockNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
+
+    shader->setVec3("pipeColor", MANUFACTURING_POSITIONED_COLOR);
+    drawTubeZone(data.positionedStraightNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
+
+    shader->setVec3("pipeColor", MANUFACTURING_FROZEN_COLOR);
+    drawTubeZone(data.frozenNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
+
+    shader->setVec3("pipeColor", MANUFACTURING_TRACE_COLOR);
+    drawTubeZone(data.currentBendTraceNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
+
+    shader->setVec3("pipeColor", MANUFACTURING_ACTIVE_COLOR);
+    drawTubeZone(data.activeZoneNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
+
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(0.2f, 0.9f, 0.3f)
+    );
 }
 
 
@@ -245,7 +303,7 @@ void GLView::drawDebugPoint(
     pipeRenderer.setMode(RenderMode::LINE);
     pipeRenderer.uploadLineStrips(strips);
 
-    glLineWidth(3.0f);
+    glLineWidth(4.0f);
     pipeRenderer.draw();
 }
 
@@ -736,16 +794,15 @@ void GLView::paintGL()
         {
             uploadCadPipeGeometry();
 
-            glLineWidth(MANUFACTURING_LINE_WIDTH);
+            glLineWidth(CAD_LINE_WIDTH);
             pipeRenderer.draw();
         }
         else if (renderMode == RenderMode::MESH)
         {
             drawTubeZone(
                 cadNodes,
-                5.0,
-                12
-            );
+                CAD_PIPE_RADIUS,
+                CAD_PIPE_RADIAL_SEGMENTS );
         }
     }
     else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
@@ -796,7 +853,7 @@ void GLView::paintGL()
                 );
             }
 
-            glLineWidth(MANUFACTURING_LINE_WIDTH);
+            glLineWidth(PLAN_PREVIEW_LINE_WIDTH);
             pipeRenderer.draw();
         }
 
@@ -810,8 +867,8 @@ void GLView::paintGL()
                 {
                     drawTubeZone(
                         strip,
-                        5.0,
-                        12
+                        PLAN_PREVIEW_PIPE_RADIUS,
+                        PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
                     );
                 }
             }
@@ -819,8 +876,8 @@ void GLView::paintGL()
             {
                 drawTubeZone(
                     previewNodes,
-                    5.0,
-                    12
+                    PLAN_PREVIEW_PIPE_RADIUS,
+                    PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
                 );
             }
         }

@@ -4132,4 +4132,41 @@ drawManufacturingMeshZones()
       ??? frozen
       ??? trace
       ??? active
+      ===================================================
 
+Phase 3N review.
+
+Main rule:
+ManufacturingPipeSimulator should NOT own colors.
+Why:
+Simulator = process state
+Renderer/GLView = visual style
+Correct ownership:
+
+ManufacturingPipeSimulator
+   ??? zone nodes only
+
+GLView / Renderer
+   ??? zone colors / line width / mesh radius
+
+   Target future colors:
+
+   incoming stock       = raw material color
+positioned straight  = fed straight color
+frozen geometry      = finished pipe color
+current bend trace   = forming trace color
+active zone          = highlight color
+ASCII:
+data:
+incoming ? positioned ? frozen ? trace ? active
+
+style:
+color 1  ? color 2    ? color 3 ? color 4 ? color 5
+
+coclusion:
+? colors belong to rendering layer
+? ManufacturingRenderData should stay geometry-only
+? next step should add GLView-level zone color constants/placeholders
+
+goal:
+Add named colors for manufacturing zones.
