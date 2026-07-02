@@ -4181,3 +4181,113 @@ Reduce repeated pattern:
 
 shader->setVec3(...)
 drawTubeZone(...)
+
+==================
+
+Phase 3R
+Add CAD and plan preview color constants
+ASCII idea
+Before
+
+paintGL()
+   ?
+   ??? (0.2,0.9,0.3)
+   ??? (0.2,0.9,0.3)
+   ??? (0.2,0.9,0.3)
+   ??? (0.2,0.9,0.3)
+
+
+After
+
+DEFAULT_PIPE_COLOR
+        ?
+        ???????????? paintGL()
+        ???????????? drawMachineReference()
+        ???????????? debug rendering
+        ???????????? future render code
+
+        Goal:
+        Separate colors for:
+- CADPreview
+- PlannedShapePreview
+- ManufacturingPlayback
+
+Phase 3R.
+
+This phase follows the same architecture we've been building since 3J:
+
+Every rendering mode should own its own visual constants.
+
+Even if today they all use the same green color, tomorrow they may differ.
+
+Why are we doing this?
+
+Right now we have something like:
+
+DEFAULT_PIPE_COLOR
+        ?
+        ??? CAD Preview
+        ??? Plan Preview
+        ??? Manufacturing
+But these are three different visualization modes.
+
+Later we might want:
+
+CAD Preview        ? Gray
+Plan Preview       ? Blue
+Manufacturing      ? Green + zone colors
+Architecture
+                    Rendering Modes
+                           ?
+      ???????????????????????????????????????????
+      ?                    ?                    ?
+      ?                    ?                    ?
+ CAD Preview        Plan Preview        Manufacturing
+      ?                    ?                    ?
+      ?                    ?                    ?
+CAD_PIPE_COLOR   PLAN_PREVIEW_PIPE_COLOR   DEFAULT_PIPE_COLOR
+Notice something important:
+These are NOT three copies.
+
+They are three different meanings.
+
+=======================================================================
+Think of it as the conductor of an orchestra.? calls every frame
+ ?
+paintGL()
+ ?
+ ??? setup camera
+ ??? setup shader
+ ??? choose simulation mode
+ ??? draw CAD
+ ??? draw Plan Preview
+ ??? draw Manufacturing
+
+ So if there is a place where shader->setVec3(...) should appear, 
+ paintGL() is one of the first places to check.
+
+ paintGL()
+
+    ?
+    ?
+DEFAULT_PIPE_COLOR
+
+    ?
+    ?
+drawManufacturingMeshZones()
+
+        ?
+        ?
+drawColoredManufacturingTubeZone()
+
+        ?
+        ??? set gray
+        ??? draw
+        ?
+        ??? set yellow
+        ??? draw
+        ?
+        ??? set green
+        ??? draw
+        ?
+        ??? ...

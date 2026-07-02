@@ -124,7 +124,17 @@ namespace
 
     const glm::vec3 DEFAULT_PIPE_COLOR =
         glm::vec3(0.9f, 0.9f, 0.3f);
+
+const glm::vec3 CAD_PIPE_COLOR =
+DEFAULT_PIPE_COLOR;
+
+const glm::vec3 PLAN_PREVIEW_PIPE_COLOR =
+DEFAULT_PIPE_COLOR;
+
 }
+
+
+
 
 
 
