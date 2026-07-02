@@ -4170,3 +4170,14 @@ coclusion:
 
 goal:
 Add named colors for manufacturing zones.
+
+
+=============================================
+Phase 3P
+Add helper for drawing colored manufacturing mesh zone
+
+Goal:
+Reduce repeated pattern:
+
+shader->setVec3(...)
+drawTubeZone(...)

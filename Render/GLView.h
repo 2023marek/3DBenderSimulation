@@ -131,5 +131,8 @@ private:
 
     int meshIndexCount = 0;
 
-    
+    void drawColoredManufacturingTubeZone(
+        const std::vector<PipeNode>& nodes,
+        const glm::vec3& color
+    );
 };

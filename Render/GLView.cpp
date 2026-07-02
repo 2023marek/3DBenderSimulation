@@ -219,56 +219,32 @@ void GLView::drawManufacturingMeshZones(
     // 4. current bend trace
     // 5. active zone last
 
-    drawTubeZone(
+    drawColoredManufacturingTubeZone(
         data.incomingStockNodes,
-        MANUFACTURING_PIPE_RADIUS,
-        MANUFACTURING_PIPE_RADIAL_SEGMENTS
+        MANUFACTURING_INCOMING_COLOR
     );
 
-    drawTubeZone(
+    drawColoredManufacturingTubeZone(
         data.positionedStraightNodes,
-        MANUFACTURING_PIPE_RADIUS,
-        MANUFACTURING_PIPE_RADIAL_SEGMENTS
+        MANUFACTURING_POSITIONED_COLOR
     );
 
-    drawTubeZone(
+    drawColoredManufacturingTubeZone(
         data.frozenNodes,
-        MANUFACTURING_PIPE_RADIUS,
-        MANUFACTURING_PIPE_RADIAL_SEGMENTS
+        MANUFACTURING_FROZEN_COLOR
     );
 
-    drawTubeZone(
+    drawColoredManufacturingTubeZone(
         data.currentBendTraceNodes,
-        MANUFACTURING_PIPE_RADIUS,
-        MANUFACTURING_PIPE_RADIAL_SEGMENTS
+        MANUFACTURING_TRACE_COLOR
     );
 
-    drawTubeZone(
+    drawColoredManufacturingTubeZone(
         data.activeZoneNodes,
-        MANUFACTURING_PIPE_RADIUS,
-        MANUFACTURING_PIPE_RADIAL_SEGMENTS
+        MANUFACTURING_ACTIVE_COLOR
     );
 
-
-    shader->setVec3("pipeColor", MANUFACTURING_INCOMING_COLOR);
-    drawTubeZone(data.incomingStockNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
-
-    shader->setVec3("pipeColor", MANUFACTURING_POSITIONED_COLOR);
-    drawTubeZone(data.positionedStraightNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
-
-    shader->setVec3("pipeColor", MANUFACTURING_FROZEN_COLOR);
-    drawTubeZone(data.frozenNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
-
-    shader->setVec3("pipeColor", MANUFACTURING_TRACE_COLOR);
-    drawTubeZone(data.currentBendTraceNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
-
-    shader->setVec3("pipeColor", MANUFACTURING_ACTIVE_COLOR);
-    drawTubeZone(data.activeZoneNodes, MANUFACTURING_PIPE_RADIUS, MANUFACTURING_PIPE_RADIAL_SEGMENTS);
-
-    shader->setVec3(
-        "pipeColor",
-        glm::vec3(0.2f, 0.9f, 0.3f)
-    );
+    
 }
 
 
@@ -1196,6 +1172,23 @@ glm::vec3 GLView::computePipeCenterAndSize(float& outSize)
     return center;
 }
 
+void GLView::drawColoredManufacturingTubeZone(
+    const std::vector<PipeNode>& nodes,
+    const glm::vec3& color
+)
+{
+    shader->setVec3(
+        "pipeColor",
+        color
+    );
+
+    drawTubeZone(
+        nodes,
+        MANUFACTURING_PIPE_RADIUS,
+        MANUFACTURING_PIPE_RADIAL_SEGMENTS
+    );
+}
+
 void GLView::uploadCadPipeGeometry()
 {
     if (!app)
@@ -1219,6 +1212,8 @@ void GLView::uploadCadPipeGeometry()
     }
 
     pipeRenderer.uploadLine(line);
+
+
 }
 
 
