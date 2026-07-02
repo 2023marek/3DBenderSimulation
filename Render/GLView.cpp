@@ -117,6 +117,13 @@ namespace
 
     const glm::vec3 MANUFACTURING_ACTIVE_COLOR =
         glm::vec3(1.0f, 0.25f, 0.15f);
+
+    // =====================================================
+// Default pipe rendering colors
+// =====================================================
+
+    const glm::vec3 DEFAULT_PIPE_COLOR =
+        glm::vec3(0.9f, 0.9f, 0.3f);
 }
 
 
@@ -693,7 +700,10 @@ void GLView::paintGL()
     shader->setMat4("model", model);
     shader->setVec3("lightDir", glm::normalize(glm::vec3(-0.5f, -1.0f, -0.3f)));
     shader->setVec3("viewPos", camera.getPosition());
-    shader->setVec3("pipeColor", glm::vec3(0.2f, 0.9f, 0.3f)); // green
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );// green
     // =====================================================
     // MANUFACTURING RENDER PATH
     //
