@@ -77,6 +77,9 @@ namespace
 
     constexpr int MANUFACTURING_PIPE_RADIAL_SEGMENTS =
         12;
+
+    constexpr float MANUFACTURING_LINE_WIDTH =
+        2.0f;
 }
 
 
@@ -733,7 +736,7 @@ void GLView::paintGL()
         {
             uploadCadPipeGeometry();
 
-            glLineWidth(2.0f);
+            glLineWidth(MANUFACTURING_LINE_WIDTH);
             pipeRenderer.draw();
         }
         else if (renderMode == RenderMode::MESH)
@@ -793,7 +796,7 @@ void GLView::paintGL()
                 );
             }
 
-            glLineWidth(2.0f);
+            glLineWidth(MANUFACTURING_LINE_WIDTH);
             pipeRenderer.draw();
         }
 
@@ -953,7 +956,7 @@ void GLView::paintGL()
         {
             uploadPipeGeometry();
 
-            glLineWidth(2.0f);
+            glLineWidth(MANUFACTURING_LINE_WIDTH);
             pipeRenderer.draw();
         }
         else if (renderMode == RenderMode::MESH)
