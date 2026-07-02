@@ -38,6 +38,22 @@ static std::vector<float> nodesToFloatLine(
     return data;
 }
 
+
+// =====================================================
+// SHARED MANUFACTURING ZONE ORDER
+//
+// This order is used by both LINE and MESH rendering:
+//
+// 1. incoming stock
+// 2. positioned straight
+// 3. frozen geometry
+// 4. current bend trace
+// 5. active zone last
+//
+// Active zone is drawn last because it represents the
+// current deformation/process focus.
+// =====================================================
+
 namespace
 {
     std::vector<std::vector<float>> buildManufacturingLineStrips(
@@ -54,6 +70,13 @@ namespace
 
         return strips;
     }
+
+
+    constexpr double MANUFACTURING_PIPE_RADIUS =
+        5.0;
+
+    constexpr int MANUFACTURING_PIPE_RADIAL_SEGMENTS =
+        12;
 }
 
 
@@ -129,6 +152,22 @@ static std::vector<float> pointsToFloatLine(
     return data;
 }
 
+// =====================================================
+// SHARED MANUFACTURING ZONE ORDER
+//
+// This order is used by both LINE and MESH rendering:
+//
+// 1. incoming stock
+// 2. positioned straight
+// 3. frozen geometry
+// 4. current bend trace
+// 5. active zone last
+//
+// Active zone is drawn last because it represents the
+// current deformation/process focus.
+// =====================================================
+
+
 void GLView::drawManufacturingMeshZones(
     const ManufacturingRenderData& data
 )
@@ -142,32 +181,32 @@ void GLView::drawManufacturingMeshZones(
 
     drawTubeZone(
         data.incomingStockNodes,
-        5.0,
-        12
+        MANUFACTURING_PIPE_RADIUS,
+        MANUFACTURING_PIPE_RADIAL_SEGMENTS
     );
 
     drawTubeZone(
         data.positionedStraightNodes,
-        5.0,
-        12
+        MANUFACTURING_PIPE_RADIUS,
+        MANUFACTURING_PIPE_RADIAL_SEGMENTS
     );
 
     drawTubeZone(
         data.frozenNodes,
-        5.0,
-        12
+        MANUFACTURING_PIPE_RADIUS,
+        MANUFACTURING_PIPE_RADIAL_SEGMENTS
     );
 
     drawTubeZone(
         data.currentBendTraceNodes,
-        5.0,
-        12
+        MANUFACTURING_PIPE_RADIUS,
+        MANUFACTURING_PIPE_RADIAL_SEGMENTS
     );
 
     drawTubeZone(
         data.activeZoneNodes,
-        5.0,
-        12
+        MANUFACTURING_PIPE_RADIUS,
+        MANUFACTURING_PIPE_RADIAL_SEGMENTS
     );
 }
 
