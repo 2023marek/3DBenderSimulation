@@ -669,6 +669,14 @@ void GLView::paintGL()
     // GLView decides WHICH render path to use.
     // =====================================================
 
+    //paintGL read like orchestration only :
+
+    //setup frame
+    //    setup camera
+    //    setup shader
+    //    dispatch render mode
+    //    draw machine / HUD
+//=============================================================================
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     if (!shader)
@@ -1124,50 +1132,13 @@ void GLView::drawPlannedShapePreview()
     }
 
 
-    if (preview.shouldShowInsertionMarker() && preview.hasInsertionMarkerNode())
-    {
-        const PipeNode& marker =
-            preview.getInsertionMarkerNode();
+    drawPlanPreviewInsertionMarker(
+        preview
+    );
 
-        shader->setVec3(
-            "pipeColor",
-            glm::vec3(1.0f, 0.2f, 0.2f)
-        );
-
-        drawDebugPoint(
-            marker.pos,
-            8.0
-        );
-
-        shader->setVec3(
-            "pipeColor",
-            glm::vec3(0.2f, 0.9f, 0.3f)
-        );
-    }
-    if (preview.shouldShowInsertionFrame() && preview.hasInsertionStartFrame())
-    {
-        const Frame& insertionFrame =
-            preview.getInsertionStartFrame();
-
-        shader->setVec3(
-            "pipeColor",
-            glm::vec3(1.0f, 0.8f, 0.1f)
-        );
-
-        drawDebugFrame(
-            insertionFrame,
-            18.0
-        );
-
-        pipeRenderer.setMode(
-            renderMode
-        );
-
-        shader->setVec3(
-            "pipeColor",
-            glm::vec3(0.2f, 0.9f, 0.3f)
-        );
-    }
+    drawPlanPreviewInsertionFrame(
+        preview
+    );
 
 
    
@@ -1200,6 +1171,68 @@ void GLView::drawManufacturingPlayback()
             data
         );
     }
+}
+
+void GLView::drawPlanPreviewInsertionMarker(
+    const ManufacturingPlanPreviewModel& preview
+)
+{
+    if (!preview.shouldShowInsertionMarker()
+        || !preview.hasInsertionMarkerNode())
+    {
+        return;
+    }
+
+    const PipeNode& marker =
+        preview.getInsertionMarkerNode();
+
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(1.0f, 0.2f, 0.2f)
+    );
+
+    drawDebugPoint(
+        marker.pos,
+        8.0
+    );
+
+    shader->setVec3(
+        "pipeColor",
+        PLAN_PREVIEW_PIPE_COLOR
+    );
+}
+
+void GLView::drawPlanPreviewInsertionFrame(
+    const ManufacturingPlanPreviewModel& preview
+)
+{
+    if (!preview.shouldShowInsertionFrame()
+       || !preview.hasInsertionStartFrame())
+    {
+        return;
+    }
+
+    const Frame& insertionFrame =
+        preview.getInsertionStartFrame();
+
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(1.0f, 0.8f, 0.1f)
+    );
+
+    drawDebugFrame(
+        insertionFrame,
+        8.0
+    );
+
+    pipeRenderer.setMode(
+        renderMode
+    );
+
+    shader->setVec3(
+        "pipeColor",
+        PLAN_PREVIEW_PIPE_COLOR
+    );
 }
 
 

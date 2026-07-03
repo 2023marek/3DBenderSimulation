@@ -12,6 +12,7 @@ class AppController;
 #include "Render/MachineRenderer.h"
 #include "Core/Geometry/Frame.h"
 #include "Core/Manufacturing/ManufacturingTypes.h"
+#include "Core/Forming/ManufacturingPlanPreviewModel.h"
 
 
 class GLView : public QOpenGLWidget
@@ -141,4 +142,14 @@ private:
     void drawPlannedShapePreview();
 
     void drawManufacturingPlayback();
+
+    void drawPlanPreviewInsertionMarker(
+        const ManufacturingPlanPreviewModel& preview
+    );
+
+    void drawPlanPreviewInsertionFrame(
+        const ManufacturingPlanPreviewModel& preview
+    );
+
+    
 };
