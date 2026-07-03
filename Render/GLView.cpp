@@ -1073,82 +1073,12 @@ void GLView::drawCadPreview()
 
 void GLView::drawPlannedShapePreview()
 {
-
     const auto& preview =
         app->getManufacturingPlanPreview();
 
-    const auto& previewNodes =
-        preview.getNodes();
-
-    const auto& previewStrips =
-        preview.getPreviewNodeStrips();
-
-    bool useStrips =
-        !previewStrips.empty();
-
-    //std::cout << "[GLView PLAN PREVIEW] nodes="
-     //   << previewNodes.size()
-      //  << std::endl;
-
-    pipeRenderer.setMode(renderMode);
-
-    if (renderMode == RenderMode::LINE)
-    {
-        if (useStrips)
-        {
-            std::vector<std::vector<float>> strips;
-
-            for (const auto& strip : previewStrips)
-            {
-                strips.push_back(
-                    nodesToFloatLine(
-                        strip
-                    )
-                );
-            }
-
-            pipeRenderer.uploadLineStrips(
-                strips
-            );
-        }
-        else
-        {
-            pipeRenderer.uploadLine(
-                nodesToFloatLine(
-                    previewNodes
-                )
-            );
-        }
-
-        glLineWidth(PLAN_PREVIEW_LINE_WIDTH);
-        pipeRenderer.draw();
-    }
-
-
-
-    else if (renderMode == RenderMode::MESH)
-    {
-        if (useStrips)
-        {
-            for (const auto& strip : previewStrips)
-            {
-                drawTubeZone(
-                    strip,
-                    PLAN_PREVIEW_PIPE_RADIUS,
-                    PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
-                );
-            }
-        }
-        else
-        {
-            drawTubeZone(
-                previewNodes,
-                PLAN_PREVIEW_PIPE_RADIUS,
-                PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
-            );
-        }
-    }
-
+    drawPlanPreviewPipe(
+        preview
+    );
 
     drawPlanPreviewInsertionMarker(
         preview
@@ -1157,12 +1087,7 @@ void GLView::drawPlannedShapePreview()
     drawPlanPreviewInsertionFrame(
         preview
     );
-
-
-   
-
 }
-
 
 
 void GLView::drawManufacturingPlayback()
@@ -1245,6 +1170,90 @@ void GLView::drawPlanPreviewInsertionFrame(
         "pipeColor",
         PLAN_PREVIEW_PIPE_COLOR
     );
+}
+
+
+
+
+
+void GLView::drawPlanPreviewPipe(
+    const ManufacturingPlanPreviewModel& preview
+)
+{
+    const auto& previewNodes =
+        preview.getNodes();
+
+    const auto& previewStrips =
+        preview.getPreviewNodeStrips();
+
+    bool useStrips =
+        !previewStrips.empty();
+
+    pipeRenderer.setMode(
+        renderMode
+    );
+
+    shader->setVec3(
+        "pipeColor",
+        PLAN_PREVIEW_PIPE_COLOR
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        if (useStrips)
+        {
+            std::vector<std::vector<float>> strips;
+
+            for (const auto& strip : previewStrips)
+            {
+                strips.push_back(
+                    nodesToFloatLine(
+                        strip
+                    )
+                );
+            }
+
+            pipeRenderer.uploadLineStrips(
+                strips
+            );
+        }
+        else
+        {
+            pipeRenderer.uploadLine(
+                nodesToFloatLine(
+                    previewNodes
+                )
+            );
+        }
+
+        glLineWidth(
+            PLAN_PREVIEW_LINE_WIDTH
+        );
+
+        pipeRenderer.draw();
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        if (useStrips)
+        {
+            for (const auto& strip : previewStrips)
+            {
+                drawTubeZone(
+                    strip,
+                    PLAN_PREVIEW_PIPE_RADIUS,
+                    PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
+                );
+            }
+        }
+        else
+        {
+            drawTubeZone(
+                previewNodes,
+                PLAN_PREVIEW_PIPE_RADIUS,
+                PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
+            );
+        }
+    }
 }
 
 

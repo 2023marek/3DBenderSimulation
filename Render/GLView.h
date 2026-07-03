@@ -151,5 +151,7 @@ private:
         const ManufacturingPlanPreviewModel& preview
     );
 
-    
+    void drawPlanPreviewPipe(
+        const ManufacturingPlanPreviewModel& preview
+    );
 };

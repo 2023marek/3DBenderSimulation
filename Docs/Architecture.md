@@ -4291,3 +4291,18 @@ drawColoredManufacturingTubeZone()
         ??? draw
         ?
         ??? ...
+
+        ==================================================
+
+        Zaczynam Phase 3X 
+        jako kolejny refactor czytelnoœci: wyci¹gniemy g³ówne rysowanie plan-preview pipe z 
+        drawPlannedShapePreview(), a overlay helpers zostan¹ osobno.
+
+ Goal:
+drawPlannedShapePreview()
+should orchestrate only:
+
+1. draw plan pipe
+2. draw insertion marker
+3. draw insertion frame
+
