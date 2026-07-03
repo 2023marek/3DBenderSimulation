@@ -154,4 +154,6 @@ private:
     void drawPlanPreviewPipe(
         const ManufacturingPlanPreviewModel& preview
     );
+
+    void drawCadPreviewPipe();
 };

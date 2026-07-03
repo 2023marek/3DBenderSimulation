@@ -1040,35 +1040,7 @@ void GLView::uploadCadPipeGeometry()
 
 void GLView::drawCadPreview()
 {
-
-   
-        auto& cadPipe =
-            app->getCadPipeGeometry();
-
-        const auto& cadNodes =
-            cadPipe.getNodes();
-        // std::cout << "[GLView CADPreview] nodes="
-         //    << cadNodes.size()
-         //    << std::endl;
-        pipeRenderer.setMode(renderMode);
-
-        if (renderMode == RenderMode::LINE)
-        {
-            uploadCadPipeGeometry();
-
-            glLineWidth(CAD_LINE_WIDTH);
-            pipeRenderer.draw();
-        }
-        else if (renderMode == RenderMode::MESH)
-        {
-            drawTubeZone(
-                cadNodes,
-                CAD_PIPE_RADIUS,
-                CAD_PIPE_RADIAL_SEGMENTS);
-        }
-   
-
-
+    drawCadPreviewPipe();
 }
 
 void GLView::drawPlannedShapePreview()
@@ -1253,6 +1225,44 @@ void GLView::drawPlanPreviewPipe(
                 PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
             );
         }
+    }
+}
+
+
+void GLView::drawCadPreviewPipe()
+{
+    auto& cadPipe =
+        app->getCadPipeGeometry();
+
+    const auto& cadNodes =
+        cadPipe.getNodes();
+
+    pipeRenderer.setMode(
+        renderMode
+    );
+
+    shader->setVec3(
+        "pipeColor",
+        CAD_PIPE_COLOR
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        uploadCadPipeGeometry();
+
+        glLineWidth(
+            CAD_LINE_WIDTH
+        );
+
+        pipeRenderer.draw();
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawTubeZone(
+            cadNodes,
+            CAD_PIPE_RADIUS,
+            CAD_PIPE_RADIAL_SEGMENTS
+        );
     }
 }
 

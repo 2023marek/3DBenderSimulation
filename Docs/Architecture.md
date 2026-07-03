@@ -4306,3 +4306,20 @@ should orchestrate only:
 2. draw insertion marker
 3. draw insertion frame
 
+
+===============================================================
+Phase 3Y
+Extract CAD preview pipe drawing helper
+
+Goal:
+
+Make drawCadPreview() match the same pattern:
+
+drawCadPreview()
+      ?
+drawCadPreviewPipe()
+
+
+
+
+
