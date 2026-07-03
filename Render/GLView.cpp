@@ -1064,28 +1064,15 @@ void GLView::drawPlannedShapePreview()
 
 void GLView::drawManufacturingPlayback()
 {
-
     const ManufacturingPipeSimulator& mfgPipe =
         app->getManufacturingPipe();
 
     const auto& data =
         mfgPipe.getManufacturingRenderData();
 
-    pipeRenderer.setMode(renderMode);
-
-    if (renderMode == RenderMode::LINE)
-    {
-        uploadPipeGeometry();
-
-        glLineWidth(MANUFACTURING_LINE_WIDTH);
-        pipeRenderer.draw();
-    }
-    else if (renderMode == RenderMode::MESH)
-    {
-        drawManufacturingMeshZones(
-            data
-        );
-    }
+    drawManufacturingPlaybackPipe(
+        data
+    );
 }
 
 void GLView::drawPlanPreviewInsertionMarker(
@@ -1262,6 +1249,32 @@ void GLView::drawCadPreviewPipe()
             cadNodes,
             CAD_PIPE_RADIUS,
             CAD_PIPE_RADIAL_SEGMENTS
+        );
+    }
+}
+
+void GLView::drawManufacturingPlaybackPipe(
+    const ManufacturingRenderData& data
+)
+{
+    pipeRenderer.setMode(
+        renderMode
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        uploadPipeGeometry();
+
+        glLineWidth(
+            MANUFACTURING_LINE_WIDTH
+        );
+
+        pipeRenderer.draw();
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawManufacturingMeshZones(
+            data
         );
     }
 }

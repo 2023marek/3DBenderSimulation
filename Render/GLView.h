@@ -156,4 +156,7 @@ private:
     );
 
     void drawCadPreviewPipe();
+    void drawManufacturingPlaybackPipe(
+    const ManufacturingRenderData& data
+);
 };
