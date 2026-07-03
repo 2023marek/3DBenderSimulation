@@ -131,7 +131,25 @@ DEFAULT_PIPE_COLOR;
 const glm::vec3 PLAN_PREVIEW_PIPE_COLOR =
 DEFAULT_PIPE_COLOR;
 
+
+const glm::vec3 PLAN_PREVIEW_MARKER_COLOR =
+glm::vec3(1.0f, 0.2f, 0.2f);
+
+const glm::vec3 PLAN_PREVIEW_FRAME_COLOR =
+glm::vec3(1.0f, 0.8f, 0.1f);
+
+
+constexpr double PLAN_PREVIEW_MARKER_SIZE =
+8.0;
+
+constexpr double PLAN_PREVIEW_FRAME_SIZE =
+8.0;
+
+
+
+
 }
+
 
 
 
@@ -1188,13 +1206,10 @@ void GLView::drawPlanPreviewInsertionMarker(
 
     shader->setVec3(
         "pipeColor",
-        glm::vec3(1.0f, 0.2f, 0.2f)
+        PLAN_PREVIEW_MARKER_COLOR
     );
 
-    drawDebugPoint(
-        marker.pos,
-        8.0
-    );
+    drawDebugPoint(marker.pos, PLAN_PREVIEW_MARKER_SIZE);
 
     shader->setVec3(
         "pipeColor",
@@ -1217,13 +1232,10 @@ void GLView::drawPlanPreviewInsertionFrame(
 
     shader->setVec3(
         "pipeColor",
-        glm::vec3(1.0f, 0.8f, 0.1f)
+        PLAN_PREVIEW_FRAME_COLOR
     );
 
-    drawDebugFrame(
-        insertionFrame,
-        8.0
-    );
+    drawDebugFrame(insertionFrame, PLAN_PREVIEW_FRAME_SIZE);
 
     pipeRenderer.setMode(
         renderMode
