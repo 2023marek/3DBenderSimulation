@@ -1187,20 +1187,37 @@ private:
     {
         renderNodes.clear();
 
-        for (const auto& node : state.renderData.incomingStockNodes)
-            renderNodes.push_back(node);
+        appendZoneNodesToRenderNodes(
+            state.renderData.incomingStockNodes
+        );
 
-        for (const auto& node : state.renderData.positionedStraightNodes)
-            renderNodes.push_back(node);
+        appendZoneNodesToRenderNodes(
+            state.renderData.positionedStraightNodes
+        );
 
-        for (const auto& node : state.renderData.currentBendTraceNodes)
-            renderNodes.push_back(node);
+        appendZoneNodesToRenderNodes(
+            state.renderData.frozenNodes
+        );
 
-        for (const auto& node : state.renderData.frozenNodes)
-            renderNodes.push_back(node);
+        appendZoneNodesToRenderNodes(
+            state.renderData.currentBendTraceNodes
+        );
 
-        for (const auto& node : state.renderData.activeZoneNodes)
-            renderNodes.push_back(node);
+        appendZoneNodesToRenderNodes(
+            state.renderData.activeZoneNodes
+        );
+    }
+    // helper
+    void appendZoneNodesToRenderNodes(
+        const std::vector<PipeNode>& zoneNodes
+    )
+    {
+        for (const auto& node : zoneNodes)
+        {
+            renderNodes.push_back(
+                node
+            );
+        }
     }
 
 

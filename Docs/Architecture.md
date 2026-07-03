@@ -4319,6 +4319,52 @@ drawCadPreview()
       ?
 drawCadPreviewPipe()
 
+Before:
+
+drawManufacturingPlayback()
+   ??? get mfg pipe
+   ??? get render data
+   ??? set renderer mode
+   ??? LINE drawing
+   ??? MESH drawing
+
+
+After:
+
+drawManufacturingPlayback()
+   ??? get mfg pipe
+   ??? get render data
+   ??? drawManufacturingPlaybackPipe()
+          ??? LINE drawing
+          ??? MESH drawing
+===============================================================
+Phase 4A
+Review ManufacturingPipeSimulator bend trace vs active zone
+Goal:
+Return from GLView cleanup to manufacturing behavior.
+
+Check:
+- activeZone = small moving deformation window
+- currentBendTrace = full visible arc formed during current bend
+
+[entry] ) ) ) ) ) ------>
+        trace arc     positioned straight
+
+            \\\
+            active window
+
+=============================================================
+Phase 4C
+Add shared manufacturing zone append helper
+
+Goal:
+Avoid repeating:
+
+for (const auto& node : zone)
+    renderNodes.push_back(node);
+
+
+
 
 
 
