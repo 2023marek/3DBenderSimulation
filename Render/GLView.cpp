@@ -774,251 +774,27 @@ void GLView::paintGL()
     // Uses GeometricPipeModel.
     // One ideal continuous pipe.
     // =====================================================
+
+
     if (mode == SimulationController::SimulationMode::CADPreview)
     {
-        auto& cadPipe =
-            app->getCadPipeGeometry();
-
-        const auto& cadNodes =
-            cadPipe.getNodes();
-       // std::cout << "[GLView CADPreview] nodes="
-        //    << cadNodes.size()
-        //    << std::endl;
-        pipeRenderer.setMode(renderMode);
-
-        if (renderMode == RenderMode::LINE)
-        {
-            uploadCadPipeGeometry();
-
-            glLineWidth(CAD_LINE_WIDTH);
-            pipeRenderer.draw();
-        }
-        else if (renderMode == RenderMode::MESH)
-        {
-            drawTubeZone(
-                cadNodes,
-                CAD_PIPE_RADIUS,
-                CAD_PIPE_RADIAL_SEGMENTS );
-        }
+        drawCadPreview();
     }
     else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
     {
-        const auto& preview =
-            app->getManufacturingPlanPreview();
-
-        const auto& previewNodes =
-            preview.getNodes();
-
-        const auto& previewStrips =
-        preview.getPreviewNodeStrips();
-
-        bool useStrips =
-        !previewStrips.empty();
-
-        //std::cout << "[GLView PLAN PREVIEW] nodes="
-         //   << previewNodes.size()
-          //  << std::endl;
-
-        pipeRenderer.setMode(renderMode);
-
-        if (renderMode == RenderMode::LINE)
-        {
-            if (useStrips)
-            {
-                std::vector<std::vector<float>> strips;
-
-                for (const auto& strip : previewStrips)
-                {
-                    strips.push_back(
-                        nodesToFloatLine(
-                            strip
-                        )
-                    );
-                }
-
-                pipeRenderer.uploadLineStrips(
-                    strips
-                );
-            }
-            else
-            {
-                pipeRenderer.uploadLine(
-                    nodesToFloatLine(
-                        previewNodes
-                    )
-                );
-            }
-
-            glLineWidth(PLAN_PREVIEW_LINE_WIDTH);
-            pipeRenderer.draw();
-        }
-
-
-
-        else if (renderMode == RenderMode::MESH)
-        {
-            if (useStrips)
-            {
-                for (const auto& strip : previewStrips)
-                {
-                    drawTubeZone(
-                        strip,
-                        PLAN_PREVIEW_PIPE_RADIUS,
-                        PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
-                    );
-                }
-            }
-            else
-            {
-                drawTubeZone(
-                    previewNodes,
-                    PLAN_PREVIEW_PIPE_RADIUS,
-                    PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
-                );
-            }
-        }
-
-
-        if (preview.shouldShowInsertionMarker() && preview.hasInsertionMarkerNode())
-        {
-            const PipeNode& marker =
-                preview.getInsertionMarkerNode();
-
-            shader->setVec3(
-                "pipeColor",
-                glm::vec3(1.0f, 0.2f, 0.2f)
-            );
-
-            drawDebugPoint(
-                marker.pos,
-                8.0
-            );
-
-            shader->setVec3(
-                "pipeColor",
-                glm::vec3(0.2f, 0.9f, 0.3f)
-            );
-        }
-        if (preview.shouldShowInsertionFrame() && preview.hasInsertionStartFrame())
-        {
-            const Frame& insertionFrame =
-                preview.getInsertionStartFrame();
-
-            shader->setVec3(
-                "pipeColor",
-                glm::vec3(1.0f, 0.8f, 0.1f)
-            );
-
-            drawDebugFrame(
-                insertionFrame,
-                18.0
-            );
-
-            pipeRenderer.setMode(
-                renderMode
-            );
-
-            shader->setVec3(
-                "pipeColor",
-                glm::vec3(0.2f, 0.9f, 0.3f)
-            );
-        }
-
-
-    //    if (preview.shouldShowTransformedInsertOverlay())
-     //   {
-
-         //    const auto& transformedInsert =
-        //        preview.getTransformedInsertedNodes();
-//
-        //     if (!transformedInsert.empty())
-         //    {
-        //         shader->setVec3(
-        //             "pipeColor",
-        //             glm::vec3(1.0f, 0.4f, 0.9f)
-        //         );
-//
-          //       if (renderMode == RenderMode::LINE)
-          //       {
-          //           pipeRenderer.setMode(
-          //               RenderMode::LINE
-         //            );
-
-         //           pipeRenderer.uploadLine(
-         //                nodesToFloatLine(
-         //                    transformedInsert
-         //                )
-         //            );
-
-        //             glLineWidth(
-        //                 4.0f
-        //             );
-
-        //             pipeRenderer.draw();
-        //         }
-        //         else if (renderMode == RenderMode::MESH)
-        //         {
-        //             drawTubeZone(
-        //                transformedInsert,
-        //                 5.5,
-        //                 12
-        //             );
-        //         }
-
-        //         pipeRenderer.setMode(
-        //             renderMode
-        //         );
-
-        //        shader->setVec3(
-        //            "pipeColor",
-        //             glm::vec3(0.2f, 0.9f, 0.3f)
-        //         );
-        //     }
-
-        //}
+        drawPlannedShapePreview();
 
     }
 
-
-
-    // Manufacturing zone draw order:
-// 1. incoming stock
-// 2. positioned straight
-// 3. frozen geometry
-// 4. current bend trace
-// 5. active zone last
-//
-// Keep LINE and MESH paths in the same order.
-
-
-    // =====================================================
-    // MANUFACTURING PLAYBACK
-    // Uses current PipeAxis3D manufacturing zones.
-    // =====================================================
     else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
     {
-        const ManufacturingPipeSimulator& mfgPipe =
-            app->getManufacturingPipe();
-
-        const auto& data =
-            mfgPipe.getManufacturingRenderData();
-
-        pipeRenderer.setMode(renderMode);
-
-        if (renderMode == RenderMode::LINE)
-        {
-            uploadPipeGeometry();
-
-            glLineWidth(MANUFACTURING_LINE_WIDTH);
-            pipeRenderer.draw();
-        }
-        else if (renderMode == RenderMode::MESH)
-        {
-            drawManufacturingMeshZones(
-                data
-            );
-        }
+        drawManufacturingPlayback();
     }
+
+
+
+
+
     if (showMachineReference)
     {
         drawMachineReference();
@@ -1235,6 +1011,198 @@ void GLView::uploadCadPipeGeometry()
 
 
 }
+
+void GLView::drawCadPreview()
+{
+
+   
+        auto& cadPipe =
+            app->getCadPipeGeometry();
+
+        const auto& cadNodes =
+            cadPipe.getNodes();
+        // std::cout << "[GLView CADPreview] nodes="
+         //    << cadNodes.size()
+         //    << std::endl;
+        pipeRenderer.setMode(renderMode);
+
+        if (renderMode == RenderMode::LINE)
+        {
+            uploadCadPipeGeometry();
+
+            glLineWidth(CAD_LINE_WIDTH);
+            pipeRenderer.draw();
+        }
+        else if (renderMode == RenderMode::MESH)
+        {
+            drawTubeZone(
+                cadNodes,
+                CAD_PIPE_RADIUS,
+                CAD_PIPE_RADIAL_SEGMENTS);
+        }
+   
+
+
+}
+
+void GLView::drawPlannedShapePreview()
+{
+
+    const auto& preview =
+        app->getManufacturingPlanPreview();
+
+    const auto& previewNodes =
+        preview.getNodes();
+
+    const auto& previewStrips =
+        preview.getPreviewNodeStrips();
+
+    bool useStrips =
+        !previewStrips.empty();
+
+    //std::cout << "[GLView PLAN PREVIEW] nodes="
+     //   << previewNodes.size()
+      //  << std::endl;
+
+    pipeRenderer.setMode(renderMode);
+
+    if (renderMode == RenderMode::LINE)
+    {
+        if (useStrips)
+        {
+            std::vector<std::vector<float>> strips;
+
+            for (const auto& strip : previewStrips)
+            {
+                strips.push_back(
+                    nodesToFloatLine(
+                        strip
+                    )
+                );
+            }
+
+            pipeRenderer.uploadLineStrips(
+                strips
+            );
+        }
+        else
+        {
+            pipeRenderer.uploadLine(
+                nodesToFloatLine(
+                    previewNodes
+                )
+            );
+        }
+
+        glLineWidth(PLAN_PREVIEW_LINE_WIDTH);
+        pipeRenderer.draw();
+    }
+
+
+
+    else if (renderMode == RenderMode::MESH)
+    {
+        if (useStrips)
+        {
+            for (const auto& strip : previewStrips)
+            {
+                drawTubeZone(
+                    strip,
+                    PLAN_PREVIEW_PIPE_RADIUS,
+                    PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
+                );
+            }
+        }
+        else
+        {
+            drawTubeZone(
+                previewNodes,
+                PLAN_PREVIEW_PIPE_RADIUS,
+                PLAN_PREVIEW_PIPE_RADIAL_SEGMENTS
+            );
+        }
+    }
+
+
+    if (preview.shouldShowInsertionMarker() && preview.hasInsertionMarkerNode())
+    {
+        const PipeNode& marker =
+            preview.getInsertionMarkerNode();
+
+        shader->setVec3(
+            "pipeColor",
+            glm::vec3(1.0f, 0.2f, 0.2f)
+        );
+
+        drawDebugPoint(
+            marker.pos,
+            8.0
+        );
+
+        shader->setVec3(
+            "pipeColor",
+            glm::vec3(0.2f, 0.9f, 0.3f)
+        );
+    }
+    if (preview.shouldShowInsertionFrame() && preview.hasInsertionStartFrame())
+    {
+        const Frame& insertionFrame =
+            preview.getInsertionStartFrame();
+
+        shader->setVec3(
+            "pipeColor",
+            glm::vec3(1.0f, 0.8f, 0.1f)
+        );
+
+        drawDebugFrame(
+            insertionFrame,
+            18.0
+        );
+
+        pipeRenderer.setMode(
+            renderMode
+        );
+
+        shader->setVec3(
+            "pipeColor",
+            glm::vec3(0.2f, 0.9f, 0.3f)
+        );
+    }
+
+
+   
+
+}
+
+
+
+void GLView::drawManufacturingPlayback()
+{
+
+    const ManufacturingPipeSimulator& mfgPipe =
+        app->getManufacturingPipe();
+
+    const auto& data =
+        mfgPipe.getManufacturingRenderData();
+
+    pipeRenderer.setMode(renderMode);
+
+    if (renderMode == RenderMode::LINE)
+    {
+        uploadPipeGeometry();
+
+        glLineWidth(MANUFACTURING_LINE_WIDTH);
+        pipeRenderer.draw();
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawManufacturingMeshZones(
+            data
+        );
+    }
+}
+
+
 
 
 

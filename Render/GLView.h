@@ -135,4 +135,10 @@ private:
         const std::vector<PipeNode>& nodes,
         const glm::vec3& color
     );
+
+    void drawCadPreview();
+
+    void drawPlannedShapePreview();
+
+    void drawManufacturingPlayback();
 };
