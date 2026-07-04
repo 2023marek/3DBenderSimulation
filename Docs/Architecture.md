@@ -4362,6 +4362,13 @@ Avoid repeating:
 
 for (const auto& node : zone)
     renderNodes.push_back(node);
+=========================================================
+Phase 4D
+Add shared manufacturing zone order comment in simulator
+
+Make simulator flatten order match renderer order intentionally.
+
+
 
 
 

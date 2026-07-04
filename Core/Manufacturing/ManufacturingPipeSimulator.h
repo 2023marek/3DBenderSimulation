@@ -267,11 +267,15 @@ public:
             freezeActiveZone();
         }
 
-        std::cout << "[MFG SIM BEND] arcStep="
-            << arcStepLength
-            << " positionedStraightLeft="
-            << state.positionedStraight.length
-            << std::endl;
+        if (debugBendStep)
+        {
+            std::cout
+                << "[MFG SIM BEND] arcStep="
+                << arcStepLength
+                << " positionedStraightLeft="
+                << state.positionedStraight.length
+                << std::endl;
+        }
     }
 
 
@@ -332,9 +336,37 @@ public:
         return renderNodes;
     }
 
-   
+    void setDebugActiveZoneStep(
+        bool enabled
+    )
+    {
+        debugActiveZoneStep =
+            enabled;
+    }
+    void setDebugActiveWindow(
+        bool enabled
+    )
+    {
+        debugActiveWindow =
+            enabled;
+    }
+    void setDebugBendStep(
+        bool enabled
+    )
+    {
+        debugBendStep =
+            enabled;
+    }
 
 private:
+
+    bool debugActiveWindow =
+        false;
+    bool debugActiveZoneStep =
+        false;
+    bool debugBendStep =
+        false;
+
     void resetFrames()
     {
         // =====================================================
@@ -707,17 +739,20 @@ private:
 
         maintainActiveWindow();
 
-        std::cout << "[MFG SIM ACTIVE ZONE] angle="
-            << state.activeZone.accumulatedAngle
-            << " / "
-            << state.activeZone.targetAngle
-            << " activeNodes="
-            << state.activeZone.localNodes.size()
-            << " traceNodes="
-            << state.currentBendTraceNodes.size()
-            << " frozenNodes="
-            << state.frozenNodes.size()
-            << std::endl;
+        if (debugActiveZoneStep)
+        {
+            std::cout << "[MFG SIM ACTIVE ZONE] angle="
+                << state.activeZone.accumulatedAngle
+                << " / "
+                << state.activeZone.targetAngle
+                << " activeNodes="
+                << state.activeZone.localNodes.size()
+                << " traceNodes="
+                << state.currentBendTraceNodes.size()
+                << " frozenNodes="
+                << state.frozenNodes.size()
+                << std::endl;
+        }
     }
 
 
@@ -733,7 +768,20 @@ private:
 
     maxActiveNodes =
         std::max<size_t>(2, maxActiveNodes);
-
+    if (debugActiveWindow)
+    {
+        std::cout
+            << "[MFG ACTIVE WINDOW] "
+            << "activeLength="
+            << state.activeZone.activeLength
+            << " ds="
+            << ds
+            << " maxNodes="
+            << maxActiveNodes
+            << " currentNodes="
+            << state.activeZone.localNodes.size()
+            << std::endl;
+    }
     while (state.activeZone.localNodes.size() > maxActiveNodes)
     {
         releaseOldestActiveNode();
@@ -1182,7 +1230,17 @@ private:
 // ManufacturingPipeSimulator owns zone generation.
 // Renderer owns drawing only.
 // =====================================================
-
+    // =====================================================
+// LEGACY FLATTEN ORDER
+//
+// Keep this order aligned with GLView manufacturing draw order:
+//
+// 1. incoming stock
+// 2. positioned straight
+// 3. frozen geometry
+// 4. current bend trace
+// 5. active zone last
+// =====================================================
     void flattenManufacturingRenderData()
     {
         renderNodes.clear();
@@ -1219,6 +1277,8 @@ private:
             );
         }
     }
+
+
 
 
 };
