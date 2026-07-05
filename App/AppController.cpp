@@ -41,6 +41,14 @@ namespace
     constexpr size_t TEST_INSERT_NODE_INDEX = 404;
     constexpr bool DEBUG_PRINT_MANUFACTURING_HISTORY =
         true;
+    constexpr bool DEBUG_MANUFACTURING_SIMULATOR =
+        true;
+
+    constexpr bool DEBUG_MFG_ACTIVE_WINDOW =
+        false;
+
+    constexpr bool DEBUG_MFG_BEND_STEP =
+        false;
 }
 
 
@@ -58,14 +66,13 @@ AppController::AppController()
         TEST_INCOMING_STOCK_LENGTH
     );
 
+
+    configureManufacturingDebug();
+
+
     rebuildTestManufacturingPlan();
 
-   
-
-
     configureInitialMode();
-
-   
 
     std::cout << "[APP PLACEMENT PRESET] "
         << testPlacementPresetToString(
@@ -79,8 +86,6 @@ AppController::AppController()
     preview.setShowInsertionMarker(true);
     preview.setShowInsertionFrame(false);
     preview.setShowTransformedInsertOverlay(true);
-   
-    configureInitialMode();
 }
 
 
@@ -623,6 +628,26 @@ void AppController::toggleSimulationMode()
             activeExplicitAttachMode
         );
     }
+
+    void AppController::configureManufacturingDebug()
+    {
+        auto& mfgPipe =
+            sim.getManufacturingPipe();
+
+        mfgPipe.setDebugAll(
+            DEBUG_MANUFACTURING_SIMULATOR
+        );
+
+        mfgPipe.setDebugActiveWindow(
+            DEBUG_MFG_ACTIVE_WINDOW
+        );
+
+        mfgPipe.setDebugBendStep(
+            DEBUG_MFG_BEND_STEP
+        );
+    }
+
+   
 
     
 

@@ -31,6 +31,14 @@ public:
         resetFrames();
     }
 
+    void setDebugSnapshot(
+        bool enabled
+    )
+    {
+        debugSnapshot =
+            enabled;
+    }
+
     bool isBendActive() const
     {
         return state.activeZone.active;
@@ -150,13 +158,21 @@ public:
 
         moveFrozenGeometryDuringFeed(actualFeed);
 
-        std::cout << "[MFG SIM FEED] incomingRemaining="
-            << state.incomingStock.remainingLength
-            << " positionedStraight="
-            << state.positionedStraight.length
-            << " consumed="
-            << state.incomingStock.consumedLength
-            << std::endl;
+        if (debugFeed)
+        {
+            std::cout << "[MFG SIM FEED] incomingRemaining="
+                << state.incomingStock.remainingLength
+                << " positionedStraight="
+                << state.positionedStraight.length
+                << " consumed="
+                << state.incomingStock.consumedLength
+                << std::endl;
+        }
+
+
+        printManufacturingSnapshot(
+            "after feed"
+        );
     }
 
     void processBend(
@@ -292,17 +308,23 @@ public:
         {
             rotatePipeBodyAroundMachineAxis(signedAngle);
 
-            std::cout << "[MFG SIM ROTATE] PipeRoll angleDeg="
-                << signedAngle * 180.0 / PI
-                << std::endl;
+            if (debugRotate)
+            {
+                std::cout << "[MFG SIM ROTATE] PipeRoll angleDeg="
+                    << signedAngle * 180.0 / PI
+                    << std::endl;
+            }
         }
         else if (mode == RotationKinematicMode::ToolHeadRotate)
         {
             rotateToolPlaneAroundMachineAxis(signedAngle);
 
-            std::cout << "[MFG SIM ROTATE] ToolHeadRotate angleDeg="
-                << signedAngle * 180.0 / PI
-                << std::endl;
+            if (debugRotate)
+            {
+                std::cout << "[MFG SIM ROTATE] ToolHeadRotate angleDeg="
+                    << signedAngle * 180.0 / PI
+                    << std::endl;
+            }
         }
     }
 
@@ -311,9 +333,12 @@ public:
         buildManufacturingRenderData();
         flattenManufacturingRenderData();
 
-        std::cout << "[MFG SIM RECONSTRUCT] nodes="
-            << renderNodes.size()
-            << std::endl;
+        if (debugReconstruct)
+        {
+            std::cout << "[MFG SIM RECONSTRUCT] nodes="
+                << renderNodes.size()
+                << std::endl;
+        }
     }
 
     void setRotationKinematicMode(RotationKinematicMode mode)
@@ -357,7 +382,60 @@ public:
         debugBendStep =
             enabled;
     }
+    void setDebugRenderData(
+        bool enabled
+    )
+    {
+        debugRenderData =
+            enabled;
+    }
+    void setDebugReconstruct(
+        bool enabled
+    )
+    {
+        debugReconstruct =
+            enabled;
+    }
 
+    void setDebugFeed(
+        bool enabled
+    )
+    {
+        debugFeed =
+            enabled;
+    }
+
+    void setDebugRotate(
+        bool enabled
+    )
+    {
+        debugRotate =
+            enabled;
+    }
+
+    void setDebugFreeze(
+        bool enabled
+    )
+    {
+        debugFreeze =
+            enabled;
+    }
+
+    void setDebugAll(
+        bool enabled
+    )
+    {
+        setDebugActiveWindow(enabled);
+        setDebugActiveZoneStep(enabled);
+        setDebugBendStep(enabled);
+        setDebugRenderData(enabled);
+        setDebugReconstruct(enabled);
+        setDebugFeed(enabled);
+        setDebugRotate(enabled);
+        setDebugFreeze(enabled);
+        setDebugSnapshot(enabled);
+       
+    }
 private:
 
     bool debugActiveWindow =
@@ -366,6 +444,59 @@ private:
         false;
     bool debugBendStep =
         false;
+    bool debugRenderData =
+        false;
+    bool debugReconstruct =
+        false;
+    bool debugFeed =
+        false;
+    bool debugRotate =
+        false;
+    bool debugFreeze =
+        false;
+
+    bool debugSnapshot = false;
+
+//helper
+    Frame frameFromNode(
+        const PipeNode& node
+    ) const
+    {
+        Frame frame;
+
+        frame.P = node.pos;
+        frame.T = node.T;
+        frame.N = node.N;
+        frame.B = node.B;
+
+        return frame;
+    }
+
+//========================================================
+    void printManufacturingSnapshot(
+        const char* label
+    ) const
+    {
+        if (!debugSnapshot)
+            return;
+
+        std::cout << "[MFG SNAPSHOT] "
+            << label
+            << " incoming="
+            << state.incomingStock.remainingLength
+            << " positioned="
+            << state.positionedStraight.length
+            << " trace="
+            << state.currentBendTraceNodes.size()
+            << " active="
+            << state.activeZone.localNodes.size()
+            << " frozen="
+            << state.frozenNodes.size()
+            << std::endl;
+    }
+
+
+
 
     void resetFrames()
     {
@@ -453,14 +584,14 @@ private:
             const PipeNode& last =
                 state.frozenNodes.back();
 
-            Frame frame;
+           
 
-            frame.P = last.pos;
-            frame.T = last.T;
-            frame.N = last.N;
-            frame.B = last.B;
+            currentFrame =
+                frameFromNode(
+                    last
+                );
 
-            currentFrame = frame;
+            
         }
         else
         {
@@ -476,9 +607,12 @@ private:
         state.activeZone.localNodes.clear();
         state.activeZone.active = false;
 
-        std::cout << "[MFG SIM FREEZE ACTIVE ZONE] frozenNodes="
-            << state.frozenNodes.size()
-            << std::endl;
+        if (debugFreeze)
+        {
+            std::cout << "[MFG SIM FREEZE ACTIVE ZONE] frozenNodes="
+                << state.frozenNodes.size()
+                << std::endl;
+        }
     }
 
 
@@ -1015,10 +1149,10 @@ private:
             const PipeNode& last =
                 state.frozenNodes.back();
 
-            currentFrame.P = last.pos;
-            currentFrame.T = last.T;
-            currentFrame.N = last.N;
-            currentFrame.B = last.B;
+            currentFrame =
+                frameFromNode(
+                    last
+                );
         }
     }
 
@@ -1198,13 +1332,16 @@ private:
         state.renderData.frozenNodes =
             state.frozenNodes;
 
-        std::cout << "[MFG SIM RENDER DATA] "
-            << "incoming=" << state.renderData.incomingStockNodes.size()
-            << " positioned=" << state.renderData.positionedStraightNodes.size()
-            << " trace=" << state.renderData.currentBendTraceNodes.size()
-            << " active=" << state.renderData.activeZoneNodes.size()
-            << " frozen=" << state.renderData.frozenNodes.size()
-            << std::endl;
+        if (debugRenderData)
+        {
+            std::cout << "[MFG SIM RENDER DATA] "
+                << "incoming=" << state.renderData.incomingStockNodes.size()
+                << " positioned=" << state.renderData.positionedStraightNodes.size()
+                << " trace=" << state.renderData.currentBendTraceNodes.size()
+                << " active=" << state.renderData.activeZoneNodes.size()
+                << " frozen=" << state.renderData.frozenNodes.size()
+                << std::endl;
+        }
     }
 
     // =====================================================

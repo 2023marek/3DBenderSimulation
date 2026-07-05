@@ -30,10 +30,27 @@ struct ManufacturingIncomingStock
 
 struct ManufacturingPositionedStraight
 {
+    // =====================================================
+    // SOURCE OF TRUTH
+    //
+    // Remaining straight pipe currently positioned in the
+    // machine before entering the active bend.
+    // =====================================================
     double length = 0.0;
-    bool visible = true;
 
+    // =====================================================
+    // GENERATED CACHE
+    //
+    // Rebuilt from:
+    //   - length
+    //   - current attachment frame
+    //
+    // This is render/generated geometry.
+    // Do not treat this as simulation state.
+    // =====================================================
     std::vector<PipeNode> nodes;
+
+	bool visible = true;
 };
 
 // =====================================================

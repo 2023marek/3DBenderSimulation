@@ -31,6 +31,8 @@ public:
     void togglePlannedPreviewDebug();
     void toggleExplicitAttachMode();
 	//Getters/setters
+
+    
     void setShowInsertionMarker(bool enabled)
     {
         showInsertionMarker = enabled;
@@ -197,11 +199,12 @@ private:
         const std::vector<Operation>& ops) const;
 
     void configureInitialMode();
+    void configureManufacturingDebug();
     bool showInsertionMarker = true;
     bool showInsertionFrame = true;
     bool showTransformedInsertOverlay = false;
     bool plannedPreviewDebugVisible = true;
-   
+    
     enum class TestPlacementPreset
     {
         ArcLength,

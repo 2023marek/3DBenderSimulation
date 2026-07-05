@@ -4368,11 +4368,144 @@ Add shared manufacturing zone order comment in simulator
 
 Make simulator flatten order match renderer order intentionally.
 
+=================================================
+
+Phase 4S
+add compact manufacturing state snapshot
+
+[MFG SNAPSHOT] incoming=102 positioned=166.64 trace=50 active=10 frozen=0
+======================================================
+Phase 5J is intentionally a documentation phase, 
+not a behavior change.
+he goal is to make the ownership and intent of positionedStraight.nodes obvious to
+
+struct ManufacturingPositionedStraight
+{
+    // =====================================================
+    // SOURCE OF TRUTH
+    //
+    // Remaining straight pipe currently positioned in the
+    // machine before entering the active bend.
+    // =====================================================
+    double length = 0.0;
+
+    // =====================================================
+    // GENERATED CACHE
+    //
+    // Rebuilt from:
+    //   - length
+    //   - current attachment frame
+    //
+    // This is render/generated geometry.
+    // Do not treat this as simulation state.
+    // =====================================================
+    std::vector<PipeNode> nodes;
+};
+
+cleary separate
+Simulation state
+        vs
+Generated geometry
+
+Several phases ago we discussed ownership.
+
+This is another example.
+
+Think of it like this:
+
+Simulation
+
+length
+frame
+radius
+angle
+        ?
+        ?
+        ?
+Geometry Builder
+        ?
+        ?
+nodes
+The simulation owns:
+length
+frame
+angle
+The geometry builder produces:
+nodes
+So nodes are derived data, not the authoritative state.
+Future benefit
+
+Later, when optimizing performance, you'll immediately know:
+Can I clear nodes?
+        YES
+
+Can I regenerate nodes?
+        YES
+
+Can I reconstruct simulation from nodes?
+        NO
+That distinction is extremely valuable in large simulation codebases
 
 
+Now we're gradually building a simulation architecture:
+simulation state vs generated geometry,
+ownership of data,
+rendering vs simulation,
+debug infrastructure,
+manufacturing history.
 
+Those are the kinds of architectural boundaries
+that make a project much easier to extend
 
+later—for example, when you introduce helix forming or 
+true multi-pass manufacturing.
+=========================================================
+Phase 5K
+Review currentFrame ownership
+Goal:
+Clarify whether currentFrame is still needed as real state,
+or only legacy compatibility.
+Question:
+Does ManufacturingPipeSimulator need to own currentFrame
+as real state?
+currentFrame
+    = end of manufactured pipe?
+    = legacy PipeAxis3D frame?
+    = duplicate of frozenNodes.back()?
 
+    Review target:
+    currentFrame should not become a hidden second source of truth.
+    Zaczynam Phase 5K jako review w³asnoœci stanu. Sprawdzimy,
+    czy currentFrame jest Ÿród³em prawdy, 
+    czy tylko pomocnicz¹/legacy kopi¹ koñca frozenNodes.
 
+    Current currentFrame role:
+    currentFrame = legacy/current output frame
 
+    It is updated in places like:
+    resetFrames()
+freezeActiveZone()
+rotatePipeBodyAroundMachineAxis()
+syncCurrentFrameFromFrozen()
+But the stronger source of truth is usually:
+But the stronger source of truth is usually:
+state.frozenNodes.back()
 
+ASCII:
+frozenNodes
+   ??? node 0
+   ??? node 1
+   ??? last node
+          ?
+          ?
+     output/end frame
+     Risk:
+currentFrame can become a duplicate source of truth
+if it disagrees with frozenNodes.back()
+
+============================================
+Phase 5M
+Add helper to get frozen end frame
+Goal:
+Avoid directly accessing frozenNodes.back()
+everywhere.
