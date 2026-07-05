@@ -4509,3 +4509,81 @@ Add helper to get frozen end frame
 Goal:
 Avoid directly accessing frozenNodes.back()
 everywhere.
+
+frozen end frame logic becomes explicit
+and currentFrame remains a cache/compatibility value.
+
+=========================================
+
+Phase 5N
+Use frozen end frame helper in freezeActiveZone
+
+Goal:
+
+After frozenNodes is rebuilt,
+sync currentFrame through one helper path.
+===============================================
+Phase 5P
+Review beginBendFromFrame start frame ownership
+
+Goal:
+Clarify whether beginBendFromFrame should own its own
+start frame,
+Prepare future support for:
+
+- normal rotary draw from machineEntryFrame
+- additional forming pass from AdditionalFormingPass.entryFrame
+ Current:
+ beginBendFromFrame(
+    machineEntryFrame,
+    radius,
+    targetAngle,
+    bendDirection
+);
+
+Future:
+startFrame =
+    normal manufacturing     ? machineEntryFrame
+    additional forming pass  ? additionalPass.entryFrame
+    ==========================
+    Yes, we can reuse concepts, but not the whole
+    ManufacturingPlanPreviewModel
+
+    Reusable:
+    PassPlacement
+PassPlacementResolver
+resolved Frame
+arc length / node index / explicit frame logic
+
+Do not reuse directly:
+preview node rebuilding
+curve splicing
+transformed preview overlays
+preview-only strips
+Why:
+ManufacturingPlanPreviewModel = CAD-like planned preview
+ManufacturingPipeSimulator    = real process playback
+
+Good future ovnership
+bend start frame
+    ??? normal rotary playback
+    ?       ??? machineEntryFrame
+    ?
+    ??? additional forming pass
+            ??? AdditionalFormingPass.entryFrame
+
+    ASCII:
+    PassPlacement
+      ?
+PassPlacementResolver
+      ?
+Frame
+      ?
+beginBendFromFrame(...)
+============
+
+Phase 5Q.
+Goal:
+Centralize bend start frame selection.
+For now it still returns machineEntryFrame.
+Later it can return AdditionalFormingPass.entryFrame.

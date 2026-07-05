@@ -213,7 +213,7 @@ public:
         if (!state.activeZone.active)
         {
             beginBendFromFrame(
-                machineEntryFrame,
+                getBendStartFrame(),
                 radius,
                 targetAngle,
                 bendDirection
@@ -458,6 +458,38 @@ private:
     bool debugSnapshot = false;
 
 //helper
+
+    Frame getBendStartFrame() const
+    {
+        // =====================================================
+        // BEND START FRAME SELECTION
+        //
+        // Current behavior:
+        //     normal rotary draw bending starts at machineEntryFrame.
+        //
+        // Future:
+        //     additional forming pass may start from
+        //     AdditionalFormingPass.entryFrame.
+        // =====================================================
+
+        return machineEntryFrame;
+    }
+
+    bool getFrozenEndFrame(
+        Frame& outFrame
+    ) const
+    {
+        if (state.frozenNodes.empty())
+            return false;
+
+        outFrame =
+            frameFromNode(
+                state.frozenNodes.back()
+            );
+
+        return true;
+    }
+
     Frame frameFromNode(
         const PipeNode& node
     ) const
@@ -579,19 +611,12 @@ private:
         // Sync legacy currentFrame while PipeAxis3D still owns it.
         // =====================================================
 
-        if (!state.frozenNodes.empty())
+        Frame frozenEndFrame;
+
+        if (getFrozenEndFrame(frozenEndFrame))
         {
-            const PipeNode& last =
-                state.frozenNodes.back();
-
-           
-
             currentFrame =
-                frameFromNode(
-                    last
-                );
-
-            
+                frozenEndFrame;
         }
         else
         {
@@ -990,6 +1015,14 @@ private:
             RotationKinematicMode::PipeRoll;
 
         Frame machineEntryFrame;
+        // Compatibility/cache frame.
+//
+// When frozen geometry exists, this should mirror the
+// end frame of frozenNodes.
+//
+// Do not treat this as the primary source of manufactured
+// geometry state. Prefer frozenNodes / getFrozenEndFrame()
+// when possible.
         Frame currentFrame;
 
         ManufacturingState state;
@@ -1144,15 +1177,12 @@ private:
 
     void syncCurrentFrameFromFrozen()
     {
-        if (!state.frozenNodes.empty())
-        {
-            const PipeNode& last =
-                state.frozenNodes.back();
+        Frame frozenEndFrame;
 
+        if (getFrozenEndFrame(frozenEndFrame))
+        {
             currentFrame =
-                frameFromNode(
-                    last
-                );
+                frozenEndFrame;
         }
     }
 
