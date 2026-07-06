@@ -459,6 +459,21 @@ private:
 
 //helper
 
+
+    // =====================================================
+// BEND START FRAME OWNERSHIP
+//
+// This helper is intentionally separate.
+//
+// Current rotary playback:
+//     bend starts at machineEntryFrame.
+//
+// Future manufacturing history / additional forming:
+//     bend may start at AdditionalFormingPass.entryFrame.
+//
+// Keeping this as a helper prevents processBend() from
+// hardcoding one machine model forever.
+// =====================================================
     Frame getBendStartFrame() const
     {
         // =====================================================

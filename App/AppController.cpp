@@ -49,6 +49,9 @@ namespace
 
     constexpr bool DEBUG_MFG_BEND_STEP =
         false;
+
+    constexpr bool DEBUG_MFG_SNAPSHOT =
+        true;
 }
 
 
@@ -644,6 +647,10 @@ void AppController::toggleSimulationMode()
 
         mfgPipe.setDebugBendStep(
             DEBUG_MFG_BEND_STEP
+        );
+
+        mfgPipe.setDebugSnapshot(
+            DEBUG_MFG_SNAPSHOT
         );
     }
 

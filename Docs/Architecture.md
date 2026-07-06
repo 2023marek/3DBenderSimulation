@@ -4587,3 +4587,206 @@ Goal:
 Centralize bend start frame selection.
 For now it still returns machineEntryFrame.
 Later it can return AdditionalFormingPass.entryFrame.
+=======================================================
+Phase 5S
+Review active bend start vs positioned straight start
+
+Goal:
+Check relationship between:
+
+activeZone.frame
+positionedStraight start frame
+machineEntryFrame
+
+Current logic:
+
+Frame getPositionedStraightStartFrame() const
+
+{
+    if (state.activeZone.active)
+        return state.activeZone.frame;
+
+    return machineEntryFrame;
+}
+
+Meaning:
+
+Before bend:
+positioned straight starts at machineEntryFrame
+
+During bend:
+positioned straight starts at activeZone.frame
+
+Pipeflow:
+before bend:
+[entry] ------------------------>
+        positioned straight
+
+during bend:
+[entry] ) ) ) ------------------>
+        trace  positioned straight
+               starts at activeZone.frame
+               Phase 5S: review positioned straight start
+               frame ownership
+Phase 5T is another clarity phase. The behavior stays
+exactly the same; we improve the intent of the code.
+Goal
+When someone reads:
+getPositionedStraightStartFrame()
+they might ask:
+"Start of what?"
+A clearer mental model is:
+This returns the frame where the remaining straight section
+begins after the current bend.
+
+Option 1 (recommended): Keep the name, improve the comment
+
+// =====================================================
+// POSITIONED STRAIGHT START FRAME
+//
+// Returns the frame from which the remaining straight
+// pipe should be generated.
+//
+// Before bending:
+//     machineEntryFrame
+//
+// During bending:
+//     activeZone.frame
+//     (the current end of the growing bend)
+//
+// This keeps the straight section attached to the
+// current bend as the bend grows.
+// =====================================================
+Frame getPositionedStraightStartFrame() const;
+
+// The remaining straight section always starts where the
+// current manufacturing process ends:
+//
+// no bend      -> machine entry
+// active bend  -> end of current bend (activeZone.frame)
+
+Option 2 (possible later)
+
+If, after the project grows, you feel the name is still
+too generic, you could rename it to
+getRemainingStraightStartFrame()
+
+or:
+getStraightSectionStartFrame()
+I would not do that now because:
+it requires changing every call site,
+the current name is already used consistently,
+there is no ambiguity inside ManufacturingPipeSimulator.
+
+Why this matters
+Notice how we've been evolving the architecture
+
+machineEntryFrame
+        ?
+        ?
+getBendStartFrame()
+
+activeZone.frame
+        ?
+        ?
+getPositionedStraightStartFrame()
+
+frozenNodes
+        ?
+        ?
+getFrozenEndFrame()
+
+ach helper now answers one very specific question:
+Where does the bend start?
+
+Where does the remaining straight start?
+
+Where does the manufactured pipe end?
+
+That consistency is much more valuable than simply renaming functions.
+
+==========================================
+Phase 5U
+Review helper family for frame ownership
+Goal:
+Confirm we now have clear frame helpers:
+
+getBendStartFrame()
+getPositionedStraightStartFrame()
+getFrozenEndFrame()
+frameFromNode()
+Meaning:
+bend start frame          ? where bending begins
+positioned straight frame ? where remaining straight begins
+frozen end frame          ? where manufactured body ends
+node-to-frame helper      ? conversion utility
+ASCII
+machineEntryFrame
+      ?
+getBendStartFrame()
+      ?
+activeZone.frame
+      ?
+getPositionedStraightStartFrame()
+      ?
+frozenNodes.back()
+      ?
+getFrozenEndFrame()
+=========================================
+Phase 5V
+Review first bend lifecycle summary
+Phase 5V
+Review first bend lifecycle summary
+
+Goal:
+Close the first FEED ? BEND analysis with a 
+clear lifecycle diagram.
+
+Summary target:
+1. feed stock
+2. positionedStraight grows
+3. bend starts at bendStartFrame
+4. trace grows
+5. active window moves
+6. positionedStraight shrinks
+7. freeze creates frozen geometry
+ASCII:
+FEED:
+incoming ======> [entry] ---------------->
+                     positionedStraight
+
+BEND:
+incoming ======> [entry] ) ) ) ---------->
+                     trace   positioned
+
+FREEZE:
+incoming ======> [entry] ) ) ) ---------->
+
+                     frozen geometry
+===========
+                     Reuse !!!!!!!!!!!!:
+? PassPlacement
+? PassPlacementResolver
+? resolved Frame
+? placement algorithms
+? shared helper functions
+
+never reuse directly:
+? preview node rebuilding
+? preview rendering
+? preview overlays
+? preview strips
+
+Because:
+ManufacturingPlanPreviewModel
+    = planning / CAD preview
+
+ManufacturingPipeSimulator
+    = real manufacturing state and playback
+
+So we reuse the algorithms and concepts, not the preview implementation.
+Thisseparation will become especially valuable when implementing HelixForming 
+and future multi-pass processes.
+
+
+==============================================================
