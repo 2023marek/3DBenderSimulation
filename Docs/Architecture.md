@@ -4790,3 +4790,68 @@ and future multi-pass processes.
 
 
 ==============================================================
+Phase 5X
+this mismatch
+actual consumed stock = 300
+machine feed counter  = 302.32
+
+this means two different concepts are mixed:
+commanded feed
+    = what CNC/controller tried to execute
+
+actual consumed feed
+    = what material simulator really allowed
+ASCII:
+CNC command:
+FEED 110
+   ?
+controller counter keeps moving
+
+Material stock:
+only 102 mm left
+   ?
+simulator clamps actual feed to 102
+
+Current ownership:
+MachineController / runtime state
+    owns commanded/progress feed display
+
+ManufacturingPipeSimulator
+    owns actual material consumption
+
+Conclusion:
+
+? ManufacturingPipeSimulator is correct to clamp stock
+? machine feed counter should not silently exceed 
+available stock
+
+Best target model:
+commandedFeedProgress = CNC progress
+actualMaterialFeed    = consumed stock
+feedLimitReached      = true/false
+
+Let controller know how much material really moved.
+Phase 5X goal:
+Review whether machine feed display should show:
+1. commanded feed
+2. actual consumed feed
+3. both
+Best future answer:
+commandedFeed = CNC target/progress
+actualFeed    = real material consumed
+CNC command:
+FEED 110
+   ?
+machine counter may try to advance
+
+material stock:
+only 102 left
+   ?
+actual consumed = 102
+==============================================
+Phase 5Y
+Return actualFeed from ManufacturingPipeSimulator::processFeed
+goal:
+ManufacturingPipeSimulator::processFeed()
+returns actual material feed distance.
+

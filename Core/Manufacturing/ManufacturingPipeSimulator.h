@@ -123,7 +123,7 @@ public:
         return state;
     }
 
-    void processFeed(double distance)
+    double processFeed(double distance)
     {
         // =====================================================
         // FEED OPERATION
@@ -140,13 +140,13 @@ public:
         // =====================================================
 
         if (distance <= 0.0)
-            return;
+            return 0.0;
 
         double actualFeed =
             std::min(distance, state.incomingStock.remainingLength);
 
         if (actualFeed <= 0.0)
-            return;
+            return 0.0;
 
         state.incomingStock.remainingLength -= actualFeed;
         state.incomingStock.consumedLength += actualFeed;
@@ -173,6 +173,8 @@ public:
         printManufacturingSnapshot(
             "after feed"
         );
+
+        return actualFeed;
     }
 
     void processBend(
