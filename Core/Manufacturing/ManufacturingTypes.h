@@ -19,6 +19,7 @@ struct ManufacturingIncomingStock
     double consumedLength = 0.0;
 
     bool visible = true;
+    bool exhausted =        false;
 };
 
 // =====================================================

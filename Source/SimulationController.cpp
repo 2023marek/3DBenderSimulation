@@ -134,7 +134,7 @@ void SimulationController::step()
         return;
     }
 
-    // Execute a small step (5mm for FEED, 1° for BEND)
+    // Execute a small step (0.5 for FEED, 1° for BEND)
     const Operation* op = operationQueue.getCurrent();
     if (!op) return;
 
@@ -338,10 +338,27 @@ void SimulationController::executeFeed(double distance)
 
     machine().beginFeed();
 
-    pipe().processFeed(toMove);
-    machine().addFeed(toMove);
+    double actualFeed =
+        pipe().processFeed(
+            toMove
+        );
 
-    accumulatedDistance += toMove;
+    if (actualFeed <= 0.0)
+    {
+        machine().endFeed();
+
+        accumulatedDistance =
+            op->length;
+
+        return;
+    }
+
+    machine().addFeed(
+        actualFeed
+    );
+
+    accumulatedDistance +=
+        actualFeed;
 
     if (accumulatedDistance > op->length)
     {

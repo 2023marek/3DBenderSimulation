@@ -4854,4 +4854,145 @@ Return actualFeed from ManufacturingPipeSimulator::processFeed
 goal:
 ManufacturingPipeSimulator::processFeed()
 returns actual material feed distance.
+==========================================
+Phase 5Z
+Use actualFeed in controller feed progress
+
+Goal:
+Stop machine/controller feed progress from exceeding
+available stock.
+
+Current issue:
+machine feed counter can show 302.32
+while actual consumed stock is 300
+
+Goal:
+machine feed progress should use actualFeed,
+not requested stepFeed.
+
+
+PROJECT STRUCTURE
+AppController
+      ?
+      ?
+SimulationController
+      ?
+      ??? OperationQueue
+      ??? MachineSystem / MachineRuntimeState
+      ??? PipeSystem
+             ?
+             ??? GeometricPipeModel        CAD preview
+             ??? ManufacturingPipeSimulator
+                    ?
+                    ??? ManufacturingState
+                           ??? incomingStock
+                           ??? positionedStraight
+                           ??? activeZone
+                           ??? currentBendTraceNodes
+                           ??? frozenNodes
+==================================================
+
+
+
+
+ManufacturingPipeSimulator should explicitly know:
+incoming stock is exhausted.
+
+AppController
+      ?
+      ?
+SimulationController
+      ?
+      ??? OperationQueue
+      ??? MachineSystem / MachineRuntimeState
+      ??? PipeSystem
+             ?
+             ??? GeometricPipeModel        CAD preview
+             ??? ManufacturingPipeSimulator
+                    ?
+                    ??? ManufacturingState
+                           ??? incomingStock
+                           ??? positionedStraight
+                           ??? activeZone
+                           ??? currentBendTraceNodes
+                           ??? frozenNodes
+
+resposibility:
+SimulationController
+    = controls program execution
+    = FEED / ROTATE / BEND timing
+    = operation progress
+
+ManufacturingPipeSimulator
+    = controls physical material state
+    = actual stock consumption
+    = zones / frozen / trace / active window
+=================================================
+Phase 6B
+Add stock exhaustion flag/status 
+ASCII:
+incoming stock
+300 ? ... ? 0
+              ?
+        exhausted = true
+
+
+New stock loaded
+        ?
+        ?
+exhausted = false
+        ?
+        ?
+FEED operations
+        ?
+        ?
+remainingLength reaches 0
+        ?
+        ?
+exhausted = true
+======================================================
+Phase 6C
+Propagate stock exhaustion status to SimulationController
+
+Goal:
+Keep the simulator responsible for the material state, and let the 
+controller decide what to do:
+Flow:
+ManufacturingPipeSimulator
+        ?
+        ? isIncomingStockExhausted()
+        ?
+SimulationController
+        ?
+        ??? stop operation
+        ??? update UI
+        ??? record manufacturing history
+        ??? request new stock
+        ??? continue with multi-pass workflow
+=========
+For multi-pass manufacturing, stock exhaustion is not an error. 
+It becomes an event:
+
+Stock exhausted
+        ?
+        ?
+Pause manufacturing
+        ?
+        ?
+Load new stock
+        ?
+        ?
+Resume from saved manufacturing state
+
+Phase 6C: propagate stock exhaustion state to controller
+
+I recommend this approach because it keeps responsibilities clean:
+the simulator reports
+what happened, while the controller decides what to do next. 
+This will scale naturally when you add multi-pass and 
+helix-forming support.
+
+=======================================
+Phase 6D
+Add feed stop reason enum placeholder
 

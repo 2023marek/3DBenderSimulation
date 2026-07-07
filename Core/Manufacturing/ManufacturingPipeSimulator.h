@@ -43,7 +43,13 @@ public:
     {
         return state.activeZone.active;
     }
+
+    bool isIncomingStockExhausted() const
+    {
+        return state.incomingStock.exhausted;
+    }
     //Getters/Setters
+
 
     double getIncomingStockRemainingLength() const
     {
@@ -71,6 +77,9 @@ public:
 
         renderNodes.clear();
         state.renderData.clear();
+        state.incomingStock.exhausted = false;
+        
+
     }
 
 
@@ -123,8 +132,11 @@ public:
         return state;
     }
 
+
+
     double processFeed(double distance)
     {
+        
         // =====================================================
         // FEED OPERATION
         //
@@ -144,11 +156,25 @@ public:
 
         double actualFeed =
             std::min(distance, state.incomingStock.remainingLength);
-
+        
         if (actualFeed <= 0.0)
+        {
+            state.incomingStock.exhausted =
+                true;
+
             return 0.0;
+        }
 
         state.incomingStock.remainingLength -= actualFeed;
+
+        if (state.incomingStock.remainingLength <= 1e-9)
+        {
+            state.incomingStock.remainingLength =
+                0.0;
+
+            state.incomingStock.exhausted =
+                true;
+        }
         state.incomingStock.consumedLength += actualFeed;
 
         if (state.incomingStock.remainingLength < 0.0)
