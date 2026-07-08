@@ -204,7 +204,7 @@ private:
     bool showInsertionFrame = true;
     bool showTransformedInsertOverlay = false;
     bool plannedPreviewDebugVisible = true;
-    
+    void configureControllerDebug();
     enum class TestPlacementPreset
     {
         ArcLength,

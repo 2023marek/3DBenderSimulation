@@ -5036,4 +5036,39 @@ playing
 paused
 accumulatedDistance
 accumulatedAngle
+
+
 accumulatedRotation
+DEbugging
+
+AppController
+?
+??? configureManufacturingDebug()
+?      ?
+?      ??? ManufacturingPipeSimulator
+?
+??? configureControllerDebug()
+       ?
+       ??? SimulationController
+
+       This keep the debug configuration cleanly separated
+       between the two main components.
+       ManufacturingPipeSimulator
+    owns manufacturing debug
+
+SimulationController
+    owns execution/controller debug
+
+AppController
+    configures both
+
+    ==========================================
+Phase 6G
+Separate controller debug configuration helper
+
+Goal:
+Keep AppController clean and separate:
+
+manufacturing debug
+controller/debug execution
+

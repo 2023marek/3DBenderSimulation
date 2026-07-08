@@ -91,6 +91,9 @@ AppController::AppController()
     preview.setShowInsertionMarker(true);
     preview.setShowInsertionFrame(false);
     preview.setShowTransformedInsertOverlay(true);
+
+    configureManufacturingDebug();
+    configureControllerDebug();
 }
 
 
@@ -654,10 +657,19 @@ void AppController::toggleSimulationMode()
         mfgPipe.setDebugSnapshot(
             DEBUG_MFG_SNAPSHOT
         );
+
+        sim.setDebugOperationStop(
+            DEBUG_OPERATION_STOP
+        );
     }
 
    
-
+    void AppController::configureControllerDebug()
+    {
+        sim.setDebugOperationStop(
+            DEBUG_OPERATION_STOP
+        );
+    }
     
 
   
