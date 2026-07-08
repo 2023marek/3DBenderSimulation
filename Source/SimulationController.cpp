@@ -355,8 +355,12 @@ void SimulationController::executeFeed(double distance)
             lastOperationStopReason =
                 OperationStopReason::IncomingStockExhausted;
         }
-        std::cout << "[OP STOP] IncomingStockExhausted"
-            << std::endl;
+        if (debugOperationStop)
+        {
+            std::cout
+                << "[OP STOP] IncomingStockExhausted"
+                << std::endl;
+        }
 
         machine().endFeed();
 

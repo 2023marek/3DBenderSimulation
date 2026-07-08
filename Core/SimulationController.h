@@ -243,6 +243,11 @@ public:
         const ManufacturingHistory& getManufacturingHistory() const;
 
         OperationStopReason getLastOperationStopReason() const;
+
+        void setDebugOperationStop(bool enabled)
+        {
+            debugOperationStop = enabled;
+        }
 private:
     // =====================================================
     // Mode / speed
@@ -269,7 +274,7 @@ private:
     double accumulatedDistance = 0.0;
     double accumulatedAngle = 0.0;
     double accumulatedRotation = 0.0;
-
+    bool debugOperationStop =  false;
     OperationStopReason lastOperationStopReason =
         OperationStopReason::None;
 

@@ -52,6 +52,8 @@ namespace
 
     constexpr bool DEBUG_MFG_SNAPSHOT =
         true;
+    constexpr bool DEBUG_OPERATION_STOP =
+        false;
 }
 
 
