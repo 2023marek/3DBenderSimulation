@@ -4995,4 +4995,45 @@ helix-forming support.
 =======================================
 Phase 6D
 Add feed stop reason enum placeholder
+Goal:
+Prepare controller for more than one stop reason.
+Future reason may be:
 
+incoming stock exhausted
+collision detected
+machine limit reached
+operator pause
+material constraint exceeded
+
+processFeed()
+      ?
+actualFeed = 0
+      ?
+check simulator state
+      ?
+FeedStopReason::IncomingStockExhausted
+      ?
+controller decides next action
+
+
+SimulationController
+?
+??? program data
+??? PipeSystem
+??? MachineSystem
+??? runtime execution
+?      ??? playing
+?      ??? accumulatedDistance
+?      ??? accumulatedAngle
+?      ??? accumulatedRotation
+?      ??? lastFeedStopReason
+?
+??? helper methods
+FeedStopReason is runtime execution state,
+just like:
+
+playing
+paused
+accumulatedDistance
+accumulatedAngle
+accumulatedRotation

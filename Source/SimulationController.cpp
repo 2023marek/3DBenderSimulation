@@ -17,6 +17,8 @@ SimulationController::SimulationController()
     std::cout << "SimulationController initialized\n";
 }
 
+
+
 void SimulationController::loadProgram(const std::vector<Operation>& ops)
 {
     // ===================================================================
@@ -327,6 +329,9 @@ void SimulationController::executeFeed(double distance)
     if (!op || op->type != Operation::FEED)
         return;
 
+    lastOperationStopReason =
+        OperationStopReason::None;
+
     double remaining =
         op->length - accumulatedDistance;
 
@@ -345,6 +350,14 @@ void SimulationController::executeFeed(double distance)
 
     if (actualFeed <= 0.0)
     {
+        if (pipe().isIncomingStockExhausted())
+        {
+            lastOperationStopReason =
+                OperationStopReason::IncomingStockExhausted;
+        }
+        std::cout << "[OP STOP] IncomingStockExhausted"
+            << std::endl;
+
         machine().endFeed();
 
         accumulatedDistance =
@@ -370,7 +383,6 @@ void SimulationController::executeFeed(double distance)
         machine().endFeed();
     }
 }
-
 void SimulationController::executeBend(double angle)
 {
     const Operation* op =
@@ -669,4 +681,9 @@ const ManufacturingHistory& SimulationController::getManufacturingHistory() cons
 {
     return manufacturingHistory;
 }
-    
+
+SimulationController::OperationStopReason
+SimulationController::getLastOperationStopReason() const
+{
+    return lastOperationStopReason;
+}

@@ -32,7 +32,20 @@ public:
         // active zone / frozen geometry.
         ManufacturingPlayback
     };
+    enum class OperationStopReason
+    {
+        None,
 
+        IncomingStockExhausted,
+
+        Collision,
+
+        MachineLimit,
+
+        OperatorPause,
+
+        MaterialConstraint
+    };
 public:
     SimulationController();
 
@@ -43,6 +56,9 @@ public:
     void step();
     void reset();
     void update(double deltaTime);
+
+
+   
 
     //Accessors
 
@@ -225,10 +241,13 @@ public:
         
         ManufacturingHistory& getManufacturingHistory();
         const ManufacturingHistory& getManufacturingHistory() const;
+
+        OperationStopReason getLastOperationStopReason() const;
 private:
     // =====================================================
     // Mode / speed
     // =====================================================
+    
 
     double rotationSpeedRadPerSec = PI;
 
@@ -250,6 +269,9 @@ private:
     double accumulatedDistance = 0.0;
     double accumulatedAngle = 0.0;
     double accumulatedRotation = 0.0;
+
+    OperationStopReason lastOperationStopReason =
+        OperationStopReason::None;
 
     // =====================================================
     // Core components
