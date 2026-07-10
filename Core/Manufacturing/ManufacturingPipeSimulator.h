@@ -8,7 +8,8 @@
 #include "Core/Math/Vec3D.h"
 #include "Core/Manufacturing/ManufacturingState.h"
 #include "Core/Manufacturing/RotationKinematicMode.h"
-
+#include "Core/Forming/AdditionalFormingPass.h"
+                   
 
 class ManufacturingPipeSimulator
 {
@@ -49,6 +50,56 @@ public:
         return state.incomingStock.exhausted;
     }
     //Getters/Setters
+    // =====================================================
+// ADDITIONAL FORMING PASS EXECUTION
+//
+// Placeholder for real multi-pass manufacturing.
+//
+// This is not preview insertion.
+// This is intended for future physical continuation:
+// already formed pipe -> additional forming pass
+// =====================================================
+    bool executeAdditionalFormingPass(
+        const AdditionalFormingPass& additionalPass
+    )
+    {
+        // =====================================================
+        // ADDITIONAL FORMING PASS EXECUTION
+        //
+        // Placeholder for real multi-pass manufacturing.
+        //
+        // This is NOT planned-preview insertion.
+        // This is intended for future physical continuation:
+        //
+        //     already formed pipe
+        //          ?
+        //     additional forming pass
+        //          ?
+        //     updated manufacturing state
+        //
+        // Future implementation will use:
+        //     additionalPass.pass
+        //     additionalPass.entryFrame
+        //     selected deformable region
+        //     clamp/tooling constraints
+        // =====================================================
+
+        if (!additionalPass.enabled)
+            return false;
+        if (debugSnapshot)
+        {
+            std::cout << "[MFG ADDITIONAL PASS PLACEHOLDER] name="
+                << additionalPass.name
+                << " enabled="
+                << additionalPass.enabled
+                << " entryP=("
+                << additionalPass.entryFrame.P.x << ", "
+                << additionalPass.entryFrame.P.y << ", "
+                << additionalPass.entryFrame.P.z << ")"
+                << std::endl;
+        }
+        return true;
+    }
 
 
     double getIncomingStockRemainingLength() const

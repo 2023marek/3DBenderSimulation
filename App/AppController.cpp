@@ -54,6 +54,8 @@ namespace
         true;
     constexpr bool DEBUG_OPERATION_STOP =
         false;
+    constexpr bool DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER =
+        false;
 }
 
 
@@ -538,11 +540,17 @@ void AppController::toggleSimulationMode()
 
         ManufacturingHistory& history =
             sim.getManufacturingHistory();
+        if (DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER)
+        {
+            sim.debugExecuteFirstAdditionalPassPlaceholder();
+        }
 
         buildManufacturingHistoryFromPlan(
             plan,
             history
         );
+
+      
 
         if (DEBUG_PRINT_MANUFACTURING_HISTORY)
         {

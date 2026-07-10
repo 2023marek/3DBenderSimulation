@@ -5072,3 +5072,190 @@ Keep AppController clean and separate:
 manufacturing debug
 controller/debug execution
 
+===============================
+AppController
+?
+??? configureManufacturingDebug()
+?      ?
+?      ??? ManufacturingPipeSimulator
+?             ??? Snapshot
+?             ??? ActiveWindow
+?             ??? BendStep
+?             ??? ...
+?
+??? configureControllerDebug()
+       ?
+       ??? SimulationController
+              ??? OperationStopReason
+              ??? controller diagnostics
+
+ This is exactly the kind of separation that will pay off
+
+ ================================================
+ Phase 6H
+ Review manufacturing responsibilities after refactoring
+ Goal:
+ Make sure every responsibility has exactly one owner.
+
+ AppController
+    ?
+    ?
+SimulationController
+    ?
+    ??? operation execution
+    ??? timing
+    ??? progress
+    ??? stop reasons
+    ?
+    ?
+ManufacturingPipeSimulator
+    ?
+    ??? incoming stock
+    ??? positioned straight
+    ??? active bend
+    ??? bend trace
+    ??? frozen geometry
+    ??? visible reconstruction
+    ??? material state
+
+    Geometry ownership
+    ? ManufacturingPipeSimulator
+
+Material ownership
+    ? ManufacturingPipeSimulator
+
+Operation execution
+    ? SimulationController
+
+Program sequencing
+    ? OperationQueue
+
+Machine runtime state
+    ? MachineSystem
+
+Rendering
+    ? GLView
+
+    This is the last architectural checkpoint before we
+    start introducing more advanced manufacturing capabilities.
+
+    The next major features you mentioned are:
+
+    • Multi-pass manufacturing
+• Helix forming
+• Two-roller forming
+• Additional machine kinematics
+
+All of them should fit into the architecture we've been building,
+not force us to redesign it.
+
+
+=========================================================
+=========================================================
+
+what pass to run
+where it enters
+whether it is enabled
+future constraints / selected region
+
+It should not directly:
+modify frozenNodes
+rebuild render data
+splice preview curves
+draw overlays
+
+Execution boundary:
+
+AdditionalFormingPass
+        ? data
+        ?
+ManufacturingPipeSimulator
+        ? execution
+        ?
+ManufacturingState updated
+ASCII:
+already formed pipe
+      ?
+      ?
+AdditionalFormingPass
+      ??? pass
+      ??? entryFrame
+      ??? enabled
+              ?
+              ?
+ManufacturingPipeSimulator executes
+              ?
+              ?
+updated frozen geometry
+
+Minimum current boundary:
+AdditionalFormingPass provides entryFrame.
+ManufacturingPipeSimulator decides how to use it.
+
+Phase 7C.
+Add execution placeholder for AdditionalFormingPass.
+No geometry change yet.
+
+========================
+Phase 7E
+Review ManufacturingHistory ownership in SimulationController
+
+Commit topic
+Chcemy ustaliæ, kto trzyma ManufacturingHistory, kto j¹ buduje,
+i kto powinien wywo³aæ real execution dla  AdditionalFormingPass
+Current ownership should be:
+
+
+SimulationController
+    ??? owns ManufacturingHistory
+
+Because SimulationController already owns:
+
+operation execution
+program sequencing
+manufacturing playback control
+
+ManufacturingHistory should not be owned by:
+GLView              no, rendering only
+ManufacturingPipeSimulator  no, physical execution only
+AppController       no, setup/config only
+
+Correct execution flow:
+
+SimulationController
+      ?
+      ??? has ManufacturingHistory
+      ?
+      ??? selects primary/additional pass
+      ?
+      ?
+ManufacturingPipeSimulator
+      ?
+      ??? executes selected pass
+      ASCII:
+ManufacturingHistory
+   ??? primaryPasses
+   ??? additionalPasses
+            ?
+            ?
+SimulationController chooses pass
+            ?
+            ?
+ManufacturingPipeSimulator executes
+Conclusion:
+? ManufacturingHistory ownership in SimulationController is correct
+? ManufacturingPipeSimulator should not own the whole history
+? it should only execute one pass given to it
+==========================================================
+
+Phase 7F
+Add debug helper to execute first additional pass placeholder
+
+Zaczynam Phase 7F jako debug-only integration test. 
+Wywo³amy placeholder dla s, ale nadal bez zmiany geometrii i
+bez realnego multi-pass  execution.
+Goal:
+Call executeAdditionalFormingPass()
+for the first additional pass,
+only as a debug placeholder test.
+

@@ -691,3 +691,15 @@ SimulationController::getLastOperationStopReason() const
 {
     return lastOperationStopReason;
 }
+
+
+void SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
+{
+    if (manufacturingHistory.additionalPasses.empty())
+        return;
+
+    const AdditionalFormingPass& additionalPass =
+        manufacturingHistory.additionalPasses.front();
+
+    pipe().executeAdditionalFormingPass( additionalPass  );
+}

@@ -248,6 +248,7 @@ public:
         {
             debugOperationStop = enabled;
         }
+        void debugExecuteFirstAdditionalPassPlaceholder();
 private:
     // =====================================================
     // Mode / speed
@@ -306,7 +307,7 @@ private:
 
     void updatePipeGeometryCAD();
     void updatePipeGeometryManufacturing();
-
+	//====================================================
     ManufacturingHistory manufacturingHistory;
-  
+   
 };
