@@ -701,5 +701,10 @@ void SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
     const AdditionalFormingPass& additionalPass =
         manufacturingHistory.additionalPasses.front();
 
+    AdditionalPassExecutionResult result =
+        pipe().executeAdditionalFormingPass(
+            additionalPass
+        );
+
     pipe().executeAdditionalFormingPass( additionalPass  );
 }

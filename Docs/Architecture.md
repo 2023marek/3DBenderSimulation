@@ -5258,4 +5258,37 @@ Goal:
 Call executeAdditionalFormingPass()
 for the first additional pass,
 only as a debug placeholder test.
+===================================================
+Phase 7H
+Add additional pass execution result enum
+
+Goal:
+Replace simple bool return from:
+
+executeAdditionalFormingPass(...)
+
+with a clearer result:
+Executed
+Disabled
+UnsupportedProcess
+InvalidEntryFrame
+
+Why:
+bool only says success/failure.
+Enum says why.
+
+
+=====
+Replace bool result with meaningful execution result.
+pipeflow:
+
+AdditionalFormingPass
+        ?
+        ?
+executeAdditionalFormingPass()
+        ?
+        ??? disabled ----------> Disabled
+        ??? bad entry frame ---> InvalidEntryFrame
+        ??? unsupported type --> UnsupportedProcess
+        ??? accepted ----------> Executed
 

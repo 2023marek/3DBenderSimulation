@@ -10,7 +10,14 @@
 #include "Core/Manufacturing/RotationKinematicMode.h"
 #include "Core/Forming/AdditionalFormingPass.h"
                    
-
+enum class AdditionalPassExecutionResult
+{
+    Validated,
+    Executed,
+    Disabled,
+    UnsupportedProcess,
+    InvalidEntryFrame
+};
 class ManufacturingPipeSimulator
 {
 public:
@@ -31,6 +38,9 @@ public:
     {
         resetFrames();
     }
+
+
+   
 
     void setDebugSnapshot(
         bool enabled
@@ -59,46 +69,51 @@ public:
 // This is intended for future physical continuation:
 // already formed pipe -> additional forming pass
 // =====================================================
-    bool executeAdditionalFormingPass(
+    AdditionalPassExecutionResult executeAdditionalFormingPass(
         const AdditionalFormingPass& additionalPass
     )
     {
         // =====================================================
         // ADDITIONAL FORMING PASS EXECUTION
         //
-        // Placeholder for real multi-pass manufacturing.
+        // Current stage:
+        //     validation placeholder only.
         //
-        // This is NOT planned-preview insertion.
-        // This is intended for future physical continuation:
+        // No manufacturing geometry is modified yet.
         //
-        //     already formed pipe
-        //          ?
-        //     additional forming pass
-        //          ?
-        //     updated manufacturing state
-        //
-        // Future implementation will use:
-        //     additionalPass.pass
-        //     additionalPass.entryFrame
-        //     selected deformable region
-        //     clamp/tooling constraints
+        // Validation order:
+        //     1. pass enabled
+        //     2. entry frame valid
+        //     3. future process support validation
+        //     4. future real execution
         // =====================================================
 
         if (!additionalPass.enabled)
-            return false;
-        if (debugSnapshot)
         {
-            std::cout << "[MFG ADDITIONAL PASS PLACEHOLDER] name="
-                << additionalPass.name
-                << " enabled="
-                << additionalPass.enabled
-                << " entryP=("
-                << additionalPass.entryFrame.P.x << ", "
-                << additionalPass.entryFrame.P.y << ", "
-                << additionalPass.entryFrame.P.z << ")"
-                << std::endl;
+            return AdditionalPassExecutionResult::Disabled;
         }
-        return true;
+
+        if (!isValidFrame(
+            additionalPass.entryFrame
+        ))
+        {
+            return AdditionalPassExecutionResult::InvalidEntryFrame;
+        }
+
+        if (!isSupportedAdditionalPassProcess(
+            additionalPass.pass.processType
+        ))
+        {
+            return AdditionalPassExecutionResult::UnsupportedProcess;
+        }
+        // Future:
+        // - validate supported process type
+        // - select deformable region
+        // - configure machine/process constraints
+        // - execute real forming operation
+        // - update ManufacturingState
+
+        return AdditionalPassExecutionResult::Validated;
     }
 
 
@@ -1539,7 +1554,29 @@ private:
         }
     }
 
+    bool isValidFrame(
+        const Frame& frame
+    ) const
+    {
+        return frame.T.lengthSquared() > 1e-12
+            && frame.N.lengthSquared() > 1e-12
+            && frame.B.lengthSquared() > 1e-12;
+    }
 
+    bool isSupportedAdditionalPassProcess(
+        TubeFormingProcessType type
+    ) const
+    {
+        switch (type)
+        {
+        case TubeFormingProcessType::HelixForming:
+        case TubeFormingProcessType::StretchBending:
+        case TubeFormingProcessType::TwoRollerContinuous:
+            return true;
 
+        default:
+            return false;
+        }
+    }
 
 };
