@@ -249,6 +249,8 @@ public:
             debugOperationStop = enabled;
         }
         void debugExecuteFirstAdditionalPassPlaceholder();
+
+       
 private:
     // =====================================================
     // Mode / speed
@@ -290,7 +292,8 @@ private:
     // Full loaded program copy
     std::vector<Operation> loadedOperations;
 
-
+    AdditionalPassExecutionResult lastAdditionalPassExecutionResult =
+        AdditionalPassExecutionResult::Disabled;
 
 private:
     // =====================================================

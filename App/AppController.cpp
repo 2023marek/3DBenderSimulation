@@ -55,7 +55,7 @@ namespace
     constexpr bool DEBUG_OPERATION_STOP =
         false;
     constexpr bool DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER =
-        false;
+        true;
 }
 
 
@@ -363,6 +363,7 @@ void AppController::toggleSimulationMode()
     ManufacturingPlan AppController::buildTestManufacturingPlan(
         const std::vector<Operation>& ops) const
     {
+        
         ManufacturingPass rotaryPass =
             RotaryDrawPassBuilder::buildPass(
                 ops,
@@ -526,6 +527,10 @@ void AppController::toggleSimulationMode()
 
     void AppController::rebuildTestManufacturingPlan()
     {
+        std::cout
+            << "[REBUILD TEST PLAN]"
+            << std::endl;
+
         ManufacturingPlan plan =
             buildTestManufacturingPlan(
                 testOperations
@@ -540,21 +545,23 @@ void AppController::toggleSimulationMode()
 
         ManufacturingHistory& history =
             sim.getManufacturingHistory();
-        if (DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER)
-        {
-            sim.debugExecuteFirstAdditionalPassPlaceholder();
-        }
 
         buildManufacturingHistoryFromPlan(
             plan,
             history
         );
 
-      
+        // ManufacturingHistory is fully populated here.
+        // The additional-pass placeholder must run only now.
+        if (DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER)
+        {
+            sim.debugExecuteFirstAdditionalPassPlaceholder();
+        }
 
         if (DEBUG_PRINT_MANUFACTURING_HISTORY)
         {
-            std::cout << "[MFG HISTORY REAL PASSES] primary="
+            std::cout
+                << "[MFG HISTORY REAL PASSES] primary="
                 << history.primaryPasses.size()
                 << " additional="
                 << history.additionalPasses.size()
@@ -564,9 +571,6 @@ void AppController::toggleSimulationMode()
                 history
             );
         }
-
-       
-
 
         preview.setDebugLogging(
             true
@@ -584,7 +588,6 @@ void AppController::toggleSimulationMode()
             false
         );
     }
-
     const char* AppController::testPlacementPresetToString(
         TestPlacementPreset preset) const
     {

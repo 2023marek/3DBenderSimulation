@@ -41,6 +41,7 @@ set(APP_HEADERS
 
 set(RENDER_SOURCES
     Render/GLView.cpp
+    Source/AdditionalPassExecutionResult.cpp
     Source/PipeRenderer.cpp
     Source/HUDPanel.cpp
     Source/CameraGL.cpp
@@ -89,6 +90,7 @@ set(CORE_HEADERS
     Core/Curve/PipeCurveSegment.h
     Core/Curve/PipeCurveTransform.h
     Core/RotationDirection.h
+    Core/Forming/AdditionalPassExecutionResult.h
     Core/Forming/TubeFormingProcessType.h
     Core/Forming/FormingOperation.h
     Core/Forming/FormingProcessLabels.h

@@ -5292,3 +5292,221 @@ executeAdditionalFormingPass()
         ??? unsupported type --> UnsupportedProcess
         ??? accepted ----------> Executed
 
+==================================================
+Private Public
+Rule I personally follow
+
+I use one simple question:
+
+Who needs this function?
+If the answer is:
+
+Only ManufacturingPipeSimulator
+
+Then it is a private member function.
+
+If the answer is:
+
+SimulationController
+
+AppController
+
+GLView
+
+other systems
+Then it is a public member function.
+If the answer is:
+
+SimulationController
+
+AppController
+
+GLView
+
+other systems
+          PUBLIC
+             -
+             ¡
+      -¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¬
+      - ManufacturingPipeSim -
+      -                      -
+      -  processFeed()       -
+      -  processBend()       -
+      -  executePass()       -
+      -                      -
+      - -------------------- -
+      -                      -
+      - isValidFrame()       -
+      - rebuildRenderData()  -
+      - freezeActiveZone()   -
+      - buildTrace()         -
+      -                      -
+      L¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦¦-
+             ^
+             -
+          PRIVATE
+
+Everything below the line is the internal mechanism.
+The outside world should only
+press the "buttons" at the top.
+
+
+My recommendation (best architecture)
+
+I would not make it a member of ManufacturingPipeSimulator at all.
+
+Instead, put it next to the enum as a free utility function.
+
+For example:
+
+enum class AdditionalPassExecutionResult
+{
+    Validated,
+    Executed,
+    Disabled,
+    UnsupportedProcess,
+    InvalidEntryFrame
+};
+
+const char* additionalPassExecutionResultToString(
+    AdditionalPassExecutionResult result
+);
+
+Then implement it in the .cpp.
+
+Now everyone can use it:
+
+SimulationController
+        -
+        +¦¦ debug
+        -
+HUD ----+¦¦ toString()
+        -
+Logger -+
+        -
+Tests ---
+
+Notice:
+
+It belongs to the RESULT TYPE,
+not to ManufacturingPipeSimulator.
+
+That's exactly the same idea as:
+
+testPlacementPresetToString(...)
+renderModeToString(...)
+bendDirectionToString(...)
+
+Those functions aren't methods of a class—they're 
+utilities associated with an enum.
+
+Rule of thumb
+Does the function operate on the simulator itself?
+
+
+
+exampleExample:
+
+processFeed()
+processBend()
+freezeActiveZone()
+
+it's member of ManufacturingPipeSimulator because it 
+operates on the simulator state.
+
+
+
+Does the function simply convert an enum to text?
+
+
+Free helper function
+
+recomended:
+AdditionalPassExecutionResult
+            -
+            ¡
+additionalPassExecutionResultToString()
+            ^
+            -
+Used by:
+    ? SimulationController
+    ? HUD
+    ? Logger
+    ? Unit tests
+
+    This keeps ManufacturingPipeSimulator focused on simulation,
+    while string conversion stays with the type it describes. 
+    I think this is the cleanest architecture, 
+    especially as your project grows and more
+    systems (HUD, logs, diagnostics, history export) 
+    need to display the same result consistently.
+
+    ==============================
+
+    Phase 7L — Option 3: shared free helper
+
+    Goal:
+
+AdditionalPassExecutionResult
+        ¡
+shared label helper
+        ¡
+HUD / logger / controller / tests
+
+
+====================================
+NO visible in console output for AdditionalPassExecutionResult
+========================================
+This is actually the most important point.
+
+Playback mode has nothing to do with it.
+
+The message is not printed during playback. 
+It is printed only when:
+
+SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
+is executed.
+
+Let's trace it
+
+Current call chain
+AppController
+      ?
+      ?
+rebuildTestManufacturingPlan()
+      ?
+      ?  (only if DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER == true)
+      ?
+SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
+      ?
+      ?
+executeAdditionalFormingPass()
+      ?
+      ?
+std::cout << "[ADDITIONAL PASS RESULT]"
+
+Notice:
+
+Playback
+      ?
+      ??????? NO CONNECTION
+
+
+      The important order is:
+      build plan
+    ?
+set preview plan
+    ?
+build ManufacturingHistory
+    ?
+execute additional-pass placeholder
+    ?
+print/debug history
+
+========================================
+Phase 7M
+Store last additional-pass execution result
+Goal:
+
+SimulationController should keep the latest result
+for HUD, diagnostics, or future execution flow.

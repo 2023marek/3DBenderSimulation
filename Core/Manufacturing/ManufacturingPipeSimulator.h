@@ -9,15 +9,9 @@
 #include "Core/Manufacturing/ManufacturingState.h"
 #include "Core/Manufacturing/RotationKinematicMode.h"
 #include "Core/Forming/AdditionalFormingPass.h"
+#include "Core/Forming/AdditionalPassExecutionResult.h"
                    
-enum class AdditionalPassExecutionResult
-{
-    Validated,
-    Executed,
-    Disabled,
-    UnsupportedProcess,
-    InvalidEntryFrame
-};
+
 class ManufacturingPipeSimulator
 {
 public:
@@ -105,7 +99,10 @@ public:
         ))
         {
             return AdditionalPassExecutionResult::UnsupportedProcess;
+
         }
+
+
         // Future:
         // - validate supported process type
         // - select deformable region
