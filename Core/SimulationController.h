@@ -250,7 +250,8 @@ public:
         }
         void debugExecuteFirstAdditionalPassPlaceholder();
 
-       
+        AdditionalPassExecutionResult
+            getLastAdditionalPassExecutionResult() const;
 private:
     // =====================================================
     // Mode / speed

@@ -5510,3 +5510,18 @@ Goal:
 
 SimulationController should keep the latest result
 for HUD, diagnostics, or future execution flow.
+
+==========================================================
+Phase 7N
+Add getter for last additional-pass execution result
+
+Goal:
+Allow HUD or diagnostics to read the stored result
+without exposing the private member directly.
+
+SimulationController
+    ??? private stored result
+              ?
+             getter
+              ?
+        HUD / diagnostics

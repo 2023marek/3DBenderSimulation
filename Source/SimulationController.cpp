@@ -721,5 +721,11 @@ void SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
         << std::endl;
 }
 
+AdditionalPassExecutionResult
+SimulationController::getLastAdditionalPassExecutionResult() const
+{
+    return lastAdditionalPassExecutionResult;
+}
+
 
 
