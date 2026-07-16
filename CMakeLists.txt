@@ -104,6 +104,7 @@ set(CORE_HEADERS
     Core/Forming/ManufacturingHistoryBuilder.h
     Core/Forming/ManufacturingHistoryDebug.h
     Core/Forming/ManufacturingPlanPreviewModel.h
+    Core/Forming/DeformableRegionSelection.h
     Core/Forming/HelixOperation.h
     Core/Forming/HelixCurveBuilder.h
     Core/Forming/HelixFormingPassBuilder.h

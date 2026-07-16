@@ -10,6 +10,8 @@
 #include "Core/Manufacturing/RotationKinematicMode.h"
 #include "Core/Forming/AdditionalFormingPass.h"
 #include "Core/Forming/AdditionalPassExecutionResult.h"
+#include "Core/Forming/DeformableRegion.h"
+#include "Core/Forming/DeformableRegionSelection.h"
                    
 
 class ManufacturingPipeSimulator
@@ -99,6 +101,16 @@ public:
             return AdditionalPassExecutionResult::InvalidDeformableRegion;
         }
 
+        DeformableRegionSelection selection =
+            selectNodesByArcLengthRange(
+                state.frozenNodes,
+                additionalPass.deformableRegion
+            );
+        if (!selection.valid)
+        {
+            return AdditionalPassExecutionResult::
+                InvalidDeformableRegion;
+        }
         if (!isSupportedAdditionalPassProcess(
             additionalPass.pass.processType
         ))
@@ -534,6 +546,8 @@ public:
     }
 private:
 
+
+
     bool debugActiveWindow =
         false;
     bool debugActiveZoneStep =
@@ -930,7 +944,118 @@ private:
 
 private:
 //Helpers
+    DeformableRegionSelection selectNodesByArcLengthRange(
+        const std::vector<PipeNode>& sourceNodes,
+        const DeformableRegion& region
+    ) const
+    {
+        DeformableRegionSelection result;
 
+        if (!region.isValid())
+            return result;
+
+        if (sourceNodes.size() < 2)
+            return result;
+
+        result.sourceArcLength =
+            calculateNodeListArcLength(
+                sourceNodes
+            );
+
+        // The complete requested region must exist
+        // inside the source manufactured geometry.
+        if (region.startArcLength
+        > result.sourceArcLength
+            || region.endArcLength
+        > result.sourceArcLength)
+        {
+            return result;
+        }
+
+        double cumulativeArcLength =
+            0.0;
+
+        for (size_t i = 0; i < sourceNodes.size(); ++i)
+        {
+            if (i > 0)
+            {
+                cumulativeArcLength +=
+                    distanceBetweenNodes(
+                        sourceNodes[i - 1],
+                        sourceNodes[i]
+                    );
+            }
+
+            const PipeNode& node =
+                sourceNodes[i];
+
+            if (cumulativeArcLength < region.startArcLength)
+            {
+                result.beforeNodes.push_back(
+                    node
+                );
+            }
+            else if (cumulativeArcLength <= region.endArcLength)
+            {
+                result.selectedNodes.push_back(
+                    node
+                );
+            }
+            else
+            {
+                result.afterNodes.push_back(
+                    node
+                );
+            }
+        }
+
+        result.selectedStartArcLength =
+            region.startArcLength;
+
+        result.selectedEndArcLength =
+            region.endArcLength;
+
+        result.valid =
+            !result.selectedNodes.empty();
+
+        return result;
+    }
+
+
+
+    double calculateNodeListArcLength(
+        const std::vector<PipeNode>& nodes
+    ) const
+    {
+        if (nodes.size() < 2)
+            return 0.0;
+
+        double totalLength =
+            0.0;
+
+        for (size_t i = 1; i < nodes.size(); ++i)
+        {
+            totalLength +=
+                distanceBetweenNodes(
+                    nodes[i - 1],
+                    nodes[i]
+                );
+        }
+
+        return totalLength;
+    }
+
+
+
+    double distanceBetweenNodes(
+        const PipeNode& a,
+        const PipeNode& b
+    ) const
+    {
+        return (
+            b.pos - a.pos
+            ).length();
+    }
 
 
     void updateActiveZone(double dA)

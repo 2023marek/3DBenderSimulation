@@ -5705,3 +5705,50 @@ selection coordinates:
 first process target:
     nodes between startArcLength and endArcLength
 No geometry changes yet.
+
+
+buildAdditionalPassPlacementSummaries()
+    = copy/build data only
+
+debugPrintManufacturingHistory()
+    = print data only
+
+    =====================================================
+    Phase 8B
+Select frozen nodes by arc-length range
+
+Main goal:
+frozenNodes
+    ?
+walk cumulative arc length
+    ?
+split into:
+
+beforeRegion
+selectedRegion
+afterRegion
+
+Target:
+frozen pipe:
+
+========|~~~~~~~~~~~~~~~~~~~~|========
+
+
+ before      selected          after
+
+
+ Phase 8B will only select and split existing frozen nodes. 
+ It will not deform or replace them yet.
+
+ frozenNodes:
+
+node 0 ============================================= node N
+        before          selected             after
+          ?                 ?                   ?
+          ?                 ?                   ?
+      [0, start)       [start, end]          (end, total]
+
+      The helper walks along the pipe:
+      node 0 ? node 1 ? node 2 ? ...
+          add segment lengths
+          cumulative arc length grows
