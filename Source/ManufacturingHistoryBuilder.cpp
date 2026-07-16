@@ -104,6 +104,8 @@ void buildManufacturingHistoryFromPlan(
         {
             extra.entryFrame =
                 placementResult.frame;
+            extra.deformableRegion =
+                pass.deformableRegion;
 
             extra.resolvedArcLength =
                 placementResult.arcLength;

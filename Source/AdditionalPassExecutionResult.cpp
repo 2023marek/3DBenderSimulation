@@ -21,6 +21,9 @@ const char* additionalPassExecutionResultToString(
     case  AdditionalPassExecutionResult::InvalidEntryFrame:
         return "InvalidEntryFrame";
 
+    case AdditionalPassExecutionResult::InvalidDeformableRegion:
+        return "InvalidDeformableRegion";
+
     default:
         return "Unknown";
     }

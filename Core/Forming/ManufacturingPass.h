@@ -8,6 +8,7 @@
 #include "Core/Forming/TubeFormingProcessType.h"
 #include "Core/Forming/PassPlacement.h"
 #include "Core/Geometry/Frame.h"
+#include "Core/Forming/DeformableRegion.h"
 
 // =====================================================
 // MANUFACTURING PASS
@@ -66,7 +67,7 @@ struct ManufacturingPass
 
     PipeCurve outputCurve;
 
-
+    DeformableRegion deformableRegion;
 
     // =====================================================
 // RESOLVED START FRAME

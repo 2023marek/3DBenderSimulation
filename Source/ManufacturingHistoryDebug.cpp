@@ -149,6 +149,9 @@ void debugPrintManufacturingHistory(
         << summary.primaryPassCount
         << std::endl;
 
+   
+
+
     for (size_t i = 0; i < summary.primaryPasses.size(); ++i)
     {
         const PrimaryPassSummary& primary =
@@ -189,11 +192,21 @@ void debugPrintManufacturingHistory(
         std::cout << "      resolvedArcLength="
             << extra.resolvedArcLength
             << std::endl;
+        std::cout
+            << "      deformableStart="
+            << extra.deformableStartArcLength
+            << " deformableEnd="
+            << extra.deformableEndArcLength
+            << " deformableLength="
+            << extra.deformableLength
+            << std::endl;
 
         debugPrintVec3("P", extra.entryFrame.P);
         debugPrintVec3("T", extra.entryFrame.T);
         debugPrintVec3("N", extra.entryFrame.N);
         debugPrintVec3("B", extra.entryFrame.B);
+
+        
     }
    
 }

@@ -369,28 +369,39 @@ void AppController::toggleSimulationMode()
     }
 
     ManufacturingPlan AppController::buildTestManufacturingPlan(
-        const std::vector<Operation>& ops) const
+        const std::vector<Operation>& ops
+    ) const
     {
-        
+        // =====================================================
+        // PRIMARY ROTARY-DRAW PASS
+        // =====================================================
+
         ManufacturingPass rotaryPass =
             RotaryDrawPassBuilder::buildPass(
                 ops,
                 "Rotary draw bending pass"
             );
 
-        
-      
-
+        // =====================================================
+        // ADDITIONAL HELIX-FORMING PASS
+        // =====================================================
 
         HelixOperation helixPassOp;
 
         helixPassOp.inputMode =
             HelixOperation::InputMode::RadiusPitch;
 
-        helixPassOp.length = TEST_HELIX_LENGTH;
-        helixPassOp.helixRadius = TEST_HELIX_RADIUS;
-        helixPassOp.pitch = TEST_HELIX_PITCH;
-        helixPassOp.feedSpeed = TEST_HELIX_FEED_SPEED;
+        helixPassOp.length =
+            TEST_HELIX_LENGTH;
+
+        helixPassOp.helixRadius =
+            TEST_HELIX_RADIUS;
+
+        helixPassOp.pitch =
+            TEST_HELIX_PITCH;
+
+        helixPassOp.feedSpeed =
+            TEST_HELIX_FEED_SPEED;
 
         ManufacturingPass helixPass =
             HelixFormingPassBuilder::buildPass(
@@ -398,14 +409,26 @@ void AppController::toggleSimulationMode()
                 "Heating element helix pass"
             );
 
-       helixPass.placement =
-           buildTestPlacement(
-               activePlacementPreset
-           );
-            
+        // Where the additional pass enters the previously
+        // manufactured pipe.
+        helixPass.placement =
+            buildTestPlacement(
+                activePlacementPreset
+            );
 
-       
-    
+        // Physical arc-length range that may be deformed by
+        // the additional helix-forming pass.
+        helixPass.deformableRegion.startArcLength =
+            TEST_INSERT_ARC_LENGTH;
+
+        helixPass.deformableRegion.endArcLength =
+            TEST_INSERT_ARC_LENGTH
+            + TEST_HELIX_LENGTH;
+
+        // =====================================================
+        // MANUFACTURING PLAN
+        // =====================================================
+
         ManufacturingPlan plan;
 
         plan.addPass(
@@ -417,10 +440,6 @@ void AppController::toggleSimulationMode()
         );
 
         return plan;
-
-
-
-
     }
 
     void AppController::configureInitialMode()
@@ -535,7 +554,7 @@ void AppController::toggleSimulationMode()
 
     void AppController::rebuildTestManufacturingPlan()
     {
-       
+        
 
         ManufacturingPlan plan =
             buildTestManufacturingPlan(

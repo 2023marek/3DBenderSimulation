@@ -94,14 +94,19 @@ public:
             return AdditionalPassExecutionResult::InvalidEntryFrame;
         }
 
+        if (!additionalPass.deformableRegion.isValid())
+        {
+            return AdditionalPassExecutionResult::InvalidDeformableRegion;
+        }
+
         if (!isSupportedAdditionalPassProcess(
             additionalPass.pass.processType
         ))
         {
             return AdditionalPassExecutionResult::UnsupportedProcess;
-
         }
 
+       
 
         // Future:
         // - validate supported process type

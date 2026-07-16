@@ -35,6 +35,16 @@ struct AdditionalPassPlacementSummary
     double resolvedArcLength = 0.0;
 
     Frame entryFrame;
+
+    double deformableStartArcLength =
+        0.0;
+
+    double deformableEndArcLength =
+        0.0;
+
+    double deformableLength =
+        0.0;
+
 };
 
 struct ManufacturingHistorySummary

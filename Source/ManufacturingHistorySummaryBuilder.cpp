@@ -1,6 +1,7 @@
 #include "Core/Forming/ManufacturingHistorySummaryBuilder.h"
 #include "Core/Forming/FormingProcessLabels.h"
 #include "Core/Forming/PassPlacementLabels.h"
+#include "Core/Forming/ManufacturingHistoryDebug.h"
 #include <sstream>
 
 namespace
@@ -89,12 +90,25 @@ buildAdditionalPassPlacementSummaries(
         summary.resolvedArcLength =
             extra.resolvedArcLength;
 
+        summary.deformableStartArcLength =
+            extra.deformableRegion.startArcLength;
+
+
+        summary.deformableEndArcLength =
+            extra.deformableRegion.endArcLength;
+
+        summary.deformableLength =
+            extra.deformableRegion.length();
+
+
         summary.entryFrame =
             extra.entryFrame;
 
+       
         summaries.push_back(
             summary
         );
+
     }
 
     return summaries;

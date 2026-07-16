@@ -5575,3 +5575,133 @@ HUD Renderer
         ?
         ?
 Additional pass: Validated
+
+PREVIEW SIDE                     REAL EXECUTION SIDE
+
+plan preview nodes               AdditionalFormingPass
+curve splicing                           ?
+overlays                                 ?
+      ?                         ManufacturingPipeSimulator
+      ?                                   ?
+      ????? stay separate                 ?
+                                  ManufacturingState
+
+=======================================
+Segment 8
+First real additional-pass geometry execution
+
+Starting phase:
+Phase 8A
+Define deformable region selection
+
+Define which part of already manufactured geometry
+may be modified by an AdditionalFormingPass.
+
+Current state:
+frozenNodes
+    = complete manufactured pipe geometry
+
+For multi-pass forming, we must not automatically deform all nodes.
+
+We need a selected region:
+
+before region
+deformable region
+after region
+ASCII pipeflow:
+
+frozen pipe:
+
+[0] ======== [start] ~~~~~~~~~~~~~ [end] ======== [last]
+              ?                         ?
+              ??? deformable region ?????
+
+During additional pass:
+
+before region
+    stays unchanged
+
+selected region
+    is transformed/deformed
+
+after region
+    may move rigidly or remain fixed,
+    depending on the machine process
+
+
+struct DeformableRegion
+{
+    double startArcLength = 0.0;
+    double endArcLength = 0.0;
+};
+
+Why arc length first:
+
+? independent from sampling density
+? works if node count changes
+? natural for manufacturing dimensions
+? compatible with PassPlacementResolver concepts
+
+Do not use only node indices as permanent process data:
+
+nodeIndex 404
+
+because after geometry rebuilding:
+
+node 404 may represent a different physical location
+
+Better:
+
+startArcLength = 202.0 mm
+endArcLength   = 402.0 mm
+Relation to entryFrame
+
+The additional pass already has:
+
+entryFrame
+
+That tells us where the pass begins spatially.
+
+The deformable region tells us:
+
+how much pipe after that point belongs to the pass
+
+ASCII:
+
+AdditionalFormingPass.entryFrame
+              ?
+              ?
+pipe =========|~~~~~~~~~~~~~~~~~~~~~~~~=========
+              <--- deformable length --->
+
+uture structure
+
+Eventually AdditionalFormingPass may contain:
+
+Frame entryFrame;
+
+double deformableStartArcLength = 0.0;
+double deformableLength = 0.0;
+
+or a separate object:
+
+DeformableRegion deformableRegion;
+I recommend the separate object because other 
+processes may need more selection modes later:
+ArcLengthRange
+NodeRange
+WholePipe
+RegionAroundFrame
+Phase 8A conclusion
+
+For the first real implementation:
+
+source geometry:
+    ManufacturingState::frozenNodes
+
+selection coordinates:
+    arc-length range
+
+first process target:
+    nodes between startArcLength and endArcLength
+No geometry changes yet.

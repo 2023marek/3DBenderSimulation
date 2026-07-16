@@ -6,7 +6,9 @@ enum class AdditionalPassExecutionResult
     Executed,
     Disabled,
     UnsupportedProcess,
-    InvalidEntryFrame
+    InvalidEntryFrame,
+    InvalidDeformableRegion
+
 };
 
 const char* additionalPassExecutionResultToString(

@@ -5,6 +5,7 @@
 #include "Core/Forming/ManufacturingPass.h"
 #include "Core/Geometry/Frame.h"
 #include "Core/Forming/PassPlacement.h"
+#include "Core/Forming/DeformableRegion.h"
 
 // =====================================================
 // ADDITIONAL FORMING PASS
@@ -51,4 +52,5 @@ struct AdditionalFormingPass
     double resolvedArcLength = 0.0;
 
     bool hasResolvedPlacement = false;
+    DeformableRegion deformableRegion;
 };

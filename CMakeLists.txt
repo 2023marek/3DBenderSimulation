@@ -94,6 +94,7 @@ set(CORE_HEADERS
     Core/Forming/TubeFormingProcessType.h
     Core/Forming/FormingOperation.h
     Core/Forming/FormingProcessLabels.h
+    Core/Forming/DeformableRegion.h
     Core/Forming/ManufacturingPass.h
     Core/Forming/ManufacturingPlan.h
     Core/Forming/AdditionalFormingPass.h
