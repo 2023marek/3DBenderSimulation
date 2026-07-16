@@ -10,6 +10,7 @@
 #include <sstream>
 #include <iomanip>
 #include <cmath>
+#include "Core/Forming/AdditionalPassExecutionResult.h"
 unsigned int loadFontTexture(const std::string& path);
 // ===== ADD THIS NEAR TOP OF HUDPanel.cpp =====
 // Add at the top of the file (or in an appropriate header)
@@ -207,6 +208,25 @@ void HUDPanel::render()
         glm::vec4(0.8f, 0.8f, 1.0f, 1.0f)
     );
 
+    if (data.hasAdditionalPassResult)
+    {
+        std::string additionalPassText =
+            "ADDITIONAL PASS: "
+            + std::string(
+                additionalPassExecutionResultToString(
+                    data.additionalPassResult
+                )
+            );
+
+        drawText(
+            textX,
+            textY + lineH * 11.5,
+            additionalPassText,
+            glm::vec4(1.0f, 0.8f, 0.3f, 1.0f)
+        );
+    }
+
+
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
 }
@@ -263,6 +283,7 @@ void HUDPanel::drawText(float x, float y, const std::string& text, glm::vec4 col
         drawCharacter(cursor, y, c, color);
         cursor += it->second.xAdvance * scale;
     }
+
 }
 void HUDPanel::drawRect(float x, float y, float width, float height, glm::vec4 color)
 {

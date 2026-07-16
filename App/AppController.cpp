@@ -122,7 +122,15 @@ HUDData AppController::buildHUDData() const
     data.feeding = state.feeding;
     data.rotating = state.rotating;
     data.bending = state.bending;
-    
+
+    data.hasAdditionalPassResult =
+        DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER;
+
+    if (data.hasAdditionalPassResult)
+    {
+        data.additionalPassResult =
+            sim.getLastAdditionalPassExecutionResult();
+    }
 
     data.machineStateName = "IDLE";
 
@@ -527,9 +535,7 @@ void AppController::toggleSimulationMode()
 
     void AppController::rebuildTestManufacturingPlan()
     {
-        std::cout
-            << "[REBUILD TEST PLAN]"
-            << std::endl;
+       
 
         ManufacturingPlan plan =
             buildTestManufacturingPlan(

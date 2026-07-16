@@ -695,10 +695,7 @@ SimulationController::getLastOperationStopReason() const
 
 void SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
 {
-    std::cout
-        << "[ADDITIONAL PASSES] "
-        << manufacturingHistory.additionalPasses.size()
-        << std::endl;
+    
 
     if (manufacturingHistory.additionalPasses.empty())
     {
@@ -713,12 +710,7 @@ void SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
             additionalPass
         );
 
-    std::cout
-        << "[ADDITIONAL PASS RESULT] "
-        << additionalPassExecutionResultToString(
-            lastAdditionalPassExecutionResult
-        )
-        << std::endl;
+   
 }
 
 AdditionalPassExecutionResult

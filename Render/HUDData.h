@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <string>
-
+#include "Core/Forming/AdditionalPassExecutionResult.h"
 struct HUDData
 {
     // ===== Raw state =====
@@ -34,6 +34,12 @@ struct HUDData
     bool plannedPreviewDebugVisible = true;
     // ===== Geometry =====
     size_t nodeCount = 0;
+
+    bool hasAdditionalPassResult =
+        false;
+
+    AdditionalPassExecutionResult additionalPassResult =   AdditionalPassExecutionResult::Disabled;
+
 
     // ===== Display-ready =====
     std::string status = "IDLE";

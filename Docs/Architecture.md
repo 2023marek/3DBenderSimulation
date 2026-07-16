@@ -5525,3 +5525,53 @@ SimulationController
              getter
               ?
         HUD / diagnostics
+=========================================================
+Phase 7O
+Expose additional-pass result in HUD data
+Goal:
+Move the stored result one step closer to the UI
+without letting HUD access SimulationController internals directly.
+Target flow:
+ManufacturingPipeSimulator
+        ?
+AdditionalPassExecutionResult
+        ?
+SimulationController stores result
+        ?
+AppController builds HUDData
+        ?
+HUD displays label
+
+
+===================================================
+Phase 7Q.
+We're not designing a new HUD element—we're 
+just exposing information
+that already exists.
+
+Goal:   
+ManufacturingPipeSimulator
+        ?
+        ?
+AdditionalPassExecutionResult
+        ?
+        ?
+SimulationController
+        ?
+        ?
+HUDData
+
+After this phase:
+ManufacturingPipeSimulator
+        ?
+        ?
+SimulationController
+        ?
+        ?
+HUDData
+        ?
+        ?
+HUD Renderer
+        ?
+        ?
+Additional pass: Validated
