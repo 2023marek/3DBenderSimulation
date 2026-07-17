@@ -69,21 +69,6 @@ public:
         const AdditionalFormingPass& additionalPass
     )
     {
-        // =====================================================
-        // ADDITIONAL FORMING PASS EXECUTION
-        //
-        // Current stage:
-        //     validation placeholder only.
-        //
-        // No manufacturing geometry is modified yet.
-        //
-        // Validation order:
-        //     1. pass enabled
-        //     2. entry frame valid
-        //     3. future process support validation
-        //     4. future real execution
-        // =====================================================
-
         if (!additionalPass.enabled)
         {
             return AdditionalPassExecutionResult::Disabled;
@@ -98,26 +83,21 @@ public:
 
         if (!additionalPass.deformableRegion.isValid())
         {
-            return AdditionalPassExecutionResult::InvalidDeformableRegion;
-        }
-
-        DeformableRegionSelection selection =
-            selectNodesByArcLengthRange(
-                state.frozenNodes,
-                additionalPass.deformableRegion
-            );
-        if (!selection.valid)
-        {
             return AdditionalPassExecutionResult::
                 InvalidDeformableRegion;
         }
+
         if (!isSupportedAdditionalPassProcess(
             additionalPass.pass.processType
         ))
         {
-            return AdditionalPassExecutionResult::UnsupportedProcess;
+            return AdditionalPassExecutionResult::
+                UnsupportedProcess;
         }
 
+        return AdditionalPassExecutionResult::Validated;
+    }
+        
        
 
         // Future:
@@ -127,8 +107,7 @@ public:
         // - execute real forming operation
         // - update ManufacturingState
 
-        return AdditionalPassExecutionResult::Validated;
-    }
+    
 
 
     double getIncomingStockRemainingLength() const
@@ -544,6 +523,17 @@ public:
         setDebugSnapshot(enabled);
        
     }
+
+    DeformableRegionSelection selectDeformableRegion(
+        const DeformableRegion& region
+    ) const
+    {
+        return selectNodesByArcLengthRange(
+            state.frozenNodes,
+            region
+        );
+    }
+
 private:
 
 

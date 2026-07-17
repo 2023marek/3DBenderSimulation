@@ -5752,3 +5752,27 @@ node 0 ============================================= node N
       node 0 ? node 1 ? node 2 ? ...
           add segment lengths
           cumulative arc length grows
+
+
+Important timing rule
+
+Selection must happen only after real manufactured geometry exists:
+
+startup
+    frozenNodes empty
+    selection impossible
+
+after primary FEED/BEND/FREEZE
+    frozenNodes populated
+    selection possible
+
+ASCII:
+Primary pass playback
+        ?
+freezeActiveZone()
+        ?
+frozenNodes populated
+        ?
+selectDeformableRegion()
+        ?
+before / selected / after

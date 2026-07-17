@@ -695,8 +695,6 @@ SimulationController::getLastOperationStopReason() const
 
 void SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
 {
-    
-
     if (manufacturingHistory.additionalPasses.empty())
     {
         return;
@@ -705,13 +703,30 @@ void SimulationController::debugExecuteFirstAdditionalPassPlaceholder()
     const AdditionalFormingPass& additionalPass =
         manufacturingHistory.additionalPasses.front();
 
+    std::cout
+        << "[ADDITIONAL REGION CHECK] start="
+        << additionalPass.deformableRegion.startArcLength
+        << " end="
+        << additionalPass.deformableRegion.endArcLength
+        << " valid="
+        << additionalPass.deformableRegion.isValid()
+        << std::endl;
+
     lastAdditionalPassExecutionResult =
         pipe().executeAdditionalFormingPass(
             additionalPass
         );
 
-   
+    std::cout
+        << "[ADDITIONAL RESULT CHECK] "
+        << additionalPassExecutionResultToString(
+            lastAdditionalPassExecutionResult
+        )
+        << std::endl;
 }
+
+
+
 
 AdditionalPassExecutionResult
 SimulationController::getLastAdditionalPassExecutionResult() const

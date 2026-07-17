@@ -50,6 +50,7 @@ void buildManufacturingHistoryFromPlan(
     ManufacturingHistory& history
 )
 {
+    
     history.clear();
 
     if (!plan.passes.empty())

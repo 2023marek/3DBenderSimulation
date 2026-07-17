@@ -578,6 +578,7 @@ void AppController::toggleSimulationMode()
 
         // ManufacturingHistory is fully populated here.
         // The additional-pass placeholder must run only now.
+        
         if (DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER)
         {
             sim.debugExecuteFirstAdditionalPassPlaceholder();
