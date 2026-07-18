@@ -5776,3 +5776,98 @@ frozenNodes populated
 selectDeformableRegion()
         ?
 before / selected / after
+
+
+=====================================================
+Phase 8C
+Test deformable-region selection after frozen geometry exists
+Important timing:
+startup:
+frozenNodes = empty
+do not test selection
+
+after first bend freeze:
+frozenNodes populated
+now call selectDeformableRegion(...)
+
+Target debug output:
+[DEFORMABLE REGION SELECTION]
+sourceNodes=...
+sourceArcLength=...
+beforeNodes=...
+selectedNodes=...
+afterNodes=...
+valid=1
+ASCII:
+primary pass completes
+        ?
+frozenNodes created
+        ?
+select [202 mm, 402 mm]
+        ?
+before | selected | after
+
+==================================================
+Phase 8D.
+
+Goal:
+
+Compare requested deformable region with the real
+primary-pass output currently available.
+
+Current values:
+
+frozen length       ? 198 mm
+positioned straight = 102 mm
+available output    ? 300 mm
+
+requested end       = 402 mm
+missing length      ? 102 mm
+
+ASCII:
+
+primary output:
+
+0 ==================== 198 ---------- 300
+      frozenNodes          positionedStraight
+
+requested region:
+
+                      202 ~~~~~~~~~~~~~~~~~ 402
+                                      exceeds output
+
+ double calculateAvailablePrimaryOutputLength() const
+{
+    double frozenLength =
+        calculateNodeListArcLength(
+            state.frozenNodes
+        );
+
+    return frozenLength
+        + state.positionedStraight.length;
+}
+
+This helper treats the primary output as:
+
+frozen geometry + remaining positioned straight
+
+
+Add public getter
+
+In the public section:
+
+double getAvailablePrimaryOutputLength() const
+{
+    return calculateAvailablePrimaryOutputLength();
+}
+
+Why public:
+
+SimulationController needs to validate
+the requested additio
+========================================================
+Phase 8E
+Increase test stock/output length for the 200 mm helix region
+
+the source should be longer than 402 mm. Add some downstream margin, 
+for example

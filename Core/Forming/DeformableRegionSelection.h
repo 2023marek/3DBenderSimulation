@@ -40,6 +40,17 @@ struct DeformableRegionSelection
 
     bool valid =
         false;
+    double availableSourceLength =
+        0.0;
+
+    double requiredEndArcLength =
+        0.0;
+
+    double missingLength =
+        0.0;
+
+    bool fitsAvailableLength =
+        false;
 
     void clear()
     {
@@ -52,5 +63,10 @@ struct DeformableRegionSelection
         selectedEndArcLength = 0.0;
 
         valid = false;
+
+        availableSourceLength = 0.0;
+        requiredEndArcLength = 0.0;
+        missingLength = 0.0;
+        fitsAvailableLength = false;
     }
 };

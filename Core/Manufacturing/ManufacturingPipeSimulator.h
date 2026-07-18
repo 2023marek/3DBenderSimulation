@@ -534,6 +534,12 @@ public:
         );
     }
 
+    //Getter
+    double getAvailablePrimaryOutputLength() const
+    {
+        return calculateAvailablePrimaryOutputLength();
+    }
+
 private:
 
 
@@ -559,7 +565,16 @@ private:
 
 //helper
 
+    double calculateAvailablePrimaryOutputLength() const
+    {
+        double frozenLength =
+            calculateNodeListArcLength(
+                state.frozenNodes
+            );
 
+        return frozenLength
+            + state.positionedStraight.length;
+    }
     // =====================================================
 // BEND START FRAME OWNERSHIP
 //

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <vector>
-
+#include <algorithm>
 #include "OperationQueue.h"
 #include "Core/Machine/MachineSystem.h"
 #include "Core/Manufacturing/RotationKinematicMode.h"
@@ -234,7 +234,14 @@ public:
     {
         return machineSystem.getRenderData();
     }
-
+	//Setters
+    void setDebugDeformableRegionSelection(
+        bool enabled
+    )
+    {
+        debugDeformableRegionSelection =
+            enabled;
+    }
     public:
         
         //HELPER===========================
@@ -252,6 +259,8 @@ public:
 
         AdditionalPassExecutionResult
             getLastAdditionalPassExecutionResult() const;
+
+        void debugValidateFirstAdditionalPassRegionLength();
 private:
     // =====================================================
     // Mode / speed
@@ -279,6 +288,8 @@ private:
     double accumulatedAngle = 0.0;
     double accumulatedRotation = 0.0;
     bool debugOperationStop =  false;
+    bool debugDeformableRegionSelection =
+        false;
     OperationStopReason lastOperationStopReason =
         OperationStopReason::None;
 
@@ -300,7 +311,7 @@ private:
     // =====================================================
     // Internal execution
     // =====================================================
-
+    void debugSelectFirstAdditionalPassRegion();
     void executeOperation(double deltaTime);
 
     void executeFeed(double distance);

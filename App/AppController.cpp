@@ -28,9 +28,10 @@ namespace
     constexpr double TEST_FEED_1_LENGTH = 198.0;
     constexpr double TEST_BEND_RADIUS = 20.0;
     constexpr double TEST_BEND_ANGLE = PI / 2.0;
-    constexpr double TEST_FEED_2_LENGTH = 110.0;
+    constexpr double TEST_FEED_2_LENGTH =
+        260.0;
 
-    constexpr double TEST_INCOMING_STOCK_LENGTH = 300.0;
+    constexpr double TEST_INCOMING_STOCK_LENGTH = 600.0;
 
     constexpr double TEST_HELIX_LENGTH = 200.0;
     constexpr double TEST_HELIX_RADIUS = 10.0;
@@ -56,7 +57,13 @@ namespace
         false;
     constexpr bool DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER =
         true;
+
+    constexpr bool DEBUG_DEFORMABLE_REGION_SELECTION =
+        true;
+    
 }
+
+
 
 
 
@@ -694,20 +701,18 @@ void AppController::toggleSimulationMode()
         mfgPipe.setDebugSnapshot(
             DEBUG_MFG_SNAPSHOT
         );
-
-        sim.setDebugOperationStop(
-            DEBUG_OPERATION_STOP
-        );
     }
 
-   
     void AppController::configureControllerDebug()
     {
         sim.setDebugOperationStop(
             DEBUG_OPERATION_STOP
         );
+
+        sim.setDebugDeformableRegionSelection(
+            DEBUG_DEFORMABLE_REGION_SELECTION
+        );
     }
-    
 
   
 

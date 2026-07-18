@@ -1,6 +1,7 @@
 #include "Core/SimulationController.h"
 #include <iostream>
 #include <cmath>
+#include "Core/Forming/DeformableRegionSelection.h"
 
 #ifndef PI
 #define PI 3.14159265358979323846
@@ -454,6 +455,10 @@ void SimulationController::advanceToNextOperation()
             MachineRuntimeState::Status::COMPLETE
         );
 
+        debugValidateFirstAdditionalPassRegionLength();
+
+        debugSelectFirstAdditionalPassRegion(); 
+
         std::cout << "Program COMPLETED!\n";
     }
 }
@@ -732,6 +737,78 @@ AdditionalPassExecutionResult
 SimulationController::getLastAdditionalPassExecutionResult() const
 {
     return lastAdditionalPassExecutionResult;
+}
+
+
+void SimulationController::debugSelectFirstAdditionalPassRegion()
+{
+    if (!debugDeformableRegionSelection)
+        return;
+
+    if (manufacturingHistory.additionalPasses.empty())
+        return;
+
+    const AdditionalFormingPass& additionalPass =
+        manufacturingHistory.additionalPasses.front();
+
+    DeformableRegionSelection selection =
+        pipe().selectDeformableRegion(
+            additionalPass.deformableRegion
+        );
+
+    std::cout
+        << "[DEFORMABLE REGION SELECTION]"
+        << " sourceArcLength="
+        << selection.sourceArcLength
+        << " beforeNodes="
+        << selection.beforeNodes.size()
+        << " selectedNodes="
+        << selection.selectedNodes.size()
+        << " afterNodes="
+        << selection.afterNodes.size()
+        << " valid="
+        << selection.valid
+        << std::endl;
+}
+
+void SimulationController::
+debugValidateFirstAdditionalPassRegionLength()
+{
+    if (!debugDeformableRegionSelection)
+        return;
+
+    if (manufacturingHistory.additionalPasses.empty())
+        return;
+
+    const AdditionalFormingPass& additionalPass =
+        manufacturingHistory.additionalPasses.front();
+
+    double availableLength =
+        pipe().getAvailablePrimaryOutputLength();
+
+    double requiredEnd =
+        additionalPass.deformableRegion.endArcLength;
+
+    double missingLength =
+        std::max(
+            0.0,
+            requiredEnd - availableLength
+        );
+
+    bool fits =
+        requiredEnd <= availableLength + 1e-9;
+
+    std::cout
+        << "[DEFORMABLE REGION LENGTH CHECK]"
+        << " availableLength="
+        << availableLength
+        << " requiredEnd="
+        << requiredEnd
+        << " missingLength="
+        << missingLength
+        << " fits="
+        << fits
+        << std::endl;
 }
 
 
