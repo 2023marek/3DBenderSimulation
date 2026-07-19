@@ -5871,3 +5871,100 @@ Increase test stock/output length for the 200 mm helix region
 
 the source should be longer than 402 mm. Add some downstream margin, 
 for example
+The length validation now passes:
+
+availableLength=457.999
+requiredEnd=402
+fits=1
+
+But selection still fails because it reads only:
+
+state.frozenNodes
+
+and those represent only:
+
+sourceArcLength=197.999
+
+The remaining primary output is still stored as:
+
+state.positionedStraight.length ? 260 mm
+state.positionedStraight.nodes ? 521 nodes
+
+So the complete output is:
+
+frozenNodes       ? 198 mm
+positionedStraight ? 260 mm
+total              ? 458 mm
+
+ASCII:
+
+frozenNodes:
+0 ==================== 198
+
+positionedStraight:
+                      198 ---------------------- 458
+
+requested region:
+                          202 ~~~~~~~~~~~~~ 402
+
+The requested region lies almost entirely in positionedStraight, so selecting only from frozenNodes must return invalid.
+
+Next phase
+Phase 8F
+Build complete primary-output node list for selection
+
+Goal:
+
+completePrimaryNodes =
+    frozenNodes
+    + positionedStraight nodes
+
+Then call:
+
+selectNodesByArcLengthRange(
+    completePrimaryNodes,
+    region
+);
+
+One important detail: positionedStraight.nodes is generated
+during reconstructVisiblePipe(), but your selection currently
+runs before the final reconstruction in update().
+
+So the safer implementation should build positioned-straight
+nodes directly from state, rather than depend on render cache timing.
+
+Target helper:
+
+std::vector<PipeNode> buildCompletePrimaryOutputNodes() const;
+
+This helper should:
+
+1. copy frozenNodes
+2. generate current positioned-straight nodes
+3. append without duplicate boundary nodes
+4. return one process-aware source list
+
+Then the selection source length should become approximately:
+
+457.999
+
+and selection should become:
+
+beforeNodes > 0
+selectedNodes > 0
+afterNodes > 0
+valid=1
+==========================================
+After the second FEED, the newly positioned straight starts at the machine entry, 
+while the previously frozen body has been pushed downstream.
+
+machine entry
+    ?
+    ?
+0 -------- positioned straight -------- 260 ===== frozen body ===== 458
+
+completePrimaryOutputNodes:
+
+[positioned 0...260] + [frozen 260...458]
+             ?
+             ??? duplicate joint removed

@@ -524,15 +524,26 @@ public:
        
     }
 
+
+
     DeformableRegionSelection selectDeformableRegion(
         const DeformableRegion& region
     ) const
     {
+        std::vector<PipeNode> sourceNodes =
+            buildCompletePrimaryOutputNodes();
+
         return selectNodesByArcLengthRange(
-            state.frozenNodes,
+            sourceNodes,
             region
         );
     }
+
+
+
+	//Helper
+   
+
 
     //Getter
     double getAvailablePrimaryOutputLength() const
@@ -563,17 +574,127 @@ private:
 
     bool debugSnapshot = false;
 
+//Helper
+    void appendNodeNoDuplicate(
+        std::vector<PipeNode>& dst,
+        const PipeNode& node
+    ) const
+    {
+        if (!dst.empty()
+            && nearlySamePoint(
+                dst.back(),
+                node
+            ))
+        {
+            return;
+        }
+
+        dst.push_back(
+            node
+        );
+    }
+//Helper
+    std::vector<PipeNode>
+        buildCompletePrimaryOutputNodes() const
+    {
+        std::vector<PipeNode> completeNodes;
+
+        // The currently positioned straight section is closest
+        // to the machine entry.
+        std::vector<PipeNode> positionedNodes =
+            buildCurrentPositionedStraightNodes();
+
+        for (const PipeNode& node : positionedNodes)
+        {
+            appendNodeNoDuplicate(
+                completeNodes,
+                node
+            );
+        }
+
+        // Previously formed/frozen geometry follows downstream.
+        for (const PipeNode& node : state.frozenNodes)
+        {
+            appendNodeNoDuplicate(
+                completeNodes,
+                node
+            );
+        }
+
+        return completeNodes;
+    }
+
+
+
 //helper
+    std::vector<PipeNode> buildCurrentPositionedStraightNodes() const
+    {
+        std::vector<PipeNode> result;
+
+        if (state.positionedStraight.length <= 0.0)
+            return result;
+
+        if (ds <= 1e-9)
+            return result;
+
+        Frame startFrame =
+            getPositionedStraightStartFrame();
+
+        int steps =
+            std::max(
+                1,
+                static_cast<int>(
+                    std::ceil(
+                        state.positionedStraight.length / ds
+                    )
+                    )
+            );
+
+        double stepLength =
+            state.positionedStraight.length
+            / static_cast<double>(steps);
+
+        Vec3D direction =
+            startFrame.T.normalized();
+
+        for (int i = 0; i <= steps; ++i)
+        {
+            double arcDistance =
+                stepLength
+                * static_cast<double>(i);
+
+            PipeNode node;
+
+            node.pos =
+                startFrame.P
+                + direction * arcDistance;
+
+            node.T = startFrame.T;
+            node.N = startFrame.N;
+            node.B = startFrame.B;
+
+            result.push_back(
+                node
+            );
+        }
+
+        return result;
+    }
+
+
+
+    //helper
+ 
+
 
     double calculateAvailablePrimaryOutputLength() const
     {
-        double frozenLength =
-            calculateNodeListArcLength(
-                state.frozenNodes
-            );
+        std::vector<PipeNode> completeNodes =
+            buildCompletePrimaryOutputNodes();
 
-        return frozenLength
-            + state.positionedStraight.length;
+        return calculateNodeListArcLength(
+            completeNodes
+        );
     }
     // =====================================================
 // BEND START FRAME OWNERSHIP
