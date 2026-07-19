@@ -269,8 +269,17 @@ void AppController::handleAction(UserAction action)
         break;
 
     case UserAction::Reset:
+    {
         sim.reset();
+
+        sim.getManufacturingPipe().setIncomingStockLength(
+            TEST_INCOMING_STOCK_LENGTH
+        );
+
+        rebuildTestManufacturingPlan();
+
         break;
+    }
 
     case UserAction::Step:
         sim.step();
@@ -293,6 +302,9 @@ void AppController::handleAction(UserAction action)
 
     case UserAction::ToggleExplicitAttachMode:
         toggleExplicitAttachMode();
+        break;
+    case UserAction::ToggleDeformableRegionOverlay:
+        toggleDeformableRegionOverlay();
         break;
 
     }
@@ -714,5 +726,8 @@ void AppController::toggleSimulationMode()
         );
     }
 
-  
-
+    const DeformableRegionSelection&
+        AppController::getLastDeformableRegionSelection() const
+    {
+        return sim.getLastDeformableRegionSelection();
+    }

@@ -125,6 +125,19 @@ namespace
     const glm::vec3 DEFAULT_PIPE_COLOR =
         glm::vec3(0.9f, 0.9f, 0.3f);
 
+    constexpr glm::vec3 DEFORMABLE_REGION_OVERLAY_COLOR =
+        glm::vec3(
+            1.0f,
+            0.2f,
+            0.8f
+        );
+
+    constexpr float DEFORMABLE_REGION_LINE_WIDTH =
+        6.0f;
+
+    constexpr double DEFORMABLE_REGION_PIPE_RADIUS =
+        5.8;
+
 const glm::vec3 CAD_PIPE_COLOR =
 DEFAULT_PIPE_COLOR;
 
@@ -1067,7 +1080,7 @@ void GLView::drawManufacturingPlayback()
     const ManufacturingPipeSimulator& mfgPipe =
         app->getManufacturingPipe();
 
-    const auto& data =
+    const ManufacturingRenderData& data =
         mfgPipe.getManufacturingRenderData();
 
     drawManufacturingPlaybackPipe(
@@ -1277,8 +1290,79 @@ void GLView::drawManufacturingPlaybackPipe(
             data
         );
     }
+
+    if (app
+        && app->isDeformableRegionOverlayVisible())
+    {
+        const DeformableRegionSelection& selection =
+            app->getLastDeformableRegionSelection();
+
+        drawDeformableRegionSelectionOverlay(
+            selection
+        );
+    }
 }
 
+
+void GLView::drawDeformableRegionSelectionOverlay(
+    const DeformableRegionSelection& selection
+)
+{
+    if (!selection.valid)
+        return;
+
+    if (selection.selectedNodes.size() < 2)
+        return;
+
+    shader->setVec3(
+        "pipeColor",
+        DEFORMABLE_REGION_OVERLAY_COLOR
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        pipeRenderer.setMode(
+            RenderMode::LINE
+        );
+
+        pipeRenderer.uploadLine(
+            nodesToFloatLine(
+                selection.selectedNodes
+            )
+        );
+
+        glLineWidth(
+            DEFORMABLE_REGION_LINE_WIDTH
+        );
+
+        pipeRenderer.draw();
+
+        // Overlay upload replaced the main line buffer.
+        // Restore it for the next frame.
+        uploadPipeGeometry();
+
+        glLineWidth(
+            MANUFACTURING_LINE_WIDTH
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawTubeZone(
+            selection.selectedNodes,
+            DEFORMABLE_REGION_PIPE_RADIUS,
+            MANUFACTURING_PIPE_RADIAL_SEGMENTS
+        );
+    }
+
+    pipeRenderer.setMode(
+        renderMode
+    );
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
 
 
 

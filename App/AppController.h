@@ -15,6 +15,7 @@
 #include "Core/Forming/ManufacturingPlan.h"
 #include "Core/Forming/PassPlacement.h"
 #include "Core/Forming/ManufacturingHistory.h"
+#include "Core/Forming/DeformableRegionSelection.h"
 
 
 class AppController
@@ -188,8 +189,25 @@ public:
     
      void togglePlacementPreset();
 
-private:
 
+     //Getter
+
+     const DeformableRegionSelection&
+         getLastDeformableRegionSelection() const;
+
+     bool isDeformableRegionOverlayVisible() const
+     {
+         return deformableRegionOverlayVisible;
+     }
+
+     void toggleDeformableRegionOverlay()
+     {
+         deformableRegionOverlayVisible =
+             !deformableRegionOverlayVisible;
+     }
+
+private:
+    
 
     RenderMode renderMode = RenderMode::LINE;
     SimulationController sim;
@@ -204,6 +222,7 @@ private:
     bool showInsertionFrame = true;
     bool showTransformedInsertOverlay = false;
     bool plannedPreviewDebugVisible = true;
+    bool deformableRegionOverlayVisible =        true;
     void configureControllerDebug();
     enum class TestPlacementPreset
     {
@@ -228,7 +247,7 @@ private:
     
    ExplicitFrameAttachMode activeExplicitAttachMode =
         ExplicitFrameAttachMode::InsertedOnly;
-
+  
   
 }; 
       

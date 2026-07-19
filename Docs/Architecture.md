@@ -5968,3 +5968,45 @@ completePrimaryOutputNodes:
 [positioned 0...260] + [frozen 260...458]
              ?
              ??? duplicate joint removed
+
+
+Phase 8F is correct and complete.
+
+availableLength=457.999
+sourceArcLength=457.999
+
+That is the strongest confirmation, because both validation and selection now use the same complete primary-output geometry.
+
+The split also looks correct:
+
+beforeNodes=404
+selectedNodes=388
+afterNodes=113
+valid=1
+
+0 -------- before -------- 202 ~~~~~ selected ~~~~~ 402 -------- after -------- 458
+
+The selected count is slightly below the rough estimate because
+the geometry is not uniformly sampled everywhere and the current 
+selector does not interpolate exact boundary nodes.
+That is acceptable at this stage.
+============================================================
+Phase 8G
+Render deformable-region selection overlay
+
+before region   = normal/default color
+selected region = strong highlight color
+after region    = normal/default color
+
+=======================================================================
+Phase 8G should render only the selected range as a debug overlay. 
+It must not modify:
+
+state.frozenNodes
+state.positionedStraight
+ManufacturingRenderData
+Goal:
+complete primary output:
+
+==========|~~~~~~~~~~~~~~~~~~~~|==========
+ normal        highlighted        normal

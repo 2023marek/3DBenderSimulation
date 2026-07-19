@@ -10,5 +10,6 @@ enum class UserAction
     ToggleSimulationMode,
     TogglePlacementPreset,
     TogglePlannedPreviewDebug,
-    ToggleExplicitAttachMode
+    ToggleExplicitAttachMode,
+    ToggleDeformableRegionOverlay
 };

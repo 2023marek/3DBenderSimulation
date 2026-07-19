@@ -13,6 +13,7 @@ class AppController;
 #include "Core/Geometry/Frame.h"
 #include "Core/Manufacturing/ManufacturingTypes.h"
 #include "Core/Forming/ManufacturingPlanPreviewModel.h"
+#include "Core/Forming/DeformableRegionSelection.h"
 
 
 class GLView : public QOpenGLWidget
@@ -90,6 +91,10 @@ private:
         double radius,
         int radialSegments);
     void drawMachineReference();
+
+    void drawDeformableRegionSelectionOverlay(
+        const DeformableRegionSelection& selection
+    );
 
 public:
     

@@ -45,6 +45,8 @@ void SimulationController::loadProgram(const std::vector<Operation>& ops)
     pipeSystem.reset();
     machineSystem.reset();
 
+    lastDeformableRegionSelection.clear();
+
     // Preserve selected rotation kinematic mode
     pipe().setRotationKinematicMode(rotationKinematicMode);
 
@@ -85,15 +87,21 @@ void SimulationController::reset()
     playing = false;
     paused = false;
 
+    lastDeformableRegionSelection.clear();
+
     pipeSystem.reset();
     machineSystem.reset();
 
-    pipe().setRotationKinematicMode(rotationKinematicMode);
+    pipe().setRotationKinematicMode(
+        rotationKinematicMode
+    );
 
-    // Keep CAD preview available after reset.
-    pipeSystem.setProgram(loadedOperations);
+    pipeSystem.setProgram(
+        loadedOperations
+    );
 
-    std::cout << "[SimulationController] reset\n";
+    std::cout
+        << "[SimulationController] reset\n";
 }
 void SimulationController::play()
 {
@@ -638,7 +646,7 @@ void SimulationController::executeRotate(double angleIncrement)
         << std::endl;
 }
 
-   
+
 
 //Helpers for refactoring
 
@@ -751,10 +759,13 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
     const AdditionalFormingPass& additionalPass =
         manufacturingHistory.additionalPasses.front();
 
-    DeformableRegionSelection selection =
+    lastDeformableRegionSelection =
         pipe().selectDeformableRegion(
             additionalPass.deformableRegion
         );
+
+    const DeformableRegionSelection& selection =
+        lastDeformableRegionSelection;
 
     std::cout
         << "[DEFORMABLE REGION SELECTION]"

@@ -8,6 +8,7 @@
 #include "Core/PipeSystem.h"
 #include "Core/Forming/ManufacturingPlanPreviewModel.h"
 #include "Core/Forming/ManufacturingHistory.h"
+#include "Core/Forming/DeformableRegionSelection.h"
 
 class SimulationController
 {
@@ -261,6 +262,13 @@ public:
             getLastAdditionalPassExecutionResult() const;
 
         void debugValidateFirstAdditionalPassRegionLength();
+
+        const DeformableRegionSelection&
+            getLastDeformableRegionSelection() const
+        {
+            return lastDeformableRegionSelection;
+        }
+        
 private:
     // =====================================================
     // Mode / speed
@@ -306,6 +314,8 @@ private:
 
     AdditionalPassExecutionResult lastAdditionalPassExecutionResult =
         AdditionalPassExecutionResult::Disabled;
+
+    DeformableRegionSelection lastDeformableRegionSelection;
 
 private:
     // =====================================================
