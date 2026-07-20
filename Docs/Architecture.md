@@ -6010,3 +6010,131 @@ complete primary output:
 
 ==========|~~~~~~~~~~~~~~~~~~~~|==========
  normal        highlighted        normal
+
+ ===============================================================
+ OK start Phase 8H: add deformable region overlay debug toggle
+
+Phase 8H.
+
+Goal:
+
+selection data remains available
+overlay visibility can be toggled independently
+
+Flow:
+
+DeformableRegionSelection
+        ?
+        ??? still computed
+        ??? still stored
+                ?
+GLView checks visibility flag
+                ?
+draw or skip overlay
+
+======================================
+Phase 8I
+Review selected-region boundary accuracy
+
+Goal:
+
+Check how close the sampled first/last selected nodes are to:
+
+startArcLength = 202 mm
+endArcLength   = 402 mm
+
+=========================================
+Phase 8I
+Review selected-region boundary accuracy
+
+What will Phase 8I do?
+
+We won't change any geometry.
+
+We'll simply measure:
+
+requested start = 202.000
+
+actual first selected node = ?
+
+difference = ?
+
+and
+
+requested end = 402.000
+
+actual last selected node = ?
+
+difference = ?
+
+start error = 0.12 mm
+end error   = 0.08 mm
+
+Case 1 — Errors are very small
+start error = 0.12 mm
+end error   = 0.08 mm
+
+Excellent. We can continue implementing real helix deformation and postpone interpolation until the end.
+
+Case 2 — Errors are significant
+start error = 1.8 mm
+end error   = 2.4 mm
+
+Then we know that before any real deformation, we should implement boundary-node interpolation.
+
+Why I like this phase
+
+It doesn't add complexity to the simulator, 
+but it tells us how trustworthy our selection already is. 
+That's valuable because the next block (real deformation) 
+will build directly on this selection. If the selection is 
+already accurate enough, we avoid introducing interpolation logic prematurely.
+If it isn't, we know exactly what to 
+improve before any geometry is modified.
+
+Phase 8I will measure the difference between the 
+requested arc-length boundaries
+and the first/last selected sampled nodes
+ ========================================================
+
+ Phase 8J
+ Cel
+
+Chcemy przekszta³ciæ:
+
+selectedNodes w world space
+
+do:
+
+selectedNodes w local entry-frame space
+
+Czyli:
+
+entryFrame.P = lokalne (0,0,0)
+entryFrame.T = lokalna oœ X
+entryFrame.N = lokalna oœ Y
+entryFrame.B = lokalna oœ Z
+
+ASCII:
+
+WORLD SPACE
+
+                 selected pipe
+                      /
+                     /
+entryFrame.P  ?----->
+              T
+
+
+LOCAL SPACE
+
+origin ?=======================>
+       (0,0,0)             local X
+
+Dziêki temu przysz³a helisa mo¿e byæ budowana prostym wzorem:
+
+x = d³ugoœæ wzd³u¿ rury
+y = radius * cos(angle)
+z = radius * sin(angle)
+
+Bez zastanawiania siê, jak rura jest obrócona w œwiecie.

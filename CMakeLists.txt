@@ -95,6 +95,7 @@ set(CORE_HEADERS
     Core/Forming/FormingOperation.h
     Core/Forming/FormingProcessLabels.h
     Core/Forming/DeformableRegion.h
+    Core/Forming/LocalDeformableRegion.h
     Core/Forming/ManufacturingPass.h
     Core/Forming/ManufacturingPlan.h
     Core/Forming/AdditionalFormingPass.h

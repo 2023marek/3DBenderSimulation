@@ -52,6 +52,18 @@ struct DeformableRegionSelection
     bool fitsAvailableLength =
         false;
 
+    double actualSelectedStartArcLength =
+        0.0;
+
+    double actualSelectedEndArcLength =
+        0.0;
+
+    double startBoundaryError =
+        0.0;
+
+    double endBoundaryError =
+        0.0;
+
     void clear()
     {
         beforeNodes.clear();
@@ -68,5 +80,10 @@ struct DeformableRegionSelection
         requiredEndArcLength = 0.0;
         missingLength = 0.0;
         fitsAvailableLength = false;
+
+        actualSelectedStartArcLength = 0.0;
+        actualSelectedEndArcLength = 0.0;
+        startBoundaryError = 0.0;
+        endBoundaryError = 0.0;
     }
 };

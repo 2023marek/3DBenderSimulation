@@ -12,6 +12,7 @@
 #include "Core/Forming/AdditionalPassExecutionResult.h"
 #include "Core/Forming/DeformableRegion.h"
 #include "Core/Forming/DeformableRegionSelection.h"
+#include "Core/Forming/LocalDeformableRegion.h"
                    
 
 class ManufacturingPipeSimulator
@@ -539,12 +540,149 @@ public:
         );
     }
 
+    LocalDeformableRegion prepareLocalDeformableRegion(
+        const DeformableRegionSelection& selection,
+        const Frame& entryFrame
+    ) const
+    {
+        return buildLocalDeformableRegion(
+            selection,
+            entryFrame
+        );
+    }
 
+	private:
 
 	//Helper
-   
+    Vec3D transformPointToLocalFrame(
+        const Vec3D& worldPoint,
+        const Frame& frame
+    ) const
+    {
+        Vec3D relative =
+            worldPoint - frame.P;
 
+        Vec3D T =
+            frame.T.normalized();
 
+        Vec3D N =
+            frame.N.normalized();
+
+        Vec3D B =
+            frame.B.normalized();
+
+        return Vec3D{
+            dot(relative, T),
+            dot(relative, N),
+            dot(relative, B)
+        };
+    }
+
+	//Helper
+    Vec3D transformDirectionToLocalFrame(
+        const Vec3D& worldDirection,
+        const Frame& frame
+    ) const
+    {
+        Vec3D T =
+            frame.T.normalized();
+
+        Vec3D N =
+            frame.N.normalized();
+
+        Vec3D B =
+            frame.B.normalized();
+
+        Vec3D localDirection{
+            dot(worldDirection, T),
+            dot(worldDirection, N),
+            dot(worldDirection, B)
+        };
+
+        if (localDirection.lengthSquared() <= 1e-12)
+        {
+            return localDirection;
+        }
+
+        return localDirection.normalized();
+    }
+	//Helper
+
+    PipeNode transformNodeToLocalFrame(
+        const PipeNode& worldNode,
+        const Frame& frame
+    ) const
+    {
+        PipeNode localNode;
+
+        localNode.pos =
+            transformPointToLocalFrame(
+                worldNode.pos,
+                frame
+            );
+
+        localNode.T =
+            transformDirectionToLocalFrame(
+                worldNode.T,
+                frame
+            );
+
+        localNode.N =
+            transformDirectionToLocalFrame(
+                worldNode.N,
+                frame
+            );
+
+        localNode.B =
+            transformDirectionToLocalFrame(
+                worldNode.B,
+                frame
+            );
+
+        return localNode;
+    }
+	//Helper
+    LocalDeformableRegion buildLocalDeformableRegion(
+        const DeformableRegionSelection& selection,
+        const Frame& entryFrame
+    ) const
+    {
+        LocalDeformableRegion result;
+
+        if (!selection.valid)
+            return result;
+
+        if (selection.selectedNodes.size() < 2)
+            return result;
+
+        if (!isValidFrame(entryFrame))
+            return result;
+
+        result.worldEntryFrame =
+            entryFrame;
+
+        result.localNodes.reserve(
+            selection.selectedNodes.size()
+        );
+
+        for (const PipeNode& worldNode :
+            selection.selectedNodes)
+        {
+            result.localNodes.push_back(
+                transformNodeToLocalFrame(
+                    worldNode,
+                    entryFrame
+                )
+            );
+        }
+
+        result.valid =
+            !result.localNodes.empty();
+
+        return result;
+    }
+
+    public:
     //Getter
     double getAvailablePrimaryOutputLength() const
     {
@@ -1123,6 +1261,15 @@ private:
             }
             else if (cumulativeArcLength <= region.endArcLength)
             {
+                if (result.selectedNodes.empty())
+                {
+                    result.actualSelectedStartArcLength =
+                        cumulativeArcLength;
+                }
+
+                result.actualSelectedEndArcLength =
+                    cumulativeArcLength;
+
                 result.selectedNodes.push_back(
                     node
                 );
@@ -1134,6 +1281,13 @@ private:
                 );
             }
         }
+        result.startBoundaryError =
+            result.actualSelectedStartArcLength
+            - region.startArcLength;
+
+        result.endBoundaryError =
+            result.actualSelectedEndArcLength
+            - region.endArcLength;
 
         result.selectedStartArcLength =
             region.startArcLength;

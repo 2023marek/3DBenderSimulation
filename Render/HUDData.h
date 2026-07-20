@@ -37,6 +37,7 @@ struct HUDData
 
     bool hasAdditionalPassResult =
         false;
+
     bool deformableRegionOverlayVisible =
         true;
 

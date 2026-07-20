@@ -9,6 +9,7 @@
 #include "Core/Forming/ManufacturingPlanPreviewModel.h"
 #include "Core/Forming/ManufacturingHistory.h"
 #include "Core/Forming/DeformableRegionSelection.h"
+#include "Core/Forming/LocalDeformableRegion.h"
 
 class SimulationController
 {
@@ -268,12 +269,18 @@ public:
         {
             return lastDeformableRegionSelection;
         }
-        
+
+        const LocalDeformableRegion&
+            getLastLocalDeformableRegion() const
+        {
+            return lastLocalDeformableRegion;
+        }
 private:
     // =====================================================
     // Mode / speed
     // =====================================================
-    
+    LocalDeformableRegion
+        lastLocalDeformableRegion;
 
     double rotationSpeedRadPerSec = PI;
 

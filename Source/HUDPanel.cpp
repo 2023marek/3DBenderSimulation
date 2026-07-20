@@ -191,7 +191,7 @@ void HUDPanel::render()
     drawText(
         textX,
         textY + lineH * 7,
-        "KEYS: M Render | N Mode | T Place | A Attach | D Debug",
+        "KEYS: M Render | N Mode | T Place | A Attach | D Debug | E OVERLAY",
         glm::vec4(0.7f, 0.7f, 0.7f, 1.0f)
     );
     drawText(

@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cmath>
 #include "Core/Forming/DeformableRegionSelection.h"
+#include "Core/Forming/LocalDeformableRegion.h"
 
 #ifndef PI
 #define PI 3.14159265358979323846
@@ -88,6 +89,8 @@ void SimulationController::reset()
     paused = false;
 
     lastDeformableRegionSelection.clear();
+    lastDeformableRegionSelection.clear();
+    lastLocalDeformableRegion.clear();
 
     pipeSystem.reset();
     machineSystem.reset();
@@ -763,6 +766,42 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
         pipe().selectDeformableRegion(
             additionalPass.deformableRegion
         );
+    if (lastDeformableRegionSelection.valid)
+    {
+        lastLocalDeformableRegion =
+            pipe().prepareLocalDeformableRegion(
+                lastDeformableRegionSelection,
+                additionalPass.entryFrame
+            );
+    }
+    else
+    {
+        lastLocalDeformableRegion.clear();
+    }
+
+    if (lastLocalDeformableRegion.valid
+        && !lastLocalDeformableRegion.localNodes.empty())
+    {
+        const PipeNode& first =
+            lastLocalDeformableRegion.localNodes.front();
+
+        const PipeNode& last =
+            lastLocalDeformableRegion.localNodes.back();
+
+        std::cout
+            << "[LOCAL DEFORMABLE REGION]"
+            << " nodes="
+            << lastLocalDeformableRegion.localNodes.size()
+            << " firstP=("
+            << first.pos.x << ", "
+            << first.pos.y << ", "
+            << first.pos.z << ")"
+            << " lastP=("
+            << last.pos.x << ", "
+            << last.pos.y << ", "
+            << last.pos.z << ")"
+            << std::endl;
+    }
 
     const DeformableRegionSelection& selection =
         lastDeformableRegionSelection;
