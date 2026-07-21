@@ -278,7 +278,12 @@ public:
 private:
     // =====================================================
     // Mode / speed
-    // =====================================================
+    // 
+    Frame actualAdditionalPassEntryFrame;
+
+    bool hasActualAdditionalPassEntryFrame =
+        false;
+
     LocalDeformableRegion
         lastLocalDeformableRegion;
 

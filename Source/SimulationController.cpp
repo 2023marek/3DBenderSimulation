@@ -103,6 +103,12 @@ void SimulationController::reset()
         loadedOperations
     );
 
+
+    actualAdditionalPassEntryFrame =
+        Frame{};
+
+    hasActualAdditionalPassEntryFrame =
+        false;
     std::cout
         << "[SimulationController] reset\n";
 }
@@ -762,22 +768,65 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
     const AdditionalFormingPass& additionalPass =
         manufacturingHistory.additionalPasses.front();
 
+    // =====================================================
+    // 1. SELECT REGION FROM COMPLETE PRIMARY OUTPUT
+    // =====================================================
+
     lastDeformableRegionSelection =
         pipe().selectDeformableRegion(
             additionalPass.deformableRegion
         );
-    if (lastDeformableRegionSelection.valid)
+
+    // =====================================================
+    // 2. RESOLVE ENTRY FRAME FROM ACTUAL MANUFACTURING DATA
+    // =====================================================
+
+    hasActualAdditionalPassEntryFrame =
+        pipe().resolveActualDeformableRegionEntryFrame(
+            lastDeformableRegionSelection,
+            actualAdditionalPassEntryFrame
+        );
+
+    // =====================================================
+    // 3. TRANSFORM SELECTED REGION TO LOCAL COORDINATES
+    // =====================================================
+
+    if (lastDeformableRegionSelection.valid
+        && hasActualAdditionalPassEntryFrame)
     {
         lastLocalDeformableRegion =
             pipe().prepareLocalDeformableRegion(
                 lastDeformableRegionSelection,
-                additionalPass.entryFrame
+                actualAdditionalPassEntryFrame
             );
     }
     else
     {
         lastLocalDeformableRegion.clear();
     }
+
+    // =====================================================
+    // 4. BUILD HELIX PHASES ALONG EXISTING CENTERLINE
+    // =====================================================
+
+    bool helixPhasesReady =
+        false;
+
+    if (lastLocalDeformableRegion.valid)
+    {
+        const double helixPitch =
+            additionalPass.pass.helixPitch;
+
+        helixPhasesReady =
+            pipe().prepareHelixPhases(
+                lastLocalDeformableRegion,
+                helixPitch
+            );
+    }
+
+    // =====================================================
+    // 5. LOCAL REGION DIAGNOSTICS
+    // =====================================================
 
     if (lastLocalDeformableRegion.valid
         && !lastLocalDeformableRegion.localNodes.empty())
@@ -787,6 +836,14 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
 
         const PipeNode& last =
             lastLocalDeformableRegion.localNodes.back();
+
+        std::cout
+            << "[LOCAL CENTERLINE PATH]"
+            << " nodes="
+            << lastLocalDeformableRegion.localNodes.size()
+            << " arcLength="
+            << lastLocalDeformableRegion.totalArcLength
+            << std::endl;
 
         std::cout
             << "[LOCAL DEFORMABLE REGION]"
@@ -802,6 +859,37 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
             << last.pos.z << ")"
             << std::endl;
     }
+
+    // =====================================================
+    // 6. HELIX PHASE DIAGNOSTICS
+    // =====================================================
+
+    if (helixPhasesReady
+        && !lastLocalDeformableRegion.helixPhases.empty())
+    {
+        const double firstPhase =
+            lastLocalDeformableRegion.helixPhases.front();
+
+        const double lastPhase =
+            lastLocalDeformableRegion.helixPhases.back();
+
+        const double turns =
+            lastPhase / (2.0 * PI);
+
+        std::cout
+            << "[HELIX PHASE]"
+            << " first="
+            << firstPhase
+            << " last="
+            << lastPhase
+            << " turns="
+            << turns
+            << std::endl;
+    }
+
+    // =====================================================
+    // 7. SELECTION DIAGNOSTICS
+    // =====================================================
 
     const DeformableRegionSelection& selection =
         lastDeformableRegionSelection;
@@ -820,7 +908,6 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
         << selection.valid
         << std::endl;
 }
-
 void SimulationController::
 debugValidateFirstAdditionalPassRegionLength()
 {

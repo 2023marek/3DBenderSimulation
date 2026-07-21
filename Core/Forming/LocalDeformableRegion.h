@@ -20,6 +20,12 @@ struct LocalDeformableRegion
     Frame worldEntryFrame;
 
     std::vector<PipeNode> localNodes;
+    std::vector<double> localArcLengths;
+
+    std::vector<double> helixPhases;
+
+    double totalArcLength =
+        0.0;
 
     bool valid =
         false;
@@ -30,6 +36,10 @@ struct LocalDeformableRegion
             Frame{};
 
         localNodes.clear();
+        localArcLengths.clear();
+        
+        totalArcLength = 0.0;
+        helixPhases.clear();
 
         valid =
             false;

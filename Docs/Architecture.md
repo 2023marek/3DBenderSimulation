@@ -6138,3 +6138,32 @@ y = radius * cos(angle)
 z = radius * sin(angle)
 
 Bez zastanawiania siê, jak rura jest obrócona w œwiecie.
+====================================================================
+
+Phase 8L — Option A: follow existing centerline
+
+Goal:
+
+Keep the selected pipe centerline unchanged.
+Build a local moving frame along it.
+Use that frame later to apply helix offset around the existing shape.
+
+ASCII:
+
+existing selected centerline
+
+(0,0,0) ????????)
+                  \
+                   \
+                    •
+
+
+future helix offset
+
+      ~~~~~~~~)
+               \
+                \~~~~
+
+The bend remains. The helix follows it.
+
+1. Add local path-distance storage

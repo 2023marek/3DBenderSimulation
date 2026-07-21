@@ -36,8 +36,17 @@ public:
 
         pass.processType =
             TubeFormingProcessType::HelixForming;
+        pass.enabled =
+			true;   
+
         pass.placement =
             PassPlacement::append();
+        //copy helix process parameters into the pass
+
+		pass.helixLength = op.length;
+		pass.helixRadius = op.helixRadius;
+		pass.helixPitch = op.pitch;
+		pass.helixFeedSpeed = op.feedSpeed;
         auto result =
             HelixCurveBuilder::build(op);
 

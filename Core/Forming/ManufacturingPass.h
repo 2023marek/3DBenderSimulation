@@ -33,68 +33,36 @@ struct ManufacturingPass
     // =====================================================
 
     std::string name;
+    std::vector<Operation> operations;
 
     TubeFormingProcessType processType =
         TubeFormingProcessType::RotaryDrawBending;
+
     PassPlacement placement =
         PassPlacement::append();
 
-    // =====================================================
-    // INPUT COMMANDS
-    //
-    // For now, this uses the current Operation type.
-    // This fits RotaryDrawBending.
-    //
-    // Later we can replace or extend this with:
-    // FormingOperation
-    // HelixOperation
-    // StretchBendOperation
-    // =====================================================
-
-    std::vector<Operation> operations;
-
-
-
-    // =====================================================
-    // OUTPUT GEOMETRY
-    //
-    // Curvature-driven result of this manufacturing pass.
-    //
-    // Important rule:
-    // outputCurve is the model.
-    // nodes are only sampled later.
-    // =====================================================
-
     PipeCurve outputCurve;
-
+        
     DeformableRegion deformableRegion;
 
-    // =====================================================
-// RESOLVED START FRAME
-//
-// Used after placement resolution.
-//
-// Example:
-// InsertAtArcLength(202)
-//      ?
-// find frame on existing curve at s=202
-//      ?
-// store that frame here
-//
-// Phase 7Q:
-// metadata only.
-// Later:
-// inserted outputCurve will be transformed/aligned to this frame.
-// =====================================================
+ Frame resolvedStartFrame;
 
     bool hasResolvedStartFrame = false;
-    Frame resolvedStartFrame;
+    
+    // Helix-forming parameters.
+    double helixLength =
+        0.0;
 
-    // =====================================================
-    // STATE FLAGS
-    // =====================================================
+    double helixRadius =
+        0.0;
 
-    bool enabled = true;
+    double helixPitch =
+        0.0;
+
+    double helixFeedSpeed =
+        0.0;
+
+     bool enabled = true;
     bool completed = false;
 
     void clear()

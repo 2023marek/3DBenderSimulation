@@ -551,6 +551,28 @@ public:
         );
     }
 
+
+    bool resolveActualDeformableRegionEntryFrame(
+        const DeformableRegionSelection& selection,
+        Frame& outFrame
+    ) const
+    {
+        if (!selection.valid)
+            return false;
+
+        if (selection.selectedNodes.empty())
+            return false;
+
+        outFrame =
+            frameFromNode(
+                selection.selectedNodes.front()
+            );
+
+        return isValidFrame(
+            outFrame
+        );
+    }
+
 	private:
 
 	//Helper
@@ -676,8 +698,39 @@ public:
             );
         }
 
+        result.localArcLengths.reserve(
+            result.localNodes.size()
+        );
+
+        double cumulativeLength =
+            0.0;
+
+        result.localArcLengths.push_back(
+            cumulativeLength
+        );
+
+        for (size_t i = 1;
+            i < result.localNodes.size();
+            ++i)
+        {
+            cumulativeLength +=
+                distanceBetweenNodes(
+                    result.localNodes[i - 1],
+                    result.localNodes[i]
+                );
+
+            result.localArcLengths.push_back(
+                cumulativeLength
+            );
+        }
+
+        result.totalArcLength =
+            cumulativeLength;
+
         result.valid =
-            !result.localNodes.empty();
+            result.localNodes.size() >= 2
+            && result.localArcLengths.size()
+            == result.localNodes.size();
 
         return result;
     }
@@ -688,6 +741,77 @@ public:
     {
         return calculateAvailablePrimaryOutputLength();
     }
+
+    //Helper
+
+    double calculateHelixPhase(
+        double arcLength,
+        double pitch
+    ) const
+    {
+        if (pitch <= 1e-9)
+            return 0.0;
+
+        return 2.0 * PI
+            * arcLength
+            / pitch;
+    }
+
+
+
+    //Helper phase building 
+    bool buildHelixPhases(
+        LocalDeformableRegion& region,
+        double pitch
+    ) const
+    {
+        if (!region.valid)
+            return false;
+
+        if (pitch <= 1e-9)
+            return false;
+
+        if (region.localArcLengths.size()
+            != region.localNodes.size())
+        {
+            return false;
+        }
+
+        region.helixPhases.clear();
+
+        region.helixPhases.reserve(
+            region.localArcLengths.size()
+        );
+
+        for (double arcLength :
+        region.localArcLengths)
+        {
+            region.helixPhases.push_back(
+                calculateHelixPhase(
+                    arcLength,
+                    pitch
+                )
+            );
+        }
+
+        return region.helixPhases.size()
+            == region.localNodes.size();
+    }
+
+    // Public controlled method
+
+    bool prepareHelixPhases(
+        LocalDeformableRegion& region,
+        double pitch
+    ) const
+    {
+        return buildHelixPhases(
+            region,
+            pitch
+        );
+    }
+
+
 
 private:
 
