@@ -817,6 +817,8 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
 
     bool previewHelixReady =
         false;
+    bool worldPreviewHelixReady =
+        false;
 
     if (lastLocalDeformableRegion.valid)
     {
@@ -848,6 +850,14 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
                     lastLocalDeformableRegion
                 );
         }
+
+        if (previewHelixReady)
+        {
+            worldPreviewHelixReady =
+                pipe().prepareWorldPreviewHelixNodes(
+                    lastLocalDeformableRegion
+                );
+        }
     }
     if (helixOffsetsReady
         && !lastLocalDeformableRegion.helixOffsets.empty())
@@ -866,6 +876,48 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
 
             const PipeNode& lastPreview =
                 lastLocalDeformableRegion.previewHelixNodes.back();
+
+            if (worldPreviewHelixReady
+                && !lastLocalDeformableRegion
+                .worldPreviewHelixNodes.empty())
+            {
+                const PipeNode& firstWorld =
+                    lastLocalDeformableRegion
+                    .worldPreviewHelixNodes.front();
+
+                const PipeNode& lastWorld =
+                    lastLocalDeformableRegion
+                    .worldPreviewHelixNodes.back();
+
+                std::cout
+                    << "[PREVIEW HELIX WORLD]"
+                    << " nodes="
+                    << lastLocalDeformableRegion
+                    .worldPreviewHelixNodes.size()
+                    << " firstP=("
+                    << firstWorld.pos.x << ", "
+                    << firstWorld.pos.y << ", "
+                    << firstWorld.pos.z << ")"
+                    << " lastP=("
+                    << lastWorld.pos.x << ", "
+                    << lastWorld.pos.y << ", "
+                    << lastWorld.pos.z << ")"
+                    << std::endl;
+            }
+            if (worldPreviewHelixReady)
+            {
+                const Vec3D delta =
+                    lastLocalDeformableRegion
+                    .worldPreviewHelixNodes.front().pos
+                    - lastDeformableRegionSelection
+                    .selectedNodes.front().pos;
+
+                std::cout
+                    << "[PREVIEW HELIX WORLD CHECK]"
+                    << " firstOffsetLength="
+                    << delta.length()
+                    << std::endl;
+            }
 
             std::cout
                 << "[PREVIEW HELIX LOCAL]"

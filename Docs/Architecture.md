@@ -6257,4 +6257,72 @@ buildHelixOffsets()
 calculateHelixOffset()
     szczegó³y matematyczne simulatora
 
+=======================================================
+    Phase 8O — Build preview helical nodes
+
+    existing local centerline
+        +
+moving-frame helix offsets
+        ?
+local preview helix nodes
+
+===========================================================
+
+Phase 8P — Transform preview helix nodes back to world coordinates
+
+Mamy teraz:
+
+previewHelixNodes
+
+w lokalnym uk³adzie actualAdditionalPassEntryFrame.
+
+Chcemy utworzyæ osobn¹ kopiê:
+
+worldPreviewHelixNodes
+
+gotow¹ do póŸniejszego renderowania.
+
+ASCII:
+
+LOCAL HELIX
+
+origin ?~~~~~~~)
+        \
+         \~~~~
+
+
+        transform by entryFrame
+                ?
+
+
+WORLD HELIX
+
+              ?~~~~~~~)
+               \
+                \~~~~
+
+Nie zmieniamy:
+
+localNodes
+selectedNodes
+frozenNodes
+positionedStraight
+real manufacturing geometry
+
+========================================
+Phase 8Q — Render world-space helix preview overlay
+CelNarysowaæ:
+
+lastLocalDeformableRegion.worldPreviewHelixNodes
+
+jako osobny overlay nad istniej¹c¹ rur¹.
+
+rotary pipe:
+========)----------------
+
+helix preview:
+        ~~~~~~~~)~~~~~~~
+
+Nie zmieniamy ¿adnej geometrii manufacturing.
+
 

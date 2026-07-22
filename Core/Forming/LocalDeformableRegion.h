@@ -33,6 +33,10 @@ struct LocalDeformableRegion
     // coordinate system.
    
     std::vector<PipeNode> previewHelixNodes;
+    // Preview helix transformed back into world coordinates.
+ //
+ // This remains separate from real manufacturing geometry.
+    std::vector<PipeNode> worldPreviewHelixNodes;
 
     double totalArcLength =
         0.0;
@@ -50,6 +54,7 @@ struct LocalDeformableRegion
         helixPhases.clear();
         helixOffsets.clear();
         previewHelixNodes.clear();
+        worldPreviewHelixNodes.clear();
 
         totalArcLength =
             0.0;

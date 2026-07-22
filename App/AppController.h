@@ -16,6 +16,7 @@
 #include "Core/Forming/PassPlacement.h"
 #include "Core/Forming/ManufacturingHistory.h"
 #include "Core/Forming/DeformableRegionSelection.h"
+#include "Core/Forming/LocalDeformableRegion.h"
 
 
 class AppController
@@ -205,6 +206,10 @@ public:
          deformableRegionOverlayVisible =
              !deformableRegionOverlayVisible;
      }
+
+     //Getter
+     const LocalDeformableRegion&
+         getLastLocalDeformableRegion() const;
 
 private:
     

@@ -587,8 +587,91 @@ public:
         );
     }
 
-	private:
+    // public wrapper
+    bool prepareWorldPreviewHelixNodes(
+        LocalDeformableRegion& region
+    ) const
+    {
+        return buildWorldPreviewHelixNodes(
+            region
+        );
+    }
 
+	private:
+//helper transformacji PipeNode
+
+        PipeNode transformNodeFromLocalFrame(
+            const PipeNode& localNode,
+            const Frame& frame
+        ) const
+        {
+            PipeNode worldNode;
+
+            worldNode.pos =
+                transformPointFromLocalFrame(
+                    localNode.pos,
+                    frame
+                );
+
+            worldNode.T =
+                transformDirectionFromLocalFrame(
+                    localNode.T,
+                    frame
+                );
+
+            worldNode.N =
+                transformDirectionFromLocalFrame(
+                    localNode.N,
+                    frame
+                );
+
+            worldNode.B =
+                transformDirectionFromLocalFrame(
+                    localNode.B,
+                    frame
+                );
+
+            return worldNode;
+        }
+
+        //helper preview
+        bool buildWorldPreviewHelixNodes(
+            LocalDeformableRegion& region
+        ) const
+        {
+            if (!region.valid)
+                return false;
+
+            if (!isValidFrame(
+                region.worldEntryFrame
+            ))
+            {
+                return false;
+            }
+
+            if (region.previewHelixNodes.size() < 2)
+                return false;
+
+            region.worldPreviewHelixNodes.clear();
+
+            region.worldPreviewHelixNodes.reserve(
+                region.previewHelixNodes.size()
+            );
+
+            for (const PipeNode& localPreviewNode :
+                region.previewHelixNodes)
+            {
+                region.worldPreviewHelixNodes.push_back(
+                    transformNodeFromLocalFrame(
+                        localPreviewNode,
+                        region.worldEntryFrame
+                    )
+                );
+            }
+
+            return region.worldPreviewHelixNodes.size()
+                == region.previewHelixNodes.size();
+        }
 
     //helper pojedynczego ofsettu
         Vec3D calculateHelixOffset(
@@ -2290,6 +2373,55 @@ private:
         default:
             return false;
         }
+    }
+    //local point to world point
+    Vec3D transformPointFromLocalFrame(
+        const Vec3D& localPoint,
+        const Frame& frame
+    ) const
+    {
+        Vec3D T =
+            frame.T.normalized();
+
+        Vec3D N =
+            frame.N.normalized();
+
+        Vec3D B =
+            frame.B.normalized();
+
+        return frame.P
+            + T * localPoint.x
+            + N * localPoint.y
+            + B * localPoint.z;
+    }
+
+    // local direction to world direction
+
+    Vec3D transformDirectionFromLocalFrame(
+        const Vec3D& localDirection,
+        const Frame& frame
+    ) const
+    {
+        Vec3D T =
+            frame.T.normalized();
+
+        Vec3D N =
+            frame.N.normalized();
+
+        Vec3D B =
+            frame.B.normalized();
+
+        Vec3D worldDirection =
+            T * localDirection.x
+            + N * localDirection.y
+            + B * localDirection.z;
+
+        if (worldDirection.lengthSquared() <= 1e-12)
+        {
+            return worldDirection;
+        }
+
+        return worldDirection.normalized();
     }
 
 };

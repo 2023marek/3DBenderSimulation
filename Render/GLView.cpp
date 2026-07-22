@@ -132,6 +132,23 @@ namespace
             0.8f
         );
 
+//helix preview
+
+    constexpr glm::vec3 HELIX_PREVIEW_COLOR =
+        glm::vec3(
+            0.2f,
+            1.0f,
+            0.4f
+        );
+
+    constexpr float HELIX_PREVIEW_LINE_WIDTH =
+        5.0f;
+
+    constexpr double HELIX_PREVIEW_PIPE_RADIUS =
+        2.5;
+
+
+    //
     constexpr float DEFORMABLE_REGION_LINE_WIDTH =
         6.0f;
 
@@ -1291,16 +1308,21 @@ void GLView::drawManufacturingPlaybackPipe(
         );
     }
 
-    if (app
-        && app->isDeformableRegionOverlayVisible())
-    {
-        const DeformableRegionSelection& selection =
-            app->getLastDeformableRegionSelection();
+    if (!app)
+        return;
 
+    // Existing magenta source-region overlay.
+    if (app->isDeformableRegionOverlayVisible())
+    {
         drawDeformableRegionSelectionOverlay(
-            selection
+            app->getLastDeformableRegionSelection()
         );
     }
+
+    // New green world-space helix preview.
+    drawWorldHelixPreviewOverlay(
+        app->getLastLocalDeformableRegion()
+    );
 }
 
 
@@ -1350,6 +1372,67 @@ void GLView::drawDeformableRegionSelectionOverlay(
         drawTubeZone(
             selection.selectedNodes,
             DEFORMABLE_REGION_PIPE_RADIUS,
+            MANUFACTURING_PIPE_RADIAL_SEGMENTS
+        );
+    }
+
+    pipeRenderer.setMode(
+        renderMode
+    );
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
+
+
+void GLView::drawWorldHelixPreviewOverlay(
+    const LocalDeformableRegion& region
+)
+{
+    if (!region.valid)
+        return;
+
+    if (region.worldPreviewHelixNodes.size() < 2)
+        return;
+
+    shader->setVec3(
+        "pipeColor",
+        HELIX_PREVIEW_COLOR
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        pipeRenderer.setMode(
+            RenderMode::LINE
+        );
+
+        pipeRenderer.uploadLine(
+            nodesToFloatLine(
+                region.worldPreviewHelixNodes
+            )
+        );
+
+        glLineWidth(
+            HELIX_PREVIEW_LINE_WIDTH
+        );
+
+        pipeRenderer.draw();
+
+        // Restore the normal manufacturing line geometry,
+        // because the shared renderer buffer was replaced.
+        uploadPipeGeometry();
+
+        glLineWidth(
+            MANUFACTURING_LINE_WIDTH
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawTubeZone(
+            region.worldPreviewHelixNodes,
+            HELIX_PREVIEW_PIPE_RADIUS,
             MANUFACTURING_PIPE_RADIAL_SEGMENTS
         );
     }

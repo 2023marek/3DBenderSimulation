@@ -731,3 +731,9 @@ void AppController::toggleSimulationMode()
     {
         return sim.getLastDeformableRegionSelection();
     }
+
+    const LocalDeformableRegion&
+        AppController::getLastLocalDeformableRegion() const
+    {
+        return sim.getLastLocalDeformableRegion();
+    }

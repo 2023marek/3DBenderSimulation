@@ -6,6 +6,7 @@
 #include "Core/Forming/HelixOperation.h"
 #include "Core/Forming/HelixCurveBuilder.h"
 #include "Core/Forming/TubeFormingProcessType.h"
+#include "Core/Forming/LocalDeformableRegion.h" 
 
 // =====================================================
 // HELIX FORMING PASS BUILDER
