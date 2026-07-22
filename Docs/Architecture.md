@@ -6167,3 +6167,94 @@ future helix offset
 The bend remains. The helix follows it.
 
 1. Add local path-distance storage
+
+==========================================================
+Phase 8N
+Compute helix offset vectors in the moving local node frames
+
+Phase 8N — Compute helix offset vectors in moving local frames
+Cel
+
+Dla ka¿dego wybranego wêz³a obliczamy wektor:
+
+helixOffset[i]
+
+Wektor le¿y w lokalnej p³aszczyŸnie:
+
+N[i] / B[i]
+
+danego wêz³a i obraca siê zgodnie z helixPhase[i].
+
+Jeszcze nie przesuwamy wêz³ów.
+
+centerline node
+      ?
+      ?\
+      ? \ helixOffset
+    N ?  ? przysz³y punkt helisy
+      ?
+      ????? B
+
+Wzór:
+
+offset =
+    radius · cos(phase) · N
+  + radius · sin(phase) · B
+
+Poniewa¿ N i B zmieniaj¹ siê wzd³u¿ istniej¹cej krzywej, helisa bêdzie pod¹¿a³a za aktualnym centerline.
+
+existing centerline:
+
+???????????)
+            \
+             \
+
+moving frames:
+
+    N?          N?          N?
+     ???B        ???B        ?
+
+     phase = 0°
+offset = radius × N
+
+phase = 90°
+offset = radius × B
+
+phase = 180°
+offset = -radius × N
+
+phase = 270°
+offset = -radius × B
+
+                phase 0°
+                   ?
+                   ? N
+
+phase 180°  ? ? center ? ? phase 0°
+
+                   ?
+                   ?
+                phase 180°
+
+Bardziej precyzyjnie w p³aszczyŸnie N/B:
+
+                 +N
+                  ?  phase 0°
+                  |
+-B  phase 270° ?--+--? phase 90°  +B
+                  |
+                  ?  phase 180°
+                 -N
+
+Podzia³ odpowiedzialnoœci:
+
+PUBLIC
+prepareHelixOffsets()
+    controller mo¿e uruchomiæ etap
+
+PRIVATE
+buildHelixOffsets()
+calculateHelixOffset()
+    szczegó³y matematyczne simulatora
+
+

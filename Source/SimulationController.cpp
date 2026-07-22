@@ -812,18 +812,94 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
     bool helixPhasesReady =
         false;
 
+    bool helixOffsetsReady =
+        false;
+
+    bool previewHelixReady =
+        false;
+
     if (lastLocalDeformableRegion.valid)
     {
         const double helixPitch =
             additionalPass.pass.helixPitch;
+
+        const double helixRadius =
+            additionalPass.pass.helixRadius;
 
         helixPhasesReady =
             pipe().prepareHelixPhases(
                 lastLocalDeformableRegion,
                 helixPitch
             );
-    }
 
+        if (helixPhasesReady)
+        {
+            helixOffsetsReady =
+                pipe().prepareHelixOffsets(
+                    lastLocalDeformableRegion,
+                    helixRadius
+                );
+        }
+
+        if (helixOffsetsReady)
+        {
+            previewHelixReady =
+                pipe().preparePreviewHelixNodes(
+                    lastLocalDeformableRegion
+                );
+        }
+    }
+    if (helixOffsetsReady
+        && !lastLocalDeformableRegion.helixOffsets.empty())
+    {
+        const Vec3D& firstOffset =
+            lastLocalDeformableRegion.helixOffsets.front();
+
+        const Vec3D& lastOffset =
+            lastLocalDeformableRegion.helixOffsets.back();
+
+        if (previewHelixReady
+            && !lastLocalDeformableRegion.previewHelixNodes.empty())
+        {
+            const PipeNode& firstPreview =
+                lastLocalDeformableRegion.previewHelixNodes.front();
+
+            const PipeNode& lastPreview =
+                lastLocalDeformableRegion.previewHelixNodes.back();
+
+            std::cout
+                << "[PREVIEW HELIX LOCAL]"
+                << " nodes="
+                << lastLocalDeformableRegion.previewHelixNodes.size()
+                << " firstP=("
+                << firstPreview.pos.x << ", "
+                << firstPreview.pos.y << ", "
+                << firstPreview.pos.z << ")"
+                << " lastP=("
+                << lastPreview.pos.x << ", "
+                << lastPreview.pos.y << ", "
+                << lastPreview.pos.z << ")"
+                << std::endl;
+        }
+
+        std::cout
+            << "[HELIX OFFSETS]"
+            << " count="
+            << lastLocalDeformableRegion.helixOffsets.size()
+            << " first=("
+            << firstOffset.x << ", "
+            << firstOffset.y << ", "
+            << firstOffset.z << ")"
+            << " firstLength="
+            << firstOffset.length()
+            << " last=("
+            << lastOffset.x << ", "
+            << lastOffset.y << ", "
+            << lastOffset.z << ")"
+            << " lastLength="
+            << lastOffset.length()
+            << std::endl;
+    }
     // =====================================================
     // 5. LOCAL REGION DIAGNOSTICS
     // =====================================================

@@ -573,7 +573,107 @@ public:
         );
     }
 
+
+
+    // public wrapper
+    bool prepareHelixOffsets(
+        LocalDeformableRegion& region,
+        double radius
+    ) const
+    {
+        return buildHelixOffsets(
+            region,
+            radius
+        );
+    }
+
 	private:
+
+
+    //helper pojedynczego ofsettu
+        Vec3D calculateHelixOffset(
+            const PipeNode& localNode,
+            double phase,
+            double radius
+        ) const
+        {
+            if (radius <= 0.0)
+            {
+                return Vec3D{
+                    0.0,
+                    0.0,
+                    0.0
+                };
+            }
+
+            Vec3D normal =
+                localNode.N.normalized();
+
+            Vec3D binormal =
+                localNode.B.normalized();
+
+            if (normal.lengthSquared() <= 1e-12
+                || binormal.lengthSquared() <= 1e-12)
+            {
+                return Vec3D{
+                    0.0,
+                    0.0,
+                    0.0
+                };
+            }
+
+            return normal
+                * (radius * std::cos(phase))
+                + binormal
+                * (radius * std::sin(phase));
+        }
+        //Helper budujacy wszystkie offsety
+
+        bool buildHelixOffsets(
+            LocalDeformableRegion& region,
+            double radius
+        ) const
+        {
+            if (!region.valid)
+                return false;
+
+            if (radius <= 0.0)
+                return false;
+
+            if (region.localNodes.size()
+                != region.helixPhases.size())
+            {
+                return false;
+            }
+
+            region.helixOffsets.clear();
+
+            region.helixOffsets.reserve(
+                region.localNodes.size()
+            );
+
+            for (size_t i = 0;
+                i < region.localNodes.size();
+                ++i)
+            {
+                const PipeNode& localNode =
+                    region.localNodes[i];
+
+                double phase =
+                    region.helixPhases[i];
+
+                region.helixOffsets.push_back(
+                    calculateHelixOffset(
+                        localNode,
+                        phase,
+                        radius
+                    )
+                );
+            }
+
+            return region.helixOffsets.size()
+                == region.localNodes.size();
+        }
 
 	//Helper
     Vec3D transformPointToLocalFrame(
@@ -811,7 +911,15 @@ public:
         );
     }
 
-
+// Public wrapper
+    bool preparePreviewHelixNodes(
+        LocalDeformableRegion& region
+    ) const
+    {
+        return buildPreviewHelixNodes(
+            region
+        );
+    }
 
 private:
 
@@ -835,6 +943,80 @@ private:
         false;
 
     bool debugSnapshot = false;
+
+
+//Helper pojedynczego preview node
+    PipeNode buildPreviewHelixNode(
+        const PipeNode& centerlineNode,
+        const Vec3D& helixOffset
+    ) const
+    {
+        PipeNode previewNode =
+            centerlineNode;
+
+        // Move only the copied preview node.
+        // The original centerline node remains unchanged.
+        previewNode.pos =
+            centerlineNode.pos
+            + helixOffset;
+
+        // For this first preview stage, preserve the original
+        // moving frame from the existing centerline.
+        //
+        // Future:
+        // recompute tangent and normal frames from the generated
+        // helical preview curve.
+        previewNode.T =
+            centerlineNode.T;
+
+        previewNode.N =
+            centerlineNode.N;
+
+        previewNode.B =
+            centerlineNode.B;
+
+        return previewNode;
+    }
+
+    // Helper all preview helix
+    bool buildPreviewHelixNodes(
+        LocalDeformableRegion& region
+    ) const
+    {
+        if (!region.valid)
+            return false;
+
+        if (region.localNodes.size()
+            != region.helixOffsets.size())
+        {
+            return false;
+        }
+
+        if (region.localNodes.size() < 2)
+            return false;
+
+        region.previewHelixNodes.clear();
+
+        region.previewHelixNodes.reserve(
+            region.localNodes.size()
+        );
+
+        for (size_t i = 0;
+            i < region.localNodes.size();
+            ++i)
+        {
+            region.previewHelixNodes.push_back(
+                buildPreviewHelixNode(
+                    region.localNodes[i],
+                    region.helixOffsets[i]
+                )
+            );
+        }
+
+        return region.previewHelixNodes.size()
+            == region.localNodes.size();
+    }
+
 
 //Helper
     void appendNodeNoDuplicate(

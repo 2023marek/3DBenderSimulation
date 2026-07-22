@@ -4,6 +4,7 @@
 
 #include "Core/Geometry/Frame.h"
 #include "Core/Geometry/PipeNode.h"
+#include "Core/Math/Vec3D.h"
 
 // =====================================================
 // LOCAL DEFORMABLE REGION
@@ -21,8 +22,17 @@ struct LocalDeformableRegion
 
     std::vector<PipeNode> localNodes;
     std::vector<double> localArcLengths;
-
     std::vector<double> helixPhases;
+    std::vector<Vec3D> helixOffsets;
+    
+
+    // Offset from the existing centerline to the future
+    // helical centerline for each selected node.
+    //
+    // The offsets are expressed in the local entry-frame
+    // coordinate system.
+   
+    std::vector<PipeNode> previewHelixNodes;
 
     double totalArcLength =
         0.0;
@@ -37,9 +47,12 @@ struct LocalDeformableRegion
 
         localNodes.clear();
         localArcLengths.clear();
-        
-        totalArcLength = 0.0;
         helixPhases.clear();
+        helixOffsets.clear();
+        previewHelixNodes.clear();
+
+        totalArcLength =
+            0.0;
 
         valid =
             false;
