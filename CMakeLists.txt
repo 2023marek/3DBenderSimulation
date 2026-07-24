@@ -117,6 +117,8 @@ set(CORE_HEADERS
     Core/Geometry/PipeNode.h
     Core/Geometry/PipeSegment.h
     Core/Geometry/GeometricPipeModel.h
+    Core/Geometry/SpatialCurveIntegrationResult.h
+    Core/Geometry/SpatialCurveIntegrationStatus.h
     Core/Manufacturing/ManufacturingPipeSimulator.h
     Core/Manufacturing/RotationKinematicMode.h
     Core/Manufacturing/ManufacturingTypes.h

@@ -597,7 +597,229 @@ public:
         );
     }
 
+    //publicwrapper
+    bool preparePreviewHelixFrames(
+        LocalDeformableRegion& region
+    ) const
+    {
+        return rebuildPreviewHelixFrames(
+            region
+        );
+    }
+
 	private:
+
+// Helper prebuild all frames
+
+        bool rebuildPreviewHelixFrames(
+            LocalDeformableRegion& region
+        ) const
+        {
+            std::vector<PipeNode>& nodes =
+                region.worldPreviewHelixNodes;
+
+            if (nodes.size() < 2)
+                return false;
+
+            // =====================================================
+            // 1. Recompute tangents from preview helix positions.
+            // =====================================================
+
+            for (size_t i = 0;
+                i < nodes.size();
+                ++i)
+            {
+                nodes[i].T =
+                    calculatePreviewCurveTangent(
+                        nodes,
+                        i
+                    );
+            }
+
+            // =====================================================
+            // 2. Build the first orthonormal frame.
+            // =====================================================
+
+            nodes[0].N =
+                buildInitialPreviewNormal(
+                    nodes[0],
+                    nodes[0].T
+                );
+
+            nodes[0].B =
+                cross(
+                    nodes[0].T,
+                    nodes[0].N
+                ).normalized();
+
+            nodes[0].N =
+                cross(
+                    nodes[0].B,
+                    nodes[0].T
+                ).normalized();
+
+            // =====================================================
+            // 3. Transport the frame along the helix.
+            // =====================================================
+
+            for (size_t i = 1;
+                i < nodes.size();
+                ++i)
+            {
+                nodes[i].N =
+                    transportPreviewNormal(
+                        nodes[i - 1].N,
+                        nodes[i].T
+                    );
+
+                nodes[i].B =
+                    cross(
+                        nodes[i].T,
+                        nodes[i].N
+                    ).normalized();
+
+                // Recompute N to eliminate numerical drift.
+                nodes[i].N =
+                    cross(
+                        nodes[i].B,
+                        nodes[i].T
+                    ).normalized();
+            }
+
+            return true;
+        }
+
+// Helper transport normal to the next Node
+        Vec3D transportPreviewNormal(
+            const Vec3D& previousNormal,
+            const Vec3D& newTangent
+        ) const
+        {
+            // Project the previous normal onto the plane
+            // perpendicular to the new tangent.
+            Vec3D transportedNormal =
+                previousNormal
+                - newTangent * dot(
+                    previousNormal,
+                    newTangent
+                );
+
+            if (transportedNormal.lengthSquared() <= 1e-12)
+            {
+                Vec3D fallback =
+                    std::abs(newTangent.z) < 0.9
+                    ? Vec3D{ 0.0, 0.0, 1.0 }
+                : Vec3D{ 0.0, 1.0, 0.0 };
+
+                transportedNormal =
+                    fallback
+                    - newTangent * dot(
+                        fallback,
+                        newTangent
+                    );
+            }
+
+            return transportedNormal.normalized();
+        }
+
+//Helper  build Initial Preview Normal
+
+        Vec3D buildInitialPreviewNormal(
+            const PipeNode& firstNode,
+            const Vec3D& tangent
+        ) const
+        {
+            Vec3D normal =
+                firstNode.N;
+
+            // Remove the component parallel to the new tangent.
+            normal =
+                normal
+                - tangent * dot(
+                    normal,
+                    tangent
+                );
+
+            if (normal.lengthSquared() <= 1e-12)
+            {
+                normal =
+                    firstNode.B
+                    - tangent * dot(
+                        firstNode.B,
+                        tangent
+                    );
+            }
+
+            if (normal.lengthSquared() <= 1e-12)
+            {
+                Vec3D fallback =
+                    std::abs(tangent.z) < 0.9
+                    ? Vec3D{ 0.0, 0.0, 1.0 }
+                : Vec3D{ 0.0, 1.0, 0.0 };
+
+                normal =
+                    fallback
+                    - tangent * dot(
+                        fallback,
+                        tangent
+                    );
+            }
+
+            return normal.normalized();
+        }
+
+
+
+ //Helper calculate tangent preview curve
+        Vec3D calculatePreviewCurveTangent(
+            const std::vector<PipeNode>& nodes,
+            size_t index
+        ) const
+        {
+            if (nodes.size() < 2)
+            {
+                return Vec3D{
+                    1.0,
+                    0.0,
+                    0.0
+                };
+            }
+
+            Vec3D tangent;
+
+            if (index == 0)
+            {
+                tangent =
+                    nodes[1].pos
+                    - nodes[0].pos;
+            }
+            else if (index + 1 >= nodes.size())
+            {
+                tangent =
+                    nodes[index].pos
+                    - nodes[index - 1].pos;
+            }
+            else
+            {
+                // Central difference gives a smoother tangent
+                // than using only the next segment.
+                tangent =
+                    nodes[index + 1].pos
+                    - nodes[index - 1].pos;
+            }
+
+            if (tangent.lengthSquared() <= 1e-12)
+            {
+                return Vec3D{
+                    1.0,
+                    0.0,
+                    0.0
+                };
+            }
+
+            return tangent.normalized();
+        }
+
 //helper transformacji PipeNode
 
         PipeNode transformNodeFromLocalFrame(

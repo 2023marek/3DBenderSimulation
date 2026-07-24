@@ -819,6 +819,8 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
         false;
     bool worldPreviewHelixReady =
         false;
+    bool previewHelixFramesReady =
+        false; 
 
     if (lastLocalDeformableRegion.valid)
     {
@@ -858,6 +860,14 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
                     lastLocalDeformableRegion
                 );
         }
+
+        if (worldPreviewHelixReady)
+        {
+            previewHelixFramesReady =
+                pipe().preparePreviewHelixFrames(
+                    lastLocalDeformableRegion
+                );
+        }
     }
     if (helixOffsetsReady
         && !lastLocalDeformableRegion.helixOffsets.empty())
@@ -888,6 +898,38 @@ void SimulationController::debugSelectFirstAdditionalPassRegion()
                 const PipeNode& lastWorld =
                     lastLocalDeformableRegion
                     .worldPreviewHelixNodes.back();
+
+                if (previewHelixFramesReady)
+                {
+                    const PipeNode& first =
+                        lastLocalDeformableRegion
+                        .worldPreviewHelixNodes.front();
+
+                    const PipeNode& middle =
+                        lastLocalDeformableRegion
+                        .worldPreviewHelixNodes[
+                            lastLocalDeformableRegion
+                                .worldPreviewHelixNodes.size() / 2
+                        ];
+
+                    std::cout
+                        << "[PREVIEW HELIX FRAME]"
+                        << " firstTLength="
+                        << first.T.length()
+                        << " firstNLength="
+                        << first.N.length()
+                        << " firstBLength="
+                        << first.B.length()
+                        << " dotTN="
+                        << dot(first.T, first.N)
+                        << " dotTB="
+                        << dot(first.T, first.B)
+                        << " dotNB="
+                        << dot(first.N, first.B)
+                        << " middleTLength="
+                        << middle.T.length()
+                        << std::endl;
+                }
 
                 std::cout
                     << "[PREVIEW HELIX WORLD]"

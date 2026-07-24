@@ -6326,3 +6326,1169 @@ helix preview:
 Nie zmieniamy ¿adnej geometrii manufacturing.
 
 
+Current:
+
+preview points:
+~ ~ ~ ~ ~
+
+frames:
+? ? ? ? ?
+copied from old pipe
+
+Result:
+flat ribbon / conveyor
+
+Needed:
+
+preview points:
+~ ~ ~ ~ ~
+
+frames:
+? ? ? ? ?
+following the helix
+
+Result:
+round tube
+
+So Phase 8Q is only partially complete:
+
+? world helix centerline rendering correct
+? LINE mode correct
+? MESH node frames not rebuilt
+
+Next phase should be:
+===================================================================
+Phase 8R
+Recompute tangent and moving frames for preview helix nodes
+
+Musimy uzyskaæ:
+
+T = kierunek helisy
+N/B = p³aszczyzna przekroju prostopad³a do helisy
+
+ASCII:
+
+B£ÊDNIE — stare frame:
+
+helix:   ~~~~~~~~
+frames:  ? ? ? ? ?
+
+mesh:    p³aska taœma
+POPRAWNIE — frame pod¹¿a za helis¹:
+
+helix:   ~~~~~~~~
+frames:  ? ? ? ? ?
+
+mesh:    okr¹g³a rura
+
+Nie zmieniamy rotary draw geometry. Operujemy wy³¹cznie na:
+
+region.worldPreviewHelixNodes
+
+ical
+=================================================
+=================================================
+==============================================
+Segment 9, we should clearly separate two different helix concepts:
+
+A. Additional helix following existing centerline
+   = completed preview concept
+
+B. Canonical helix manufacturing
+   = new real forming process
+
+The canonical helix should have its own process-aware state,
+similar to rotary bending.
+The canonical helix should have its own process-aware state, similar to rotary bending.
+
+Suggested four-zone model:
+
+IncomingStock
+      ?
+PositionedStraight
+      ?
+ActiveHelixZone
+      ?
+FrozenHelixGeometry
+
+
+
+During execution:
+
+incoming stock
+==============================>
+
+positioned straight
+-------->
+
+active helix zone
+        @@@
+
+frozen helix
+           @@@@@@@@@@@@@
+
+More complete state flow:
+
+IncomingStock
+    material not yet fed
+
+PositionedStraight
+    material fed into helix machine,
+    waiting to enter rollers/forming zone
+
+ActiveZone
+    small currently deforming helix section
+
+CurrentFormingTrace
+    complete helix generated during current operation
+
+FrozenGeometry
+    completed canonical helix behind active zone
+
+    his preserves the successful rotary architecture:
+
+Rotary draw:
+Incoming ? Straight ? Bend ActiveZone ? Trace ? Frozen
+
+Canonical helix:
+Incoming ? Straight ? Helix ActiveZone ? Trace ? Frozen
+
+Segment 9 should probably proceed in this order:
+
+9A  Define canonical forming process ownership
+9B  Define shared four-zone interface
+9C  Add canonical helix active-zone state
+9D  Define helix machine entry frame and axis
+9E  Implement incremental helix feed/forming step
+9F  Freeze completed helix trace
+9G  Render canonical helix playback
+9H  Review stretch-bending mapping
+9I  Review two-roller continuous mapping
+
+mportant architectural rule:
+
+Do not merge helix mathematics into processBend().
+
+Instead:
+
+processBend()
+    = rotary-draw forming path
+
+processHelixForming()
+    = canonical helix path
+
+processStretchBend()
+    = future stretch-bending path
+
+processTwoRollerForming()
+    = future continuous-roll path
+
+All may reuse concepts such as:
+
+IncomingStock
+PositionedStraight
+ActiveZone
+CurrentTrace
+FrozenGeometry
+Frame
+sampling
+render-data separation
+
+But each process should own its own kinematics.
+
+The correct next phase is:
+
+Segment 9 — Phase 9A
+Define canonical helix manufacturing ownership and four-zone state
+
+Segment 9 — Phase 9A
+Define canonical helix manufacturing ownership and four-zone state
+
+The purpose of Phase 9A is to define where canonical helix 
+forming belongs architecturally before writing the real forming algorithm.
+
+This is different from the previous additional-pass preview.
+
+Previous work:
+
+existing bent pipe
+        ?
+selected region
+        ?
+helix preview follows existing centerline
+=======================
+New Segment 9 goal:
+
+straight stock
+        ?
+helix-forming machine
+        ?
+canonical helix manufactured progressively
+
+ASCII:
+
+straight stock
+==============================>
+
+helix machine
+        ?
+
+canonical helix
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+1. Ownership
+
+The top-level execution should remain:
+
+SimulationController
+        ?
+selects current operation
+        ?
+calls ManufacturingPipeSimulator
+
+For canonical helix:
+
+SimulationController
+        ?
+processHelixForming(...)
+        ?
+ManufacturingPipeSimulator
+        ?
+updates helix manufacturing state
+
+Ownership rule:
+
+SimulationController
+    owns timing, operation progress and sequencing
+
+ManufacturingPipeSimulator
+    owns actual material transition and geometry
+
+GLView
+    renders the resulting zones only
+
+Do not put helix geometry logic in:
+
+AppController
+GLView
+HUD
+ManufacturingPlanPreviewModel
+2. Separate helix operation path
+
+Do not extend rotary bending by inserting helix logic into:
+
+processBend(...)
+
+Instead create a separate future entry point:
+
+void processHelixForming(
+    double feedDistance,
+    double helixRadius,
+    double pitch
+);
+
+Conceptually:
+
+processFeed()
+processBend()
+processRotate()
+processHelixForming()
+processStretchBend()
+processTwoRollerForming()
+
+Each operation may reuse shared state concepts, but owns different kinematics.
+=============================================
+3. Four-zone state
+
+For canonical helix manufacturing, use four main process zones.
+
+IncomingStock
+PositionedStraight
+ActiveHelixZone
+FrozenHelixGeometry
+
+With an additional trace/cache:
+
+CurrentHelixTrace
+
+ASCII:
+
+machine entry
+    ?
+    ?
+
+IncomingStock
+======================
+
+PositionedStraight
+            -----------
+
+ActiveHelixZone
+                       @@@
+
+FrozenHelixGeometry
+                          @@@@@@@@@@@@@
+
+
+=====================
+4. Meaning of each zone
+IncomingStock
+
+Material not yet fed into the helix machine.
+
+============================>
+
+PositionedStraight
+
+Material already fed forward but not yet consumed by the helix forming zone.
+
+machine entry
+    ?
+    ?
+---------- straight waiting material
+
+This can initially reuse your existing:
+
+state.positionedStraight
+
+But its meaning during helix forming is:
+
+straight material available to enter the helix forming zone
+
+===
+ActiveHelixZone
+
+The small section currently being transformed from straight material into helix geometry.
+
+straight -------- @@@
+                  active
+
+It should own data such as:
+
+=======
+CurrentHelixTrace
+
+Stores all nodes generated during the current helix-forming operation.
+
+active zone only:
+@@@
+
+current trace:
+@@@@@@@@@@@@@@@@
+
+The active zone may contain only a small moving window, but the trace preserves the whole current operation until it is frozen.
+
+Suggested:
+
+std::vector<PipeNode> currentHelixTraceNodes;
+
+Meaning:
+
+all canonical helix nodes generated by the current operation
+
+===================
+FrozenHelixGeometry
+
+Completed helix geometry that is no longer actively changing.
+
+@@@@@@@@@@@@@@@@@@@@@@@@
+
+It becomes part of the final manufactured pipe.
+
+The first implementation may reuse:
+
+state.frozenNodes
+
+because frozen geometry already means:
+
+completed manufactured geometry
+
+But we should not immediately create a second unrelated frozen container unless necessary.
+
+Recommended concept:
+
+shared frozenNodes
+    may contain rotary, helix, stretch and roller geometry
+
+process-specific active zones and traces
+    remain separate
+==================================
+    Recommended concept:
+
+shared frozenNodes
+    may contain rotary, helix, stretch and roller geometry
+
+process-specific active zones and traces
+    remain separate
+5. Material flow
+
+Canonical helix forming should consume material in this order:
+
+IncomingStock
+        ? processFeed()
+PositionedStraight
+        ? processHelixForming()
+ActiveHelixZone
+        ? operation progresses
+CurrentHelixTrace
+        ? operation complete
+FrozenGeometry
+
+ASCII:
+
+INCOMING
+=======================
+
+feed
+  ?
+
+POSITIONED
+-----------
+
+helix step
+  ?
+
+ACTIVE
+@@@
+
+continue
+  ?
+
+TRACE
+@@@@@@@@@@@@
+
+finish
+  ?
+
+FROZEN
+@@@@@@@@@@@@@@@@
+
+
+=====
+6. Difference from rotary bending
+
+Rotary draw:
+
+arcStepLength =
+    radius * bendAngleStep
+
+Canonical helix:
+
+material step =
+    helix centerline arc-length increment
+
+The helix position is generated from cumulative centerline distance:
+
+angle = 2? × axialAdvance / pitch
+
+or more carefully, depending on whether your operation length means:
+
+axial helix length
+
+or:
+
+material centerline length
+
+That distinction must be resolved before implementation.
+
+===============================================
+7. Important state decision
+
+The recommended architecture is:
+
+ManufacturingState
+    ??? incomingStock
+    ??? positionedStraight
+    ??? rotaryActiveZone
+    ??? currentBendTraceNodes
+    ??? helixActiveZone
+    ??? currentHelixTraceNodes
+    ??? frozenNodes
+
+Not:
+
+one generic ActiveZone containing all possible process data
+
+at least not initially.
+
+Reason:
+
+rotary bend state and helix state have different parameters,
+different kinematics and different completion rules
+
+Later, shared interfaces may be extracted once the behavior is stable.
+
+8. Rendering ownership
+
+ManufacturingRenderData may later expose:
+
+incomingStockNodes
+positionedStraightNodes
+
+currentBendTraceNodes
+rotaryActiveZoneNodes
+
+currentHelixTraceNodes
+helixActiveZoneNodes
+
+frozenNodes
+
+GLView should only draw these zones.
+
+ASCII render order:
+
+1. incoming stock
+2. positioned straight
+3. frozen geometry
+4. current process trace
+5. active process zone
+
+For helix playback:
+
+incoming
+positioned
+frozen helix
+current helix trace
+active helix zone
+
+====
+9. Compatibility with existing rotary code
+
+The current rotary implementation remains intact:
+
+processBend()
+beginBendFromFrame()
+updateActiveZone()
+freezeActiveZone()
+
+The new helix path should add separate functions:
+
+beginHelixFromFrame()
+updateHelixActiveZone()
+freezeHelixActiveZone()
+processHelixForming()
+
+ASCII:
+
+ManufacturingPipeSimulator
+    ??? rotary path
+    ?     ??? processBend
+    ?     ??? active bend zone
+    ?     ??? bend trace
+    ?
+    ??? helix path
+          ??? processHelixForming
+          ??? active helix zone
+          ??? helix trace
+
+This means a failed helix experiment can be disabled or 
+removed without destabilizing
+rotary draw playback.
+
+Phase 9A conclusion
+
+The recommended ownership model is:
+
+SimulationController
+    sequences HELIX operation
+
+ManufacturingPipeSimulator
+    owns helix material conversion
+
+ManufacturingState
+    stores helix active zone and trace
+
+frozenNodes
+    stores completed geometry
+
+GLView
+    renders zones only
+
+The canonical helix four-zone pipeline is:
+
+IncomingStock
+      ?
+PositionedStraight
+      ?
+ActiveHelixZone
+      ?
+FrozenGeometry
+
+with:
+
+CurrentHelixTrace
+
+preserving the complete operation during playback.
+
+Next phase:
+
+Design principle
+FrozenNodes represents the final manufactured geometry shared by 
+all manufacturing processes.
+Active Zones are process-specific because each manufacturing technology 
+has different kinematics,
+parameters, and completion rules.
+Current Traces are also process-specific because they describe
+geometry currently being generated by a particular manufacturing process.
+Rendering should treat all frozen geometry uniformly, while active 
+zones and traces remain independent for each process.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+Mathematically, a two-roller continuous pipe bending 
+system can be modeled as a moving beam/pipe where one adjustable 
+roller imposes a lateral displacement or contact force while the 
+pipe is continuously fed.
+
+1. Basic variables
+
+Let:
+
+s=pipe feed length
+v=dt/ds =feed speed
+
+?=adjustable roller displacement
+L=effective distance between contact/support points
+R=bend radius
+?= 1/R
+
+2. Geometry approximation
+
+If the pipe is forced into an arc between two effective contact points,
+the simplest sagitta relation is:
+
+R=L^2/8*?  +?/2
+
+So curvature is:
+
+?=1/(L^2/8*?  +?/2)	?
+
+
+For small displacement:
+
+??8?/L^2 
+	?
+This is the first useful control equation.
+
+3. Continuous feed equation
+
+Because the pipe moves continuously:
+
+s=vt
+
+So curvature becomes a function of feed length:
+
+?(s)
+
+or time:
+
+?(t)
+
+If roller displacement changes during feeding:
+
+?=?(t)
+
+then:
+
+?(t)?8?(t)/L^2
+	?
+
+
+and since s=vt:
+
+?(s)?8?(s)/L^2
+	?
+
+4. Pipe centerline calculation
+
+For 2D bending, the pipe shape is computed from curvature.
+
+Angle update:
+
+d?/ds =?(s)
+
+Position update:
+
+dx/ds =cos?
+
+dy/ds=sin?
+
+So numerically:
+
+?i+1=?i+?i?s
+
+xi+1=xi+?scos?i
+
+yi+1=yi+?ssin?i
+	?
+This is the core simulation model.
+
+5. Force and moment model
+
+Elastic bending:
+
+M=EI?
+
+For a pipe:
+
+I=?/64 [D^4?(D?2t)^4]
+
+Approximate roller force:
+
+F?4M/L
+Therefore:
+
+F?4EI?/L
+Using:
+
+?? 8?/L^2 
+
+gives:
+
+F?32EI?/L^3
+
+This is useful for estimating actuator force.
+
+6. Plastic bending condition
+
+Permanent bend begins when:
+
+?>?y
+
+where yield curvature is:
+
+?y =2?y/ED
+
+If:
+
+?<?y
+
+the pipe mostly springs back.
+
+If:
+
+?>?y
+
+plastic curvature remains.
+
+7. Final curvature after springback
+
+A simple model:
+
+?f=?loaded??elastic
+where:
+?elastic=Munload/EI
+	?
+Practical control form:
+
+?machine=?target+?springback
+So the machine must overbend:
+
+Rmachine<Rtarget
+8. Control law
+If you measure actual curvature:
+e?=?target??measured
+then roller correction:
+?new=?old+Kpe?
+	?
+
+More complete PID:
+
+?new=?old+Kpe?+Ki?e?dt+Kdde?/dt
+
+9. For variable-radius bending
+
+If desired radius changes along the pipe:
+
+R=R(s)
+
+then:
+
+?(s)=1/R(s)
+
+Required roller displacement:
+
+?(s)?L^2/8?(s)
+or:
+?(s)?L^2/8R(s)
+
+This is the mathematical basis for continuous variable arc forming.
+
+10. Full calculation chain
+
+For control:
+
+Rtarget(s)??target(s)=1/Rtarget(s)
+
+?target
+(s)??(s)??target(s)L2/8
+	?
+
+?(s)?F(s)?32EI?(s)/ L^3
+	?
+
+?(s)?x(s),y(s)
+
+using:
+
+?i+1=?i+?i?s
+xi+1=xi+?scos?i
+yi+1=yi+?ssin?i
+	?
+That is the basic mathematical system for two-roller continuous 
+pipe bending.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+3-roll bending machine producing a helix
+helix requires:
+
+Curvature (?)
+Torsion (?)
+
+Curvature tells how strongly the centerline bends.
+
+Torsion tells how strongly the curve twists out of its bending plane.
+
+1. Helix parameterization
+
+A circular helix can be written as:
+
+x=rcost
+y=rsint
+z=bt
+
+Where:
+
+r = helix radius
+b = vertical rise parameter
+
+Pitch
+Usually we use pitch P:
+P=2?b
+Thus:
+b= P/2?
+2. Arc length
+
+One revolution:
+Lrev=sqrt((2?r)^2 +P^2)
+Very important for CNC feed calculation.
+
+3. Helix curvature
+
+The exact curvature is:
+
+Using pitch:
+?=r/(r^2 +(P/2?)^2)
+
+Radius of curvature
+Rc=1/?
+Thus:
+
+Rc?=r^2+b^2/r?
+Notice:
+Curvature radius ? helix radius.
+This is a common mistake.
+
+4. Helix torsion
+
+The exact torsion is:
+
+
+?=b/(b^2+r^2)
+
+Using pitch:
+
+?=P/2?/(r^2+(P/(2?)^2
+
+Interpretation
+If:
+P=0
+then:
+?=0
+which is just a circle.
+As pitch increases:
+?
+increases.
+The pipe twists more strongly in space.
+
+5. Relationship between curvature and torsion
+
+For a circular helix:
+
+?/?=b/r
+or
+?/?=P/2?r
+This ratio completely determines helix shape.
+6. Helix angle
+
+Helix angle:
+
+?=tan?1(P/2?r)
+
+Then:
+?=cos^2?/r
+	?
+
+?=sin?cos?/r
+Useful for machine control.
+7. Curvature vector
+For simulation:
+?=?n
+where:
+n
+is the principal normal.
+Magnitude:
+???=?
+8. Frenet-Serret equations
+These are the fundamental equations for helix simulation.
+dT/ds=?N
+dN/ds=??T+?B
+
+dB/ds=??N
+Where:
+T = tangent
+N = normal
+B = binormal
+
+8. Frenet-Serret equations
+
+For numerical integration:	?
+?i+1=?i+?i?s
+Twist:
+?i+1=?i+?i?s
+Then:
+xi+1=xi+?sTx
+yi+1=yi+?sTy
+zi+1=zi+?sTz
+This is how many tube-forming simulations are implemented
+
+10. Roller-bending machine interpretation
+
+For a 3-roll machine producing a helix:
+
+You control two independent quantities:
+
+Curvature
+
+Created by roller penetration:
+
+??8?/L^2
+
+where
+L = roller spacing
+? = roller displacement
+Torsion
+
+Created by controlled pipe rotation:
+
+??d?/ds
+where:
+? = pipe rotation angle
+s = feed length
+This is one of the most important formulas for 3D roll bending.
+
+11. Machine control equations
+
+Feed speed:
+v=ds/dt
+Rotation speed:
+
+?=d?/dt
+
+Then:
+
+?=?/v
+
+This is the practical CNC formula.
+
+12. Inverse problem (most useful)
+
+Suppose you want:
+
+helix radius r
+pitch P
+
+Compute:
+
+b=P/2?
+Then:
+?=r/(r^2+b^2)
+
+?=b/(r^2+b^2)
+
+Then machine commands become:
+
+?=?L^2?/8
+?=?v
+
+This is essentially the mathematical core of generating a helical 
+pipe on a CNC 3-roll bending machine:
+
+Desired helix geometry ? (?,?) ? roller position ? and pipe rotation speed ?.
+
+=====================================
+Segment 9 — Phase 9B
+Define spatial curve integration result
+
+Phase 9A defined the input command:
+
+CurvatureTorsionProfile
+    ?(s)
+    ?(s)
+
+Phase 9B defines the output produced by the future shared integrator:
+
+SpatialCurveIntegrationResult
+    generated PipeNodes
+    generated arc lengths
+    final frame
+    diagnostic status
+
+No integration algorithm yet.
+2. Why store both nodes and arcLengths?
+
+A generated node needs a physical material coordinate:
+
+nodes[i]
+    = point and frame in 3D
+
+arcLengths[i]
+    = material distance s along the curve
+
+ASCII:
+
+s=0       s=0.5       s=1.0       s=1.5
+ ?----------?-----------?-----------?
+ node 0     node 1      node 2      node 3
+
+This will later support:
+
+?(s)
+?(s)
+machine control at s
+material strain at s
+springback at s
+debug coloring by feed length
+
+Do not try to recover s later from world-space coordinates. 
+Store it during integration.
+
+3. Why store start and end frames?
+
+The integrator will start from a supplied machine/process frame:
+
+startFrame
+
+and progressively generate:
+
+P, T, N, B
+
+The final frame is required when another zone or operation continues
+from the generated geometry.
+
+start frame
+    ?
+    ?
+???????????)???????????
+                      ?
+                   end frame
+
+Possible continuation:
+
+Stretch operation
+      ?
+endFrame
+      ?
+next feed / forming operation
+
+4. Why distinguish requested and integrated length?
+
+A process may request:
+
+requestedArcLength = 200 mm
+
+but integration may stop early because of:
+
+invalid ? or ?
+stock exhaustion
+step limit
+numerical failure
+material constraint
+
+Then:
+
+requestedArcLength = 200
+integratedArcLength = 143.5
+valid = false or incomplete
+
+This is similar to the distinction you already introduced between:
+
+requested feed
+actual feed
+
+The geometry engine must report what it actually generated.
+
+4. Why distinguish requested and integrated length?
+
+A process may request:
+
+requestedArcLength = 200 mm
+
+but integration may stop early because of:
+
+invalid ? or ?
+stock exhaustion
+step limit
+numerical failure
+material constraint
+
+Then:
+
+requestedArcLength = 200
+integratedArcLength = 143.5
+valid = false or incomplete
+
+This is similar to the distinction you already introduced between:
+
+requested feed
+actual feed
+
+The geometry engine must report what it actually generated.
+
+Architectural flow after Phase 9B
+Machine or process model
+        ?
+        ?
+CurvatureTorsionProfile
+        ?
+        ? ?(s), ?(s)
+        ?
+future SpatialCurveIntegrator
+        ?
+        ?
+SpatialCurveIntegrationResult
+        ??? nodes
+        ??? arcLengths
+        ??? startFrame
+        ??? endFrame
+        ??? actual generated length
+        ??? status
+
+The result remains temporary:
+
+SpatialCurveIntegrationResult
+        ?
+        ??? debug rendering
+        ??? validation
+        ??? later commit to manufacturing zones
+
+It must not automatically write into:
+
+IncomingStock
+PositionedStraight
+ActiveZone
+CurrentTrace
+FrozenGeometry
+
+That responsibility belongs to the process-specific manufacturing layer.
