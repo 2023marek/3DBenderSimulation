@@ -7328,6 +7328,29 @@ pipe on a CNC 3-roll bending machine:
 Desired helix geometry ? (?,?) ? roller position ? and pipe rotation speed ?.
 
 =====================================
+
+StretchBendingMachineModel
+            ?
+            ??? calculates ?(s)
+            ??? calculates ?(s)
+            ??? checks strain/tension
+                        ?
+                        ?
+             CurvatureTorsionProfile
+                        ?
+                        ?
+              SpatialCurveIntegrator
+                        ?
+                        ?
+                    PipeNodes
+
+
+TwoRollerMachineModel ????????
+StretchBendingMachineModel ????> CurvatureTorsionProfile
+ThreeRollHelixMachineModel ???
+CanonicalHelixModel ??????????
+
+
 Segment 9 — Phase 9B
 Define spatial curve integration result
 
@@ -7492,3 +7515,172 @@ CurrentTrace
 FrozenGeometry
 
 That responsibility belongs to the process-specific manufacturing layer.
+
+================================================================
+
+Phase 9C — Define process-independent spatial curve integrator interface
+
+Goal
+
+Create one shared integrator interface that accepts:
+
+start frame
+curvature/torsion profile
+sample step
+
+and returns:
+
+SpatialCurveIntegrationResult
+
+The integrator must not know whether the profile came from:
+
+stretch bending
+two-roller forming
+canonical helix
+three-roll helix
+
+ASCII:
+
+Process model
+    ?
+    ??? ?(s)
+    ??? ?(s)
+         ?
+CurvatureTorsionProfile
+         ?
+SpatialCurveIntegrator
+         ?
+SpatialCurveIntegrationResult
+         ?
+temporary preview / later manufacturing commit
+
+
+Ownership rule
+SpatialCurveIntegrator
+    owns:
+        numerical geometry integration
+
+does not own:
+        incoming stock
+        positioned straight
+        active zones
+        traces
+        frozen geometry
+        process timing
+        material physics
+
+
+That separation is critical.
+
+ASCII:
+
+StretchBendingMachineModel
+        ?
+CurvatureTorsionProfile
+        ?
+SpatialCurveIntegrator
+        ?
+temporary result
+        ?
+StretchBending process decides what to do with it
+
+========================================================
+Phase 9D — Implement constant-step Frenet integration
+Goal
+
+Generate PipeNode geometry from:
+
+startFrame
+?(s)
+?(s)
+sampleStep
+
+using a constant integration step.
+
+Core equations:
+
+dT/ds = ?N
+dN/ds = -?T + ?B
+dB/ds = -?N
+dP/ds = T
+
+Discrete first implementation:
+
+Tnext = T + ds · ? · N
+Nnext = N + ds · (-?T + ?B)
+Bnext = B + ds · (-?N)
+Pnext = P + ds · Tnext
+
+After every step, the frame is orthonormalized.
+
+ASCII:
+
+start frame
+     T ?
+     ?
+      \
+       ?
+        \
+         ?
+          \
+           ? generated curve
+
+This phase generates temporary geometry only. It does 
+not update manufacturing state or rendering.
+
+================================================
+7. Why use average tangent for position?
+
+Basic Euler would use:
+
+Pnext =
+    P + ds * oldT;
+
+We use:
+
+movementDirection =
+    normalize(oldT + nextT);
+
+This reduces visible chord error on curved paths while keeping the method simple.
+
+ASCII:
+
+old tangent  ?
+new tangent   ?
+
+average direction:
+              ?
+
+It is still a first implementation, not a high-order solver.
+
+8. Important numerical limitation
+
+This explicit Frenet integration works best when:
+
+sampleStep × |?| << 1
+sampleStep × |?| << 1
+
+For example:
+
+sampleStep = 0.5 mm
+curvature  = 0.05 /mm
+
+step rotation ? 0.025 rad
+
+That is reasonable.
+
+Large steps may produce:
+
+shape error
+frame drift
+poor radius accuracy
+
+The frame is orthonormalized every step, which prevents severe basis collapse, but it does not make the method exact.
+
+Later upgrades may use:
+
+RK4
+rotation exponential
+adaptive step integration
+
+Do not add those yet.
