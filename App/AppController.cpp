@@ -89,7 +89,22 @@ namespace
 
     constexpr double TEST_MAX_RELATIVE_POSITION_ERROR =
         1e-3;
-    
+    // helix spatial test
+    constexpr bool DEBUG_TEST_SPATIAL_HELIX_INTEGRATOR =
+        true;
+
+    // Target circular helix dimensions.
+    constexpr double TEST_SPATIAL_HELIX_RADIUS =
+        20.0; // mm
+
+    constexpr double TEST_SPATIAL_HELIX_PITCH =
+        30.0; // mm per revolution
+
+    constexpr double TEST_SPATIAL_HELIX_TURNS =
+        3.0;
+
+    constexpr double TEST_SPATIAL_HELIX_SAMPLE_STEP =
+        0.125; // mm
 }
 
 
@@ -133,6 +148,7 @@ AppController::AppController()
     configureManufacturingDebug();
     configureControllerDebug();
     debugTestSpatialCurveIntegrator();
+    debugTestSpatialHelixIntegrator();
 }
 
 
@@ -774,7 +790,7 @@ void AppController::toggleSimulationMode()
 
     //debug test standalone
 
-    void AppController::debugTestSpatialCurveIntegrator() const
+    void AppController::debugTestSpatialCurveIntegrator() 
     {
         if (!DEBUG_TEST_SPATIAL_CURVE_INTEGRATOR)
             return;
@@ -793,7 +809,7 @@ void AppController::toggleSimulationMode()
         startFrame.P =
             Vec3D{
                 0.0,
-                0.0,
+                -120.0,
                 0.0
         };
 
@@ -835,12 +851,15 @@ void AppController::toggleSimulationMode()
 
         SpatialCurveIntegrator integrator;
 
-        SpatialCurveIntegrationResult result =
+        debugPlanarIntegrationResult =
             integrator.integrate(
                 startFrame,
                 profile,
                 TEST_INTEGRATOR_SAMPLE_STEP
             );
+
+        const SpatialCurveIntegrationResult& result =
+            debugPlanarIntegrationResult;
 
         // =====================================================
         // DIAGNOSTICS
@@ -911,11 +930,15 @@ void AppController::toggleSimulationMode()
                 * TEST_INTEGRATOR_ARC_LENGTH;
 
             Vec3D expectedEnd{
-                radius * std::sin(angle),
-                radius * (
-                    1.0 - std::cos(angle)
-                ),
-                0.0
+     startFrame.P.x
+         + radius * std::sin(angle),
+
+     startFrame.P.y
+         + radius * (
+             1.0 - std::cos(angle)
+         ),
+
+     startFrame.P.z
             };
 
             Vec3D endpointError =
@@ -1022,4 +1045,306 @@ void AppController::toggleSimulationMode()
                 << endpointError.length()
                 << std::endl;
         }
+    }
+
+
+
+// spatial helix test
+
+
+    void AppController::debugTestSpatialHelixIntegrator()
+    {
+        if (!DEBUG_TEST_SPATIAL_HELIX_INTEGRATOR)
+            return;
+
+        // =====================================================
+        // 1. TARGET HELIX PARAMETERS
+        // =====================================================
+
+        const double radius =
+            TEST_SPATIAL_HELIX_RADIUS;
+
+        const double pitch =
+            TEST_SPATIAL_HELIX_PITCH;
+
+        const double turns =
+            TEST_SPATIAL_HELIX_TURNS;
+
+        const double b =
+            pitch / (2.0 * PI);
+
+        const double q =
+            std::sqrt(
+                radius * radius
+                + b * b
+            );
+
+        const double curvature =
+            radius
+            / (
+                radius * radius
+                + b * b
+                );
+
+        const double torsion =
+            b
+            / (
+                radius * radius
+                + b * b
+                );
+
+        const double lengthPerTurn =
+            2.0 * PI * q;
+
+        const double totalArcLength =
+            turns * lengthPerTurn;
+
+        // =====================================================
+        // 2. ANALYTICALLY CONSISTENT START FRAME
+        //
+        // Canonical helix:
+        //
+        //     x = r cos(u)
+        //     y = r sin(u)
+        //     z = b u
+        //
+        // At u = 0:
+        //
+        //     P = (r, 0, 0)
+        // =====================================================
+
+        Frame startFrame;
+
+        startFrame.P =
+            Vec3D{
+                radius,
+                120.0,
+                0.0
+        };
+
+        startFrame.T =
+            Vec3D{
+                0.0,
+                radius / q,
+                b / q
+        };
+
+        startFrame.N =
+            Vec3D{
+                -1.0,
+                0.0,
+                0.0
+        };
+
+        startFrame.B =
+            cross(
+                startFrame.T,
+                startFrame.N
+            ).normalized();
+
+        // =====================================================
+        // 3. CONSTANT ? / ? PROFILE
+        // =====================================================
+
+        CurvatureTorsionProfile profile =
+            ConstantCurvatureTorsionProfileBuilder::build(
+                totalArcLength,
+                curvature,
+                torsion
+            );
+
+        // =====================================================
+        // 4. INTEGRATE TEMPORARY 3D CURVE
+        // =====================================================
+
+        SpatialCurveIntegrator integrator;
+
+        debugHelixIntegrationResult =
+            integrator.integrate(
+                startFrame,
+                profile,
+                TEST_SPATIAL_HELIX_SAMPLE_STEP
+            );
+
+        const SpatialCurveIntegrationResult& result =
+            debugHelixIntegrationResult;
+
+        std::cout
+            << "[SPATIAL HELIX TEST]"
+            << " valid="
+            << result.valid
+            << " complete="
+            << result.isComplete()
+            << " radius="
+            << radius
+            << " pitch="
+            << pitch
+            << " turns="
+            << turns
+            << " curvature="
+            << curvature
+            << " torsion="
+            << torsion
+            << " requestedLength="
+            << totalArcLength
+            << " integratedLength="
+            << result.integratedArcLength
+            << " nodes="
+            << result.nodes.size()
+            << std::endl;
+
+        if (!result.isComplete()
+            || result.nodes.empty())
+        {
+            std::cout
+                << "[SPATIAL HELIX ACCEPTANCE] FAIL"
+                << std::endl;
+
+            return;
+        }
+
+        // =====================================================
+        // 5. ANALYTICAL ENDPOINT
+        // =====================================================
+
+        const double finalAngle =
+            2.0 * PI * turns;
+
+        Vec3D expectedEnd{
+    radius * std::cos(finalAngle),
+    120.0
+        + radius * std::sin(finalAngle),
+    b * finalAngle
+        };
+
+        const PipeNode& generatedEnd =
+            result.nodes.back();
+
+        const Vec3D positionDifference =
+            generatedEnd.pos
+            - expectedEnd;
+
+        const double positionError =
+            positionDifference.length();
+
+        // After a whole number of turns, X/Y return to the
+        // starting angular position and Z rises by turns*pitch.
+        std::cout
+            << "[SPATIAL HELIX ENDPOINT]"
+            << " generated=("
+            << generatedEnd.pos.x << ", "
+            << generatedEnd.pos.y << ", "
+            << generatedEnd.pos.z << ")"
+            << " expected=("
+            << expectedEnd.x << ", "
+            << expectedEnd.y << ", "
+            << expectedEnd.z << ")"
+            << " positionError="
+            << positionError
+            << std::endl;
+
+        // =====================================================
+        // 6. ANALYTICAL END TANGENT
+        // =====================================================
+
+        Vec3D expectedEndTangent{
+            -radius
+                * std::sin(finalAngle)
+                / q,
+
+            radius
+                * std::cos(finalAngle)
+                / q,
+
+            b / q
+        };
+
+        const Vec3D tangentDifference =
+            generatedEnd.T
+            - expectedEndTangent;
+
+        const double tangentError =
+            tangentDifference.length();
+
+        const double lengthError =
+            std::abs(
+                result.integratedArcLength
+                - totalArcLength
+            );
+
+        const double relativePositionError =
+            positionError
+            / totalArcLength;
+
+        // =====================================================
+        // 7. INITIAL ACCEPTANCE THRESHOLDS
+        //
+        // The test is longer and spatial, so use a slightly
+        // larger endpoint tolerance than the planar 100 mm test.
+        // =====================================================
+
+        constexpr double MAX_HELIX_POSITION_ERROR =
+            0.10; // mm
+
+        constexpr double MAX_HELIX_TANGENT_ERROR =
+            2e-3;
+
+        constexpr double MAX_HELIX_LENGTH_ERROR =
+            1e-6; // mm
+
+        constexpr double MAX_HELIX_RELATIVE_ERROR =
+            1e-3; // 0.1%
+
+        const bool positionAccepted =
+            positionError
+            <= MAX_HELIX_POSITION_ERROR;
+
+        const bool tangentAccepted =
+            tangentError
+            <= MAX_HELIX_TANGENT_ERROR;
+
+        const bool lengthAccepted =
+            lengthError
+            <= MAX_HELIX_LENGTH_ERROR;
+
+        const bool relativeAccepted =
+            relativePositionError
+            <= MAX_HELIX_RELATIVE_ERROR;
+
+        const bool accepted =
+            positionAccepted
+            && tangentAccepted
+            && lengthAccepted
+            && relativeAccepted;
+
+        std::cout
+            << "[SPATIAL HELIX ACCURACY]"
+            << " positionError="
+            << positionError
+            << " tangentError="
+            << tangentError
+            << " lengthError="
+            << lengthError
+            << " relativePositionError="
+            << relativePositionError
+            << " positionAccepted="
+            << positionAccepted
+            << " tangentAccepted="
+            << tangentAccepted
+            << " lengthAccepted="
+            << lengthAccepted
+            << " relativeAccepted="
+            << relativeAccepted
+            << " accepted="
+            << accepted
+            << std::endl;
+
+        std::cout
+            << "[SPATIAL HELIX ACCEPTANCE] "
+            << (
+                accepted
+                ? "PASS"
+                : "FAIL"
+                )
+            << std::endl;
     }

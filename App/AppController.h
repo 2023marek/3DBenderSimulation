@@ -18,6 +18,7 @@
 #include "Core/Forming/DeformableRegionSelection.h"
 #include "Core/Forming/LocalDeformableRegion.h"
 #include "Core/Geometry/SpatialCurveAccuracyReport.h"
+#include "Core/Geometry/SpatialCurveIntegrationResult.h"
 
 
 class AppController
@@ -212,6 +213,24 @@ public:
      const LocalDeformableRegion&
          getLastLocalDeformableRegion() const;
 
+     //Getter
+     const SpatialCurveIntegrationResult&
+         getDebugPlanarIntegrationResult() const
+     {
+         return debugPlanarIntegrationResult;
+     }
+
+     const SpatialCurveIntegrationResult&
+         getDebugHelixIntegrationResult() const
+     {
+         return debugHelixIntegrationResult;
+     }
+
+     bool isSpatialIntegratorPreviewVisible() const
+     {
+         return spatialIntegratorPreviewVisible;
+     }
+
 private:
     
 
@@ -254,7 +273,20 @@ private:
    ExplicitFrameAttachMode activeExplicitAttachMode =
         ExplicitFrameAttachMode::InsertedOnly;
 
-   void debugTestSpatialCurveIntegrator() const;
+   void debugTestSpatialCurveIntegrator();
+   void debugTestSpatialHelixIntegrator() ;
+
+
+   //storing results
+  
+   SpatialCurveIntegrationResult
+       debugPlanarIntegrationResult;
+
+   SpatialCurveIntegrationResult
+       debugHelixIntegrationResult;
+
+   bool spatialIntegratorPreviewVisible =
+       true;
   
 }; 
       

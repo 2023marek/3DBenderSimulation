@@ -15,6 +15,7 @@ class AppController;
 #include "Core/Forming/ManufacturingPlanPreviewModel.h"
 #include "Core/Forming/DeformableRegionSelection.h"
 #include "Core/Forming/LocalDeformableRegion.h"
+#include "Core/Geometry/SpatialCurveIntegrationResult.h"
 
 
 class GLView : public QOpenGLWidget
@@ -128,6 +129,7 @@ public:
     }
 private:
     PipeRenderer pipeRenderer;
+    PipeRenderer spatialDebugRenderer;
 
     TubeMesh tubeMesh;
     void drawManufacturingMeshZones(
@@ -167,4 +169,17 @@ private:
     void drawManufacturingPlaybackPipe(
     const ManufacturingRenderData& data
 );
+
+    void drawSpatialIntegratorDebugPreviews();
+
+    void drawSpatialIntegratorResult(
+        const SpatialCurveIntegrationResult& result,
+        const glm::vec3& color,
+        double meshRadius
+    );
+    void drawSpatialDebugTube(
+        const std::vector<PipeNode>& nodes,
+        double radius,
+        int radialSegments
+    );
 };

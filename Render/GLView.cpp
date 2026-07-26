@@ -176,6 +176,27 @@ constexpr double PLAN_PREVIEW_FRAME_SIZE =
 8.0;
 
 
+constexpr glm::vec3 SPATIAL_PLANAR_PREVIEW_COLOR =
+glm::vec3(
+    1.0f,
+    0.6f,
+    0.1f
+);
+
+constexpr glm::vec3 SPATIAL_HELIX_PREVIEW_COLOR =
+glm::vec3(
+    0.1f,
+    0.8f,
+    1.0f
+);
+
+constexpr float SPATIAL_INTEGRATOR_LINE_WIDTH =
+4.0f;
+
+constexpr double SPATIAL_INTEGRATOR_MESH_RADIUS =
+2.0;
+
+
 
 
 }
@@ -485,6 +506,7 @@ void GLView::initializeGL()
     
 
     pipeRenderer.init();
+    spatialDebugRenderer.init();
     machineRenderer.init();
     // =========================
     // CREATE SHADER (YOUR CLASS)
@@ -805,32 +827,9 @@ void GLView::paintGL()
     // 
    // std::cout << "[GLView] mode=";
 
-    if (mode == SimulationController::SimulationMode::CADPreview)
-    {
-  //      std::cout << "CADPreview";
-    }
-    else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
-    {
-    //    std::cout << "PlannedShapePreview";
-    }
-    else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
-    {
-   //     std::cout << "ManufacturingPlayback";
-    }
-    else
-    {
-    //    std::cout << "Unknown";
-    }
-
-    std::cout << std::endl;
-
-   
+       // =====================================================
+    // DRAW ACTIVE SIMULATION
     // =====================================================
-    // CAD PREVIEW
-    // Uses GeometricPipeModel.
-    // One ideal continuous pipe.
-    // =====================================================
-
 
     if (mode == SimulationController::SimulationMode::CADPreview)
     {
@@ -839,28 +838,55 @@ void GLView::paintGL()
     else if (mode == SimulationController::SimulationMode::PlannedShapePreview)
     {
         drawPlannedShapePreview();
-
     }
-
     else if (mode == SimulationController::SimulationMode::ManufacturingPlayback)
     {
         drawManufacturingPlayback();
     }
 
+    // =====================================================
+    // STANDALONE GEOMETRY ENGINE DEBUG PREVIEWS
+    //
+    // These previews visualize the shared spatial curve
+    // integrator independently of any manufacturing process.
+    //
+    // They are intentionally NOT part of:
+    //
+    //   • CAD preview
+    //   • Planned preview
+    //   • Manufacturing playback
+    //
+    // They are drawn after the active simulation so they
+    // never modify manufacturing rendering.
+    // =====================================================
 
+    drawSpatialIntegratorDebugPreviews();
 
-
+    // =====================================================
+    // MACHINE REFERENCE
+    // =====================================================
 
     if (showMachineReference)
     {
         drawMachineReference();
     }
+
+    // =====================================================
+    // HUD
+    // =====================================================
+
     if (hud)
     {
-        hud->update(hudData, RenderMode::LINE);
+        hud->update(
+            hudData,
+            RenderMode::LINE
+        );
+
         hud->render();
     }
 }
+
+
 
 
 
@@ -1447,6 +1473,131 @@ void GLView::drawWorldHelixPreviewOverlay(
     );
 }
 
+void GLView::drawSpatialIntegratorResult(
+    const SpatialCurveIntegrationResult& result,
+    const glm::vec3& color,
+    double meshRadius
+)
+{
+    if (!result.valid)
+        return;
+
+    if (!result.isComplete())
+        return;
+
+    if (result.nodes.size() < 2)
+        return;
+
+    shader->setVec3(
+        "pipeColor",
+        color
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        spatialDebugRenderer.setMode(
+            RenderMode::LINE
+        );
+
+        spatialDebugRenderer.uploadLine(
+            nodesToFloatLine(
+                result.nodes
+            )
+        );
+
+        glLineWidth(
+            SPATIAL_INTEGRATOR_LINE_WIDTH
+        );
+
+        spatialDebugRenderer.draw();
+
+        glLineWidth(
+            MANUFACTURING_LINE_WIDTH
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawSpatialDebugTube(
+            result.nodes,
+            meshRadius,
+            MANUFACTURING_PIPE_RADIAL_SEGMENTS
+        );
+    }
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
+
+void GLView::drawSpatialIntegratorDebugPreviews()
+{
+    if (!app)
+        return;
+
+    if (!app->isSpatialIntegratorPreviewVisible())
+        return;
+
+    const SpatialCurveIntegrationResult& planar =
+        app->getDebugPlanarIntegrationResult();
+
+    const SpatialCurveIntegrationResult& helix =
+        app->getDebugHelixIntegrationResult();
+
+    if (!planar.valid
+        && !helix.valid)
+    {
+        return;
+    }
+
+    drawSpatialIntegratorResult(
+        planar,
+        SPATIAL_PLANAR_PREVIEW_COLOR,
+        SPATIAL_INTEGRATOR_MESH_RADIUS
+    );
+
+    drawSpatialIntegratorResult(
+        helix,
+        SPATIAL_HELIX_PREVIEW_COLOR,
+        SPATIAL_INTEGRATOR_MESH_RADIUS
+    );
+}
+void GLView::drawSpatialDebugTube(
+    const std::vector<PipeNode>& nodes,
+    double radius,
+    int radialSegments
+)
+{
+    if (nodes.size() < 2)
+        return;
+
+    std::vector<Vec3D> centers;
+    std::vector<Vec3D> tangents;
+
+    nodesToCenterlineAndTangents(
+        nodes,
+        centers,
+        tangents
+    );
+
+    tubeMesh.generate(
+        centers,
+        tangents,
+        radius,
+        radialSegments
+    );
+
+    spatialDebugRenderer.setMode(
+        RenderMode::MESH
+    );
+
+    spatialDebugRenderer.uploadMesh(
+        tubeMesh.getVertices(),
+        tubeMesh.getIndices()
+    );
+
+    spatialDebugRenderer.draw();
+}
 
 
 

@@ -7728,3 +7728,219 @@ integrated length:
 
 relative position:
     error must remain below 0.1%
+
+    6. Important threshold meaning
+
+These thresholds are for the geometry integrator,
+not the final machine simulation.
+
+Later, final forming accuracy also depends on:
+
+machine model accuracy
+material model
+springback model
+roller/contact approximation
+sampling resolution
+
+So keep two categories separate:
+
+Geometry-engine acceptance
+
+versus
+
+Manufacturing-process acceptance
+
+For example:
+
+integrator endpoint error < 0.05 mm
+
+but
+
+formed pipe target error < 0.5 mm
+
+The machine process will usually have a larger tolerance 
+than the
+==================================================
+
+Phase 9G — Constant-curvature/torsion helix integration test
+Goal
+
+Test the shared integrator with:
+
+curvature ? ? 0
+torsion ? ? 0
+
+This verifies real 3D spatial integration.
+
+? only:
+planar circular arc
+
+? + ?:
+spatial circular helix
+
+ASCII:
+
+Planar test:
+
+       )
+     )
+   )
+ ?????????
+Spatial helix test:
+
+      /\
+    /    \
+  /        \
+ ?          \__
+
+This remains a standalone geometry-engine test:
+
+no ManufacturingState changes
+no rotary-draw changes
+no rendering changes
+
+3. Compute exact helix parameters
+
+For a circular helix:
+
+b = pitch / 2?
+
+? = r / (r? + b?)
+
+? = b / (r? + b?)
+
+Material centerline length per revolution:
+
+Lrev = 2? ?(r? + b?)
+
+Total requested material length:
+
+L = turns × Lrev
+
+For:
+
+r = 20 mm
+P = 30 mm
+turns = 3
+
+approximately:
+
+b ? 4.77465 mm
+? ? 0.04731 /mm
+? ? 0.01130 /mm
+Lrev ? 129.19 mm
+total length ? 387.57 mm
+4. Important initial-frame orientation
+
+We need the analytical helix and Frenet-integrated curve to use the same starting frame.
+
+Use the canonical helix:
+
+x(u) = r cos(u)
+y(u) = r sin(u)
+z(u) = b u
+
+At:
+
+u = 0
+
+the point is:
+
+P = (r, 0, 0)
+
+The unit tangent is:
+
+T = (0, r/q, b/q)
+
+where:
+
+q = ?(r? + b?)
+
+The principal normal is:
+
+N = (-1, 0, 0)
+
+The binormal is:
+
+B = T × N
+
+This orientation is critical. Do not use the earlier planar start frame for the analytical helix comparison.
+
+5. Implement the test
+===============================================================
+Phase 9H — Store standalone results and render debug previews
+
+Cel
+
+Zapisujemy dwa niezale¿ne wyniki:
+
+1. planar constant-curvature arc
+2. constant-curvature/torsion helix
+
+i renderujemy je jako osobne debug-preview.
+
+Nie ³¹czymy ich z:
+
+ManufacturingState
+IncomingStock
+PositionedStraight
+ActiveZone
+FrozenGeometry
+rotary draw playback
+
+ASCII:
+
+standalone geometry tests
+        ?
+        ??? planarResult
+        ??? helixResult
+                 ?
+           AppController
+                 ?
+              GLView
+                 ?
+       debug preview rendering
+
+       ============================================================
+Phase 9I — Add dedicated spatial-debug renderer
+Goal
+
+Separate standalone geometry-engine previews from the renderer used by:
+
+CAD preview
+planned preview
+manufacturing playback
+helix additional-pass overlay
+
+Current temporary approach:
+
+pipeRenderer
+    ? upload main geometry
+    ? upload debug planar arc
+    ? restore main geometry
+    ? upload debug helix
+    ? restore main geometry
+
+This works, but it repeatedly replaces the same OpenGL buffers.
+
+New structure:
+
+pipeRenderer
+    = normal application pipe geometry
+
+spatialDebugRenderer
+    = planar and helix integrator previews only
+
+ASCII:
+
+GLView
+??? pipeRenderer
+?     ??? CAD pipe
+?     ??? manufacturing pipe
+?     ??? process overlays
+?
+??? spatialDebugRenderer
+      ??? planar integration test
+      ??? spatial helix test
+
+This protects the existing rendering paths.
