@@ -252,7 +252,8 @@ private:
     
    ExplicitFrameAttachMode activeExplicitAttachMode =
         ExplicitFrameAttachMode::InsertedOnly;
-  
+
+   void debugTestSpatialCurveIntegrator() const;
   
 }; 
       

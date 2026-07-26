@@ -1,9 +1,6 @@
 #include "Core/Geometry/SpatialCurveIntegrator.h"
-
 #include <algorithm>
 #include <cmath>
-
-
 SpatialCurveIntegrationResult
 SpatialCurveIntegrator::integrate(
     const Frame& startFrame,
@@ -313,6 +310,7 @@ SpatialCurveIntegrator::integrate(
 
     return result;
 }
+
 bool SpatialCurveIntegrator::isValidFrame(
     const Frame& frame
 ) const
@@ -321,6 +319,8 @@ bool SpatialCurveIntegrator::isValidFrame(
         && frame.N.lengthSquared() > 1e-12
         && frame.B.lengthSquared() > 1e-12;
 }
+
+
 
 bool SpatialCurveIntegrator::isValidProfile(
     const CurvatureTorsionProfile& profile
@@ -335,8 +335,43 @@ bool SpatialCurveIntegrator::isValidProfile(
     if (profile.samples.empty())
         return false;
 
+    double previousArcLength =
+        -1.0;
+
+    for (const CurvatureTorsionSample& sample :
+        profile.samples)
+    {
+        if (!sample.isValid())
+            return false;
+
+        if (!std::isfinite(
+            sample.arcLength
+        )
+            || !std::isfinite(
+                sample.curvature
+            )
+            || !std::isfinite(
+                sample.torsion
+            ))
+        {
+            return false;
+        }
+
+        if (sample.arcLength
+            < previousArcLength)
+        {
+            return false;
+        }
+
+        previousArcLength =
+            sample.arcLength;
+    }
+
     return true;
 }
+
+
+
 void SpatialCurveIntegrator::orthonormalizeFrame(
     Frame& frame
 ) const
@@ -365,7 +400,6 @@ void SpatialCurveIntegrator::orthonormalizeFrame(
             frame.T
         ).normalized();
 }
-
 PipeNode SpatialCurveIntegrator::makeNodeFromFrame(
     const Frame& frame
 ) const
@@ -486,54 +520,6 @@ bool SpatialCurveIntegrator::sampleProfileAtArcLength(
     return false;
 }
 
-bool SpatialCurveIntegrator::isValidProfile(
-    const CurvatureTorsionProfile& profile
-) const
-{
-    if (!profile.valid)
-        return false;
-
-    if (profile.totalArcLength <= 0.0)
-        return false;
-
-    if (profile.samples.empty())
-        return false;
-
-    double previousArcLength =
-        -1.0;
-
-    for (const CurvatureTorsionSample& sample :
-        profile.samples)
-    {
-        if (!sample.isValid())
-            return false;
-
-        if (!std::isfinite(
-            sample.arcLength
-        )
-            || !std::isfinite(
-                sample.curvature
-            )
-            || !std::isfinite(
-                sample.torsion
-            ))
-        {
-            return false;
-        }
-
-        if (sample.arcLength
-            < previousArcLength)
-        {
-            return false;
-        }
-
-        previousArcLength =
-            sample.arcLength;
-    }
-
-    return true;
-}
-
 bool SpatialCurveIntegrator::isFiniteFrame(
     const Frame& frame
 ) const
@@ -554,3 +540,4 @@ bool SpatialCurveIntegrator::isFiniteFrame(
         && std::isfinite(frame.B.y)
         && std::isfinite(frame.B.z);
 }
+

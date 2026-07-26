@@ -119,6 +119,12 @@ set(CORE_HEADERS
     Core/Geometry/GeometricPipeModel.h
     Core/Geometry/SpatialCurveIntegrationResult.h
     Core/Geometry/SpatialCurveIntegrationStatus.h
+    Core/Geometry/SpatialCurveIntegrator.h
+    Core/Geometry/SpatialCurveIntegrator.cpp
+    Core/Geometry/CurvatureTorsionSample.h
+    Core/Geometry/CurvatureTorsionProfile.h
+    Core/Geometry/ConstantCurvatureTorsionProfileBuilder.h
+    Core/Geometry/ConstantCurvatureTorsionProfileBuilder.cpp
     Core/Manufacturing/ManufacturingPipeSimulator.h
     Core/Manufacturing/RotationKinematicMode.h
     Core/Manufacturing/ManufacturingTypes.h

@@ -7,36 +7,6 @@
 #include "Core/Geometry/PipeNode.h"
 #include "Core/Geometry/SpatialCurveIntegrationStatus.h"
 
-// =====================================================
-// SPATIAL CURVE INTEGRATION RESULT
-//
-// Process-independent result produced by integrating
-// curvature ?(s) and torsion ?(s).
-//
-// This type does not know which manufacturing process
-// supplied the curvature/torsion profile.
-//
-// Possible sources:
-//
-//     Stretch bending
-//     Two-roller continuous forming
-//     Three-roll helix forming
-//     Canonical helix generation
-//
-// The generated nodes remain separate from real
-// ManufacturingState until a process explicitly accepts
-// and commits them.
-// =====================================================
-
-#pragma once
-
-#include <cstddef>
-#include <vector>
-
-#include "Core/Geometry/Frame.h"
-#include "Core/Geometry/PipeNode.h"
-#include "Core/Geometry/SpatialCurveIntegrationStatus.h"
-
 struct SpatialCurveIntegrationResult
 {
     std::vector<PipeNode> nodes;

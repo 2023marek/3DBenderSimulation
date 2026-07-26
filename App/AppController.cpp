@@ -14,6 +14,9 @@
 #include "Core/Forming/AdditionalFormingPass.h"
 #include "Core/Forming/ManufacturingHistoryDebug.h"
 #include "Core/Forming/ManufacturingHistoryBuilder.h"
+#include "Core/Geometry/ConstantCurvatureTorsionProfileBuilder.h"
+#include "Core/Geometry/SpatialCurveIntegrator.h"
+#include "Core/Geometry/SpatialCurveIntegrationResult.h"
 
 
 
@@ -60,6 +63,20 @@ namespace
 
     constexpr bool DEBUG_DEFORMABLE_REGION_SELECTION =
         true;
+    constexpr bool DEBUG_TEST_SPATIAL_CURVE_INTEGRATOR =
+        true;
+
+    constexpr double TEST_INTEGRATOR_ARC_LENGTH =
+        100.0;
+
+    constexpr double TEST_INTEGRATOR_CURVATURE =
+        0.02;
+
+    constexpr double TEST_INTEGRATOR_TORSION =
+        0.0;
+
+    constexpr double TEST_INTEGRATOR_SAMPLE_STEP =
+        0.5;
     
 }
 
@@ -103,7 +120,9 @@ AppController::AppController()
 
     configureManufacturingDebug();
     configureControllerDebug();
+    debugTestSpatialCurveIntegrator();
 }
+
 
 
 void AppController::update(double dt)
@@ -736,4 +755,169 @@ void AppController::toggleSimulationMode()
         AppController::getLastLocalDeformableRegion() const
     {
         return sim.getLastLocalDeformableRegion();
+    }
+
+
+
+
+    //debug test standalone
+
+    void AppController::debugTestSpatialCurveIntegrator() const
+    {
+        if (!DEBUG_TEST_SPATIAL_CURVE_INTEGRATOR)
+            return;
+
+        // =====================================================
+        // TEST START FRAME
+        //
+        // The curve begins at the world origin and initially
+        // travels along +X.
+        //
+        // Curvature acts toward +Y because N starts along +Y.
+        // =====================================================
+
+        Frame startFrame;
+
+        startFrame.P =
+            Vec3D{
+                0.0,
+                0.0,
+                0.0
+        };
+
+        startFrame.T =
+            Vec3D{
+                1.0,
+                0.0,
+                0.0
+        };
+
+        startFrame.N =
+            Vec3D{
+                0.0,
+                1.0,
+                0.0
+        };
+
+        startFrame.B =
+            Vec3D{
+                0.0,
+                0.0,
+                1.0
+        };
+
+        // =====================================================
+        // BUILD CONSTANT ? / ? PROFILE
+        // =====================================================
+
+        CurvatureTorsionProfile profile =
+            ConstantCurvatureTorsionProfileBuilder::build(
+                TEST_INTEGRATOR_ARC_LENGTH,
+                TEST_INTEGRATOR_CURVATURE,
+                TEST_INTEGRATOR_TORSION
+            );
+
+        // =====================================================
+        // INTEGRATE TEMPORARY GEOMETRY
+        // =====================================================
+
+        SpatialCurveIntegrator integrator;
+
+        SpatialCurveIntegrationResult result =
+            integrator.integrate(
+                startFrame,
+                profile,
+                TEST_INTEGRATOR_SAMPLE_STEP
+            );
+
+        // =====================================================
+        // DIAGNOSTICS
+        // =====================================================
+
+        std::cout
+            << "[SPATIAL INTEGRATOR TEST]"
+            << " valid="
+            << result.valid
+            << " complete="
+            << result.isComplete()
+            << " nodes="
+            << result.nodes.size()
+            << " requestedLength="
+            << result.requestedArcLength
+            << " integratedLength="
+            << result.integratedArcLength
+            << " requestedSteps="
+            << result.requestedStepCount
+            << " completedSteps="
+            << result.completedStepCount
+            << std::endl;
+
+        if (!result.nodes.empty())
+        {
+            const PipeNode& first =
+                result.nodes.front();
+
+            const PipeNode& last =
+                result.nodes.back();
+
+            std::cout
+                << "[SPATIAL INTEGRATOR ENDPOINT]"
+                << " firstP=("
+                << first.pos.x << ", "
+                << first.pos.y << ", "
+                << first.pos.z << ")"
+                << " lastP=("
+                << last.pos.x << ", "
+                << last.pos.y << ", "
+                << last.pos.z << ")"
+                << std::endl;
+
+            std::cout
+                << "[SPATIAL INTEGRATOR END FRAME]"
+                << " T=("
+                << last.T.x << ", "
+                << last.T.y << ", "
+                << last.T.z << ")"
+                << " N=("
+                << last.N.x << ", "
+                << last.N.y << ", "
+                << last.N.z << ")"
+                << " B=("
+                << last.B.x << ", "
+                << last.B.y << ", "
+                << last.B.z << ")"
+                << std::endl;
+        }
+        if (!result.nodes.empty())
+        {
+            const double radius =
+                1.0
+                / TEST_INTEGRATOR_CURVATURE;
+
+            const double angle =
+                TEST_INTEGRATOR_CURVATURE
+                * TEST_INTEGRATOR_ARC_LENGTH;
+
+            Vec3D expectedEnd{
+                radius * std::sin(angle),
+                radius * (
+                    1.0 - std::cos(angle)
+                ),
+                0.0
+            };
+
+            Vec3D endpointError =
+                result.nodes.back().pos
+                - expectedEnd;
+
+            std::cout
+                << "[SPATIAL INTEGRATOR ERROR]"
+                << " expectedEnd=("
+                << expectedEnd.x << ", "
+                << expectedEnd.y << ", "
+                << expectedEnd.z << ")"
+                << " errorLength="
+                << endpointError.length()
+                << std::endl;
+        }
     }

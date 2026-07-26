@@ -4,34 +4,6 @@
 #include "Core/Geometry/CurvatureTorsionProfile.h"
 #include "Core/Geometry/SpatialCurveIntegrationResult.h"
 
-// =====================================================
-// SPATIAL CURVE INTEGRATOR
-//
-// Process-independent geometry engine.
-//
-// Input:
-//     start frame
-//     curvature/torsion profile ?(s), ?(s)
-//     sampling distance
-//
-// Output:
-//     generated PipeNodes
-//     cumulative arc lengths
-//     final frame
-//     integration diagnostics
-//
-// This class does not own manufacturing state.
-// It does not consume stock.
-// It does not update active zones.
-// It only integrates spatial centerline geometry.
-// =====================================================
-
-#pragma once
-
-#include "Core/Geometry/Frame.h"
-#include "Core/Geometry/CurvatureTorsionProfile.h"
-#include "Core/Geometry/SpatialCurveIntegrationResult.h"
-
 class SpatialCurveIntegrator
 {
 public:
