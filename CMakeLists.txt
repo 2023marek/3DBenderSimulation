@@ -121,6 +121,7 @@ set(CORE_HEADERS
     Core/Geometry/SpatialCurveIntegrationStatus.h
     Core/Geometry/SpatialCurveIntegrator.h
     Core/Geometry/SpatialCurveIntegrator.cpp
+    Core/Geometry/SpatialCurveAccuracyReport.h
     Core/Geometry/CurvatureTorsionSample.h
     Core/Geometry/CurvatureTorsionProfile.h
     Core/Geometry/ConstantCurvatureTorsionProfileBuilder.h

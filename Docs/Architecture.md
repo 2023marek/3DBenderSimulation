@@ -7684,3 +7684,47 @@ rotation exponential
 adaptive step integration
 
 Do not add those yet.
+=================================================================
+
+
+
+Phase 9F — Review integration accuracy and define acceptance thresholds
+
+Your current test result:
+
+requested length = 100 mm
+sample step      = 0.5 mm
+curvature        = 0.02 /mm
+radius           = 50 mm
+turn angle       = 2 rad
+endpoint error   = 0.003105 mm
+
+This is excellent.
+
+Relative endpoint error:
+
+0.003105 / 100 ? 0.000031
+
+or approximately:
+
+0.0031%
+
+That is much smaller than the current geometry sampling step.
+
+1. Define a reusable accuracy report
+
+Create:
+
+Core/Geometry/SpatialCurveAccuracyReport.h
+
+endpoint position:
+    generated endpoint may differ by at most 0.05 mm
+
+endpoint tangent:
+    vector difference may be at most 0.001
+
+integrated length:
+    final length must match within 0.000001 mm
+
+relative position:
+    error must remain below 0.1%

@@ -77,6 +77,18 @@ namespace
 
     constexpr double TEST_INTEGRATOR_SAMPLE_STEP =
         0.5;
+    //Threshold initial
+    constexpr double TEST_MAX_ENDPOINT_POSITION_ERROR =
+        0.05; // mm
+
+    constexpr double TEST_MAX_ENDPOINT_TANGENT_ERROR =
+        1e-3;
+
+    constexpr double TEST_MAX_INTEGRATED_LENGTH_ERROR =
+        1e-6; // mm
+
+    constexpr double TEST_MAX_RELATIVE_POSITION_ERROR =
+        1e-3;
     
 }
 
@@ -909,6 +921,96 @@ void AppController::toggleSimulationMode()
             Vec3D endpointError =
                 result.nodes.back().pos
                 - expectedEnd;
+
+            SpatialCurveAccuracyReport accuracy;
+
+            const PipeNode& generatedEnd =
+                result.nodes.back();
+
+            Vec3D positionDifference =
+                generatedEnd.pos
+                - expectedEnd;
+
+            accuracy.endpointPositionError =
+                positionDifference.length();
+
+            Vec3D expectedEndTangent{
+                std::cos(angle),
+                std::sin(angle),
+                0.0
+            };
+
+            Vec3D tangentDifference =
+                generatedEnd.T
+                - expectedEndTangent;
+
+            accuracy.endpointTangentError =
+                tangentDifference.length();
+
+            accuracy.integratedLengthError =
+                std::abs(
+                    result.integratedArcLength
+                    - result.requestedArcLength
+                );
+
+            if (result.requestedArcLength > 1e-12)
+            {
+                accuracy.relativePositionError =
+                    accuracy.endpointPositionError
+                    / result.requestedArcLength;
+            }
+
+            accuracy.positionAccepted =
+                accuracy.endpointPositionError
+                <= TEST_MAX_ENDPOINT_POSITION_ERROR;
+
+            accuracy.tangentAccepted =
+                accuracy.endpointTangentError
+                <= TEST_MAX_ENDPOINT_TANGENT_ERROR;
+
+            accuracy.lengthAccepted =
+                accuracy.integratedLengthError
+                <= TEST_MAX_INTEGRATED_LENGTH_ERROR;
+
+            accuracy.accepted =
+                accuracy.positionAccepted
+                && accuracy.tangentAccepted
+                && accuracy.lengthAccepted
+                && accuracy.relativePositionError
+                <= TEST_MAX_RELATIVE_POSITION_ERROR;
+
+            const char* accuracyStatus =
+                accuracy.accepted
+                ? "PASS"
+                : "FAIL";
+
+            std::cout
+                << "[SPATIAL INTEGRATOR ACCEPTANCE] "
+                << accuracyStatus
+                << std::endl;
+
+            std::cout
+                << "[SPATIAL INTEGRATOR ACCURACY]"
+                << " positionError="
+                << accuracy.endpointPositionError
+                << " tangentError="
+                << accuracy.endpointTangentError
+                << " lengthError="
+                << accuracy.integratedLengthError
+                << " relativePositionError="
+                << accuracy.relativePositionError
+                << " positionAccepted="
+                << accuracy.positionAccepted
+                << " tangentAccepted="
+                << accuracy.tangentAccepted
+                << " lengthAccepted="
+                << accuracy.lengthAccepted
+                << " accepted="
+                << accuracy.accepted
+                << std::endl;
+
+
+
 
             std::cout
                 << "[SPATIAL INTEGRATOR ERROR]"

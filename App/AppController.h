@@ -17,6 +17,7 @@
 #include "Core/Forming/ManufacturingHistory.h"
 #include "Core/Forming/DeformableRegionSelection.h"
 #include "Core/Forming/LocalDeformableRegion.h"
+#include "Core/Geometry/SpatialCurveAccuracyReport.h"
 
 
 class AppController
