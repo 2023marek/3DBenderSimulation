@@ -145,10 +145,19 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         break;
 
     case Qt::Key_E:
-        std::cout << "[KEY] A ? TOGGLE OVERLAY VISIBLE MODE\n";
+        std::cout << "[KEY] E ? TOGGLE OVERLAY VISIBLE MODE\n";
         controller.handleAction(
             UserAction::ToggleDeformableRegionOverlay
         );
+        break;
+
+    case Qt::Key_I:
+
+        controller.handleAction(
+            UserAction::
+            ToggleSpatialIntegratorPreview
+        );
+        update();
         break;
 
     default:

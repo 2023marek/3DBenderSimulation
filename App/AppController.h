@@ -231,6 +231,13 @@ public:
          return spatialIntegratorPreviewVisible;
      }
 
+     void toggleSpatialIntegratorPreview()
+     {
+         spatialIntegratorPreviewVisible =
+             !spatialIntegratorPreviewVisible;
+     }
+
+
 private:
     
 

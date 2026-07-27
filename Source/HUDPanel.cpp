@@ -191,7 +191,7 @@ void HUDPanel::render()
     drawText(
         textX,
         textY + lineH * 7,
-        "KEYS: M Render | N Mode | T Place | A Attach | D Debug | E OVERLAY",
+        "KEYS: M Render | N Mode | T Place | A Attach | D Debug | E OVERLAY |I S PREVIEW",
         glm::vec4(0.7f, 0.7f, 0.7f, 1.0f)
     );
     drawText(
@@ -200,6 +200,8 @@ void HUDPanel::render()
         "DEBUG: " + data.previewDebugName,
         glm::vec4(0.7f, 0.9f, 0.7f, 1.0f)
     );
+
+   
 
     drawText(
         textX,
@@ -225,6 +227,8 @@ void HUDPanel::render()
             glm::vec4(1.0f, 0.8f, 0.3f, 1.0f)
         );
     }
+
+
 
 
     glBindVertexArray(0);

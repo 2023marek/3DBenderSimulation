@@ -41,7 +41,8 @@ struct HUDData
     bool deformableRegionOverlayVisible =
         true;
 
-
+    bool spatialIntegratorPreviewVisible =
+        true;
     AdditionalPassExecutionResult additionalPassResult =   AdditionalPassExecutionResult::Disabled;
 
 

@@ -354,6 +354,20 @@ void AppController::handleAction(UserAction action)
         toggleDeformableRegionOverlay();
         break;
 
+    case UserAction::ToggleSpatialIntegratorPreview:
+        toggleSpatialIntegratorPreview();
+
+        std::cout
+            << "[SPATIAL PREVIEW] "
+            << (
+                spatialIntegratorPreviewVisible
+                ? "ON"
+                : "OFF"
+                )
+            << std::endl;
+
+        break;
+
     }
 }
 
