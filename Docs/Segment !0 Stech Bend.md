@@ -1423,3 +1423,215 @@ Phase 10H acceptance
 ? rotary-draw path unchanged
 
 Next phase:
+
+=====================================================
+Phase 10I
+Generate unloaded final geometry and compare 
+loaded versus final shape
+
+Phase 10I — Generate unloaded final geometry and compare with loaded shape
+Goal
+
+Create two separate standalone results:
+
+Loaded geometry
+    uses loadedCurvatureCommand
+
+Final unloaded geometry
+    uses predictedFinalCurvature
+
+Then render both together.
+
+ASCII:
+
+loaded machine shape:
+?????????????))
+
+after unloading:
+??????????????)
+
+This phase remains outside real manufacturing playback.
+
+1. Rename the existing stored result
+
+Your current:
+
+SpatialCurveIntegrationResult
+    debugStretchBendingIntegrationResult;
+
+represents the loaded machine geometry.
+
+Rename it to:
+
+SpatialCurveIntegrationResult
+    debugStretchLoadedIntegrationResult;
+
+Add a second result:
+
+SpatialCurveIntegrationResult
+    debugStretchFinalIntegrationResult;
+
+Public getters:
+
+const SpatialCurveIntegrationResult&
+getDebugStretchLoadedIntegrationResult() const
+{
+    return debugStretchLoadedIntegrationResult;
+}
+
+const SpatialCurveIntegrationResult&
+getDebugStretchFinalIntegrationResult() const
+{
+    return debugStretchFinalIntegrationResult;
+}
+
+Remove or update the old getter:
+
+getDebugStretchBendingIntegrationResult()
+
+to prevent ambiguity.
+
+2. Keep the loaded profile builder unchanged
+
+StretchBendingProfileBuilder should continue using:
+
+evaluation.loadedCurvatureCommand
+
+That builder represents the machine-loaded state.
+
+Do not change it back to target curvature.
+
+3. Add a final-profile builder
+
+Create:
+
+Core/Forming/StretchBendingFinalProfileBuild
+.......................................
+
+9. Render both results
+
+In:
+
+drawSpatialIntegratorDebugPreviews()
+
+replace the old single stretch preview with:
+
+drawSpatialIntegratorResult(
+    app->getDebugStretchLoadedIntegrationResult(),
+    SPATIAL_STRETCH_LOADED_COLOR,
+    SPATIAL_INTEGRATOR_MESH_RADIUS
+);
+
+drawSpatialIntegratorResult(
+    app->getDebugStretchFinalIntegrationResult(),
+    SPATIAL_STRETCH_FINAL_COLOR,
+    SPATIAL_INTEGRATOR_MESH_RADIUS
+);
+
+Render final after loaded:
+
+loaded first
+final second
+
+so the green final curve remains visible where 
+they nearly overlap.
+
+10. Expected visual result
+LINE mode
+purple:
+    slightly stronger bend
+
+green:
+    slightly more open bend
+
+ASCII:
+
+loaded purple:
+????????????))
+
+final green:
+?????????????)
+
+Both begin at exactly the same point and tangent.
+
+MESH mode
+
+You should see two thin round tubes:
+
+purple tube = loaded
+green tube  = unloaded final
+
+They overlap near the start and gradually
+separate toward the endpoint.
+
+11. Expected diagnostics
+
+Approximately:
+
+[STRETCH SHAPE COMPARISON]
+loadedValid=1
+loadedComplete=1
+finalValid=1
+finalComplete=1
+loadedKappa=0.00222222
+finalKappa=0.002
+targetKappa=0.002
+
+Endpoints approximately:
+
+loaded end:
+(193.48, -176.282, 0)
+
+final end:
+(194.709, -180.529, 0)
+
+Endpoint recovery length should be approximately:
+
+sqrt(
+    (194.709 - 193.480)^2
+    + (-180.529 + 176.282)^2
+)
+
+? 4.42 mm
+
+That earlier 4.42229 mm “error” now becomes a 
+meaningful physical quantity:
+
+springback endpoint displacement
+Important interpretation
+
+The current springback model assumes:
+
+arc length unchanged
+torsion unchanged
+curvature uniformly reduced
+
+This is a first approximation.
+
+Later models may change:
+
+arc length through elastic strain recovery
+torsion during unloading
+nonuniform curvature
+end constraints
+
+Do not add those yet.
+
+Phase 10I acceptance
+? build complete
+? loaded geometry remains valid
+? final unloaded geometry is generated
+? final curvature matches target curvature
+? loaded and final curves share start frame
+? curves separate gradually
+? endpoint recovery is approximately 4.42 mm
+? LINE rendering clearly shows both shapes
+? MESH rendering shows two round tubes
+? rotary-draw path unchanged
+
+Next phase:
+
+Phase 10J
+Define stretch-bending manufacturing state 
+
+and fixed active-zone data

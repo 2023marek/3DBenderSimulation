@@ -21,6 +21,7 @@
 #include "Core/Forming/StretchBendingEvaluator.h"
 #include "Core/Forming/StretchBendingEvaluationStatus.h"
 #include "Core/Forming/StretchBendingProfileBuilder.h"
+#include "Core/Forming/StretchBendingFinalProfileBuilder.h"
 
 
 
@@ -948,6 +949,8 @@ void AppController::toggleSimulationMode()
                 TEST_INTEGRATOR_SAMPLE_STEP
             );
 
+
+
         const SpatialCurveIntegrationResult& result =
             debugPlanarIntegrationResult;
 
@@ -1255,6 +1258,7 @@ void AppController::toggleSimulationMode()
                 profile,
                 TEST_SPATIAL_HELIX_SAMPLE_STEP
             );
+
 
         const SpatialCurveIntegrationResult& result =
             debugHelixIntegrationResult;
@@ -1959,7 +1963,7 @@ void AppController::toggleSimulationMode()
 
         if (!evaluation.valid)
         {
-            debugStretchBendingIntegrationResult.clear();
+            debugStretchLoadedIntegrationResult.clear();
 
             std::cout
                 << "[STRETCH GEOMETRY]"
@@ -1983,13 +1987,43 @@ void AppController::toggleSimulationMode()
                 evaluation
             );
 
+        const CurvatureTorsionProfile loadedProfile =
+            StretchBendingProfileBuilder::build(
+                input,
+                evaluation
+            );
+
+        const CurvatureTorsionProfile finalProfile =
+            StretchBendingFinalProfileBuilder::build(
+                input,
+                evaluation
+            );
+
         if (!profile.valid)
         {
-            debugStretchBendingIntegrationResult.clear();
+            debugStretchLoadedIntegrationResult.clear();
 
             std::cout
                 << "[STRETCH GEOMETRY]"
                 << " profileValid=0"
+                << " result=REJECTED"
+                << std::endl;
+
+            return;
+        }
+
+        if (!loadedProfile.valid
+            || !finalProfile.valid)
+        {
+            debugStretchLoadedIntegrationResult.clear();
+            debugStretchFinalIntegrationResult.clear();
+
+            std::cout
+                << "[STRETCH SHAPE COMPARISON]"
+                << " loadedProfileValid="
+                << loadedProfile.valid
+                << " finalProfileValid="
+                << finalProfile.valid
                 << " result=REJECTED"
                 << std::endl;
 
@@ -2051,15 +2085,28 @@ void AppController::toggleSimulationMode()
 
         SpatialCurveIntegrator integrator;
 
-        debugStretchBendingIntegrationResult =
+        debugStretchLoadedIntegrationResult =
             integrator.integrate(
                 startFrame,
-                profile,
+                loadedProfile,
                 input.sampleStep
             );
 
+        debugStretchFinalIntegrationResult =
+            integrator.integrate(
+                startFrame,
+                finalProfile,
+                input.sampleStep
+            );
+
+        const SpatialCurveIntegrationResult& loadedResult =
+            debugStretchLoadedIntegrationResult;
+
+        const SpatialCurveIntegrationResult& finalResult =
+            debugStretchFinalIntegrationResult;
+
         const SpatialCurveIntegrationResult& result =
-            debugStretchBendingIntegrationResult;
+            debugStretchLoadedIntegrationResult;
         if (result.isComplete()
             && !result.nodes.empty())
 
@@ -2067,7 +2114,52 @@ void AppController::toggleSimulationMode()
         // =====================================================
         // 6. BASIC DIAGNOSTICS
         // =====================================================
+            std::cout
+            << "[STRETCH SHAPE COMPARISON]"
+            << " loadedValid="
+            << loadedResult.valid
+            << " loadedComplete="
+            << loadedResult.isComplete()
+            << " finalValid="
+            << finalResult.valid
+            << " finalComplete="
+            << finalResult.isComplete()
+            << " loadedKappa="
+            << evaluation.loadedCurvatureCommand
+            << " finalKappa="
+            << evaluation.predictedFinalCurvature
+            << " targetKappa="
+            << evaluation.finalTargetCurvature
+            << std::endl;
 
+        if (loadedResult.isComplete()
+            && finalResult.isComplete()
+            && !loadedResult.nodes.empty()
+            && !finalResult.nodes.empty())
+        {
+            const Vec3D loadedEnd =
+                loadedResult.nodes.back().pos;
+
+            const Vec3D finalEnd =
+                finalResult.nodes.back().pos;
+
+            const Vec3D endpointRecovery =
+                finalEnd - loadedEnd;
+
+            std::cout
+                << "[STRETCH SPRINGBACK DISPLACEMENT]"
+                << " loadedEnd=("
+                << loadedEnd.x << ", "
+                << loadedEnd.y << ", "
+                << loadedEnd.z << ")"
+                << " finalEnd=("
+                << finalEnd.x << ", "
+                << finalEnd.y << ", "
+                << finalEnd.z << ")"
+                << " endpointRecoveryLength="
+                << endpointRecovery.length()
+                << std::endl;
+        }
         std::cout
             << "[STRETCH GEOMETRY]"
             << " evaluationStatus="
@@ -2168,6 +2260,63 @@ void AppController::toggleSimulationMode()
                 << expectedEnd.z << ")"
                 << " positionError="
                 << error.length()
+                << std::endl;
+        }
+
+        const double finalCurvature =
+            evaluation.predictedFinalCurvature;
+
+        if (finalResult.isComplete()
+            && !finalResult.nodes.empty())
+        {
+            const double length =
+                input.geometry.targetArcLength;
+
+            const double angle =
+                finalCurvature * length;
+
+            Vec3D expectedFinalEnd;
+
+            if (finalCurvature > 1e-12)
+            {
+                const double radius =
+                    1.0 / finalCurvature;
+
+                expectedFinalEnd =
+                    startFrame.P
+                    + Vec3D{
+                        radius * std::sin(angle),
+
+                        radius
+                            * (
+                                1.0
+                                - std::cos(angle)
+                            ),
+
+                        0.0
+                };
+            }
+            else
+            {
+                expectedFinalEnd =
+                    startFrame.P
+                    + startFrame.T * length;
+            }
+
+            const Vec3D finalError =
+                finalResult.nodes.back().pos
+                - expectedFinalEnd;
+
+            std::cout
+                << "[STRETCH FINAL GEOMETRY ACCURACY]"
+                << " finalKappa="
+                << finalCurvature
+                << " expectedEnd=("
+                << expectedFinalEnd.x << ", "
+                << expectedFinalEnd.y << ", "
+                << expectedFinalEnd.z << ")"
+                << " positionError="
+                << finalError.length()
                 << std::endl;
         }
     }

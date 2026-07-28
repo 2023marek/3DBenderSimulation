@@ -141,6 +141,21 @@ namespace
             0.4f
         );
 
+
+    constexpr glm::vec3 SPATIAL_STRETCH_LOADED_COLOR =
+        glm::vec3(
+            0.9f,
+            0.2f,
+            0.8f
+        );
+
+    constexpr glm::vec3 SPATIAL_STRETCH_FINAL_COLOR =
+        glm::vec3(
+            0.2f,
+            1.0f,
+            0.5f
+        );
+
     constexpr float HELIX_PREVIEW_LINE_WIDTH =
         5.0f;
 
@@ -1567,12 +1582,14 @@ void GLView::drawSpatialIntegratorDebugPreviews()
         SPATIAL_INTEGRATOR_MESH_RADIUS
     );
     drawSpatialIntegratorResult(
-        app->getDebugStretchBendingIntegrationResult(),
-        glm::vec3(
-            0.9f,
-            0.2f,
-            0.8f
-        ),
+        app->getDebugStretchLoadedIntegrationResult(),
+        SPATIAL_STRETCH_LOADED_COLOR,
+        SPATIAL_INTEGRATOR_MESH_RADIUS
+    );
+
+    drawSpatialIntegratorResult(
+        app->getDebugStretchFinalIntegrationResult(),
+        SPATIAL_STRETCH_FINAL_COLOR,
         SPATIAL_INTEGRATOR_MESH_RADIUS
     );
 

@@ -123,6 +123,8 @@ set(CORE_HEADERS
     Core/Forming/StretchBendingPipeSection.h
     Core/Forming/StretchBendingProfileBuilder.h
     Core/Forming/StretchBendingProfileBuilder.cpp
+    Core/Forming/StretchBendingFinalProfileBuilder.h
+    Core/Forming/StretchBendingFinalProfileBuilder.cpp
     Core/Forming/StretchBendingMaterial.h
     Core/Geometry/Frame.h
     Core/Geometry/PipeNode.h

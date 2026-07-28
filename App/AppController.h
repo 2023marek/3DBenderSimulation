@@ -245,9 +245,15 @@ public:
      }
      // Getter
      const SpatialCurveIntegrationResult&
-         getDebugStretchBendingIntegrationResult() const
+         getDebugStretchLoadedIntegrationResult() const
      {
-         return debugStretchBendingIntegrationResult;
+         return debugStretchLoadedIntegrationResult;
+     }
+
+     const SpatialCurveIntegrationResult&
+         getDebugStretchFinalIntegrationResult() const
+     {
+         return debugStretchFinalIntegrationResult;
      }
 
 private:
@@ -316,8 +322,12 @@ private:
    CurvatureTorsionProfile
        debugStretchBendingProfile;
    void debugTestStretchBendingProfileBuilder();
+   //
    SpatialCurveIntegrationResult
-       debugStretchBendingIntegrationResult;
+       debugStretchLoadedIntegrationResult;
+   SpatialCurveIntegrationResult
+       debugStretchFinalIntegrationResult;
+   //
    void debugTestStretchBendingGeometry();
    void debugTestStretchBendingSpringback() const;
 }; 
