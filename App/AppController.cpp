@@ -24,6 +24,7 @@
 
 
 
+
 //#include "Core/Sampling/PipeCurveSampler.h"
 
 // =====================================
@@ -150,6 +151,9 @@ namespace
     constexpr double TEST_STRETCH_SAMPLE_STEP =
         0.5;
 
+    constexpr double TEST_STRETCH_SPRINGBACK_RATIO =
+        0.10;
+
     struct StretchEvaluationTestCase
     {
         const char* name =
@@ -221,6 +225,7 @@ AppController::AppController()
     debugTestStretchBendingFeasibilityCases();
     debugTestStretchBendingProfileBuilder();
     debugTestStretchBendingGeometry();
+    debugTestStretchBendingSpringback();
 }
 
 
@@ -1475,6 +1480,13 @@ void AppController::toggleSimulationMode()
         input.sampleStep =
             TEST_STRETCH_SAMPLE_STEP;
 
+        input.springbackRatio =
+            TEST_STRETCH_SPRINGBACK_RATIO;
+
+
+        input.compensateSpringback =
+            true;
+
         input.enabled =
             true;
 
@@ -1572,6 +1584,26 @@ void AppController::toggleSimulationMode()
             << result.maximumAllowedTension
             << " commandedTension="
             << result.commandedTension
+            << std::endl;
+
+        std::cout
+            << "[STRETCH SPRINGBACK]"
+            << " targetFinalKappa="
+            << result.finalTargetCurvature
+            << " ratio="
+            << result.springbackRatio
+            << " compensationApplied="
+            << result.springbackCompensationApplied
+            << " loadedKappa="
+            << result.loadedCurvatureCommand
+            << " predictedFinalKappa="
+            << result.predictedFinalCurvature
+            << " finalError="
+            << result.finalCurvatureError
+            << " loadedBendingStrain="
+            << result.loadedBendingStrain
+            << " predictionValid="
+            << result.springbackPredictionValid
             << std::endl;
     }
 
@@ -1690,6 +1722,18 @@ void AppController::toggleSimulationMode()
         {
             StretchBendingProcessInput input =
                 buildTestStretchBendingProcessInput();
+
+            input.springbackRatio =
+                0.0;
+
+            input.compensateSpringback =
+                false;
+
+            input.geometry.targetCurvature =
+                testCase.targetCurvature;
+
+            input.axialStretchStrain =
+                testCase.axialStretchStrain;
 
             input.geometry.targetCurvature =
                 testCase.targetCurvature;
@@ -2018,56 +2062,8 @@ void AppController::toggleSimulationMode()
             debugStretchBendingIntegrationResult;
         if (result.isComplete()
             && !result.nodes.empty())
-        {
-            const double curvature =
-                input.geometry.targetCurvature;
 
-            const double length =
-                input.geometry.targetArcLength;
 
-            const double angle =
-                curvature * length;
-
-            Vec3D expectedEnd;
-
-            if (curvature > 1e-12)
-            {
-                const double radius =
-                    1.0 / curvature;
-
-                expectedEnd =
-                    startFrame.P
-                    + Vec3D{
-                        radius * std::sin(angle),
-                        radius
-                            * (
-                                1.0
-                                - std::cos(angle)
-                            ),
-                        0.0
-                };
-            }
-            else
-            {
-                expectedEnd =
-                    startFrame.P
-                    + startFrame.T * length;
-            }
-
-            const Vec3D error =
-                result.nodes.back().pos
-                - expectedEnd;
-
-            std::cout
-                << "[STRETCH GEOMETRY ACCURACY]"
-                << " expectedEnd=("
-                << expectedEnd.x << ", "
-                << expectedEnd.y << ", "
-                << expectedEnd.z << ")"
-                << " positionError="
-                << error.length()
-                << std::endl;
-        }
         // =====================================================
         // 6. BASIC DIAGNOSTICS
         // =====================================================
@@ -2116,4 +2112,119 @@ void AppController::toggleSimulationMode()
                 << last.pos.z << ")"
                 << std::endl;
         }
+
+        {
+            // This result represents machine-loaded geometry,
+            // so the analytical comparison must use the loaded
+            // curvature command, not the final target curvature.
+            const double curvature =
+                evaluation.loadedCurvatureCommand;
+
+            const double length =
+                input.geometry.targetArcLength;
+
+            const double angle =
+                curvature * length;
+
+            Vec3D expectedEnd;
+
+            if (curvature > 1e-12)
+            {
+                const double radius =
+                    1.0 / curvature;
+
+                expectedEnd =
+                    startFrame.P
+                    + Vec3D{
+                        radius * std::sin(angle),
+
+                        radius
+                            * (
+                                1.0
+                                - std::cos(angle)
+                            ),
+
+                        0.0
+                };
+            }
+            else
+            {
+                expectedEnd =
+                    startFrame.P
+                    + startFrame.T * length;
+            }
+
+            const Vec3D error =
+                result.nodes.back().pos
+                - expectedEnd;
+
+            std::cout
+                << "[STRETCH LOADED GEOMETRY ACCURACY]"
+                << " loadedKappa="
+                << curvature
+                << " expectedEnd=("
+                << expectedEnd.x << ", "
+                << expectedEnd.y << ", "
+                << expectedEnd.z << ")"
+                << " positionError="
+                << error.length()
+                << std::endl;
+        }
+    }
+    void AppController::debugTestStretchBendingSpringback() const
+    {
+        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+            return;
+
+        StretchBendingProcessInput input =
+            buildTestStretchBendingProcessInput();
+
+        input.geometry.targetCurvature =
+            0.002;
+
+        input.axialStretchStrain =
+            0.04;
+
+        input.springbackRatio =
+            0.10;
+
+        input.compensateSpringback =
+            true;
+
+        StretchBendingEvaluator evaluator;
+
+        const StretchBendingEvaluationResult result =
+            evaluator.evaluate(
+                input
+            );
+
+        const double tolerance =
+            1e-12;
+
+        const bool finalCurvatureAccepted =
+            std::abs(
+                result.predictedFinalCurvature
+                - input.geometry.targetCurvature
+            )
+            <= tolerance;
+
+        std::cout
+            << "[STRETCH SPRINGBACK TEST]"
+            << " status="
+            << stretchBendingEvaluationStatusToString(
+                result.status
+            )
+            << " targetKappa="
+            << input.geometry.targetCurvature
+            << " loadedKappa="
+            << result.loadedCurvatureCommand
+            << " predictedFinalKappa="
+            << result.predictedFinalCurvature
+            << " ratio="
+            << result.springbackRatio
+            << " error="
+            << result.finalCurvatureError
+            << " accepted="
+            << finalCurvatureAccepted
+            << std::endl;
     }

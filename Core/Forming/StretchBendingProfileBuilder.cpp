@@ -52,7 +52,7 @@ StretchBendingProfileBuilder::build(
         input.geometry.targetArcLength;
 
     const double curvature =
-        input.geometry.targetCurvature;
+        evaluation.loadedCurvatureCommand;
 
     const double torsion =
         input.geometry.targetTorsion;

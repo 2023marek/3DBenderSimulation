@@ -42,39 +42,53 @@ struct StretchBendingProcessInput
     double sampleStep =
         0.5;
 
-    bool enabled =
+   
+
+    double springbackRatio =
+        0.0;
+
+    bool compensateSpringback =
         true;
 
-    bool isValid() const
-    {
-        if (!enabled)
-            return false;
+ bool enabled =
+        true;
+ bool isValid() const
+ {
+     if (!enabled)
+         return false;
 
-        if (!pipeSection.isValid())
-            return false;
+     if (!pipeSection.isValid())
+         return false;
 
-        if (!material.isValid())
-            return false;
+     if (!material.isValid())
+         return false;
 
-        if (!geometry.isValid())
-            return false;
+     if (!geometry.isValid())
+         return false;
 
-        if (!std::isfinite(axialStretchStrain)
-            || !std::isfinite(feedSpeed)
-            || !std::isfinite(sampleStep))
-        {
-            return false;
-        }
+     if (!std::isfinite(axialStretchStrain)
+         || !std::isfinite(feedSpeed)
+         || !std::isfinite(sampleStep)
+         || !std::isfinite(springbackRatio))
+     {
+         return false;
+     }
 
-        if (axialStretchStrain < 0.0)
-            return false;
+     if (axialStretchStrain < 0.0)
+         return false;
 
-        if (feedSpeed <= 0.0)
-            return false;
+     if (feedSpeed <= 0.0)
+         return false;
 
-        if (sampleStep <= 1e-9)
-            return false;
+     if (sampleStep <= 1e-9)
+         return false;
 
-        return true;
-    }
+     if (springbackRatio < 0.0
+         || springbackRatio >= 1.0)
+     {
+         return false;
+     }
+
+     return true;
+ }
 };

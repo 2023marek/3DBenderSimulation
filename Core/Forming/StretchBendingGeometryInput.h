@@ -30,6 +30,18 @@ struct StretchBendingGeometryInput
     double targetTorsion =
         0.0;
 
+    // Fraction of loaded curvature expected to recover
+// during unloading.
+//
+// Example:
+//
+//     0.10 = 10% curvature recovery
+//
+// Valid range:
+//
+//     0 <= springbackRatio < 1
+   
+   
     bool isValid() const
     {
         if (!std::isfinite(targetArcLength)
@@ -44,6 +56,9 @@ struct StretchBendingGeometryInput
 
         if (targetCurvature < 0.0)
             return false;
+
+        
+       
 
         return true;
     }

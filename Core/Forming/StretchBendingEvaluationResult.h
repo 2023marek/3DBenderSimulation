@@ -133,6 +133,40 @@ struct StretchBendingEvaluationResult
     bool commandedStrainInsideRecommendedRange =
         false;
 
+    // ===== Springback / loaded command =====
+
+// Requested final curvature after unloading.
+    double finalTargetCurvature =
+        0.0;
+
+    // Fraction of loaded curvature expected to recover.
+    double springbackRatio =
+        0.0;
+
+    // Machine curvature required during loading.
+    double loadedCurvatureCommand =
+        0.0;
+
+    // Estimated final curvature obtained after unloading.
+    double predictedFinalCurvature =
+        0.0;
+
+    // Difference between predicted final and requested target.
+    double finalCurvatureError =
+        0.0;
+
+    // Loaded bending strain at the outer fiber:
+    //
+    //     epsilon_b,load = kappa_load * D / 2
+    double loadedBendingStrain =
+        0.0;
+
+    bool springbackCompensationApplied =
+        false;
+
+    bool springbackPredictionValid =
+        false;
+
     void clear()
     {
         status =
@@ -189,5 +223,29 @@ struct StretchBendingEvaluationResult
         commandedStrainInsideRecommendedRange =
             false;
         valid = false;
+
+        finalTargetCurvature =
+            0.0;
+
+        springbackRatio =
+            0.0;
+
+        loadedCurvatureCommand =
+            0.0;
+
+        predictedFinalCurvature =
+            0.0;
+
+        finalCurvatureError =
+            0.0;
+
+        loadedBendingStrain =
+            0.0;
+
+        springbackCompensationApplied =
+            false;
+
+        springbackPredictionValid =
+            false;
     }
 };

@@ -1096,3 +1096,330 @@ Acceptance:
 ? standalone tube round in MESH mode
 ? invalid stretch input still produces no geometry
 ? rotary-draw path unchanged
+
+============================================================
+Phase 10H — Add first springback approximation and loaded-curvature command
+Goal
+
+Until now the profile uses:
+
+targetCurvature
+
+directly.
+
+Real material elastically recovers after unloading:
+loaded curvature
+        ? unload
+final curvature < loaded curvature
+
+Therefore the machine must overbend:
+
+loaded curvature > target final curvature
+
+ASCII:
+
+machine-loaded shape:
+
+       )))
+     )))
+   )))
+
+after unloading:
+
+        )
+      )
+    )
+
+This first model will be deliberately simple and isolated. It will not yet modify manufacturing playback.
+
+1. First springback model
+
+Use a curvature-recovery ratio:
+
+springbackRatio ? [0,1)
+
+Definition:
+
+finalCurvature =
+    loadedCurvature × (1 - springbackRatio)
+
+To achieve a target final curvature:
+
+loadedCurvature =
+    targetCurvature
+    / (1 - springbackRatio)
+
+Example:
+
+target ? = 0.002
+springback ratio = 0.10
+
+loaded ? =
+    0.002 / 0.90
+    = 0.00222222
+
+After unloading:
+
+0.00222222 × 0.90
+    = 0.002
+
+This is a control approximation, not yet a full elastic-plastic unloading solution.
+
+2. Extend StretchBendingProcessInput
+
+Add:
+
+// Fraction of loaded curvature expected to recover
+// during unloading.
+//
+// Example:
+//
+//     0.10 = 10% curvature recovery
+//
+// Valid range:
+//
+//     0 <= springbackRatio < 1
+double springbackRatio =
+    0.0;
+
+// Enables machine overbend compensation.
+bool compensateSpringback =
+    true;
+
+Update isValid():
+
+if (!std::isfinite(springbackRatio))
+    return false;
+
+if (springbackRatio < 0.0
+    || springbackRatio >= 1.0)
+{
+    return false;
+}
+
+Do not reject:
+
+..................
+11. Store final-curvature preview separately later
+
+In this phase, debugStretchBendingIntegrationResult should represent:
+
+loaded geometry
+
+The existing purple curve will therefore become slightly more curved.
+
+We will later create a separate unloaded/final result.
+
+Current flow:
+
+target final ?
+    ? compensation
+loaded ? profile
+    ? integrator
+loaded geometry preview
+12. Add diagnostics
+
+In:
+
+debugTestStretchBendingEvaluation()
+
+add:
+
+std::cout
+    << "[STRETCH SPRINGBACK]"
+    << " targetFinalKappa="
+    << result.finalTargetCurvature
+    << " ratio="
+    << result.springbackRatio
+    << " compensationApplied="
+    << result.springbackCompensationApplied
+    << " loadedKappa="
+    << result.loadedCurvatureCommand
+    << " predictedFinalKappa="
+    << result.predictedFinalCurvature
+    << " finalError="
+    << result.finalCurvatureError
+    << " loadedBendingStrain="
+    << result.loadedBendingStrain
+    << " predictionValid="
+    << result.springbackPredictionValid
+    << std::endl;
+13. Expected values for the valid test
+
+For:
+
+target final ? = 0.002
+springback ratio = 0.10
+
+Expected:
+
+loaded ? =
+    0.002 / 0.9
+    = 0.00222222
+
+Predicted final:
+
+0.00222222 × 0.9
+    = 0.002
+
+Error:
+
+approximately 0
+
+Loaded bending strain:
+
+?b,load =
+    0.00222222 × 20 / 2
+    = 0.0222222
+
+The feasible strain interval changes from:
+
+old:
+0.0200 to 0.0600
+
+to:
+
+new:
+0.0222222 to 0.0577778
+
+The recommended midpoint remains:
+
+0.04
+
+because the simple symmetric limits still center around:
+
+allowableStrain / 2
+14. Important effect on existing test cases
+
+Your previous test cases were designed without springback compensation.
+
+If the global test input now has:
+
+springbackRatio = 0.10;
+
+the loaded strain becomes larger, so expected values change slightly.
+
+To keep Phase 10D tests focused only on status logic, disable springback inside those tests:
+
+input.springbackRatio =
+    0.0;
+
+input.compensateSpringback =
+    false;
+
+Add those lines inside the loop before evaluation.
+
+This preserves the previous expected outputs exactly.
+
+Then create a separate Phase 10H springback test.
+
+15. Add dedicated springback test
+
+In AppController.h:
+
+void debugTestStretchBendingSpringback() const;
+
+Implementation:
+
+void AppController::debugTestStretchBendingSpringback() const
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    StretchBendingProcessInput input =
+        buildTestStretchBendingProcessInput();
+
+    input.geometry.targetCurvature =
+        0.002;
+
+    input.axialStretchStrain =
+        0.04;
+
+    input.springbackRatio =
+        0.10;
+
+    input.compensateSpringback =
+        true;
+
+    StretchBendingEvaluator evaluator;
+
+    const StretchBendingEvaluationResult result =
+        evaluator.evaluate(
+            input
+        );
+
+    const double tolerance =
+        1e-12;
+
+    const bool finalCurvatureAccepted =
+        std::abs(
+            result.predictedFinalCurvature
+            - input.geometry.targetCurvature
+        )
+        <= tolerance;
+
+    std::cout
+        << "[STRETCH SPRINGBACK TEST]"
+        << " status="
+        << stretchBendingEvaluationStatusToString(
+            result.status
+        )
+        << " targetKappa="
+        << input.geometry.targetCurvature
+        << " loadedKappa="
+        << result.loadedCurvatureCommand
+        << " predictedFinalKappa="
+        << result.predictedFinalCurvature
+        << " ratio="
+        << result.springbackRatio
+        << " error="
+        << result.finalCurvatureError
+        << " accepted="
+        << finalCurvatureAccepted
+        << std::endl;
+}
+
+Call:
+
+debugTestStretchBendingSpringback();
+
+after the feasibility cases.
+
+16. Expected standalone geometry change
+
+Before compensation:
+
+? = 0.002
+R = 500 mm
+angle over 200 mm = 0.4 rad
+
+After compensation:
+
+?load = 0.00222222
+Rload = 450 mm
+loaded angle over 200 mm ? 0.444444 rad
+
+So the purple loaded preview should bend slightly more strongly.
+
+ASCII:
+
+target final:
+??????????????)
+
+loaded machine preview:
+?????????????))
+
+Do not yet visually compare loaded and unloaded curves in the same scene. That comes next.
+
+Phase 10H acceptance
+? build complete
+? existing feasibility tests still PASS with springback disabled
+? springback test reports accepted=1
+? loaded curvature exceeds target curvature
+? predicted final curvature matches target
+? loaded strain uses loaded curvature
+? loaded moment uses loaded curvature
+? standalone purple geometry becomes slightly more curved
+? rotary-draw path unchanged
+
+Next phase:

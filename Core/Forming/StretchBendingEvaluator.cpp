@@ -92,6 +92,80 @@ StretchBendingEvaluator::evaluate(
     result.targetTorsion =
         input.geometry.targetTorsion;
 
+    result.finalTargetCurvature =
+        input.geometry.targetCurvature;
+
+    // =====================================================
+// SPRINGBACK COMMAND
+//
+// targetCurvature is interpreted as the required final
+// curvature after unloading.
+//
+// If compensation is enabled:
+//
+//     kappa_load = kappa_target / (1 - ratio)
+//
+// Otherwise:
+//
+//     kappa_load = kappa_target
+// =====================================================
+
+    result.finalTargetCurvature =
+        input.geometry.targetCurvature;
+
+    result.springbackRatio =
+        input.springbackRatio;
+
+    result.springbackCompensationApplied =
+        input.compensateSpringback
+        && input.springbackRatio > 0.0;
+
+    if (result.springbackCompensationApplied)
+    {
+        const double retainedCurvatureFactor =
+            1.0 - input.springbackRatio;
+
+        if (retainedCurvatureFactor <= 1e-12)
+        {
+            result.status =
+                StretchBendingEvaluationStatus::
+                NumericalFailure;
+
+            return result;
+        }
+
+        result.loadedCurvatureCommand =
+            result.finalTargetCurvature
+            / retainedCurvatureFactor;
+    }
+    else
+    {
+        result.loadedCurvatureCommand =
+            result.finalTargetCurvature;
+    }
+
+    result.predictedFinalCurvature =
+        result.loadedCurvatureCommand
+        * (
+            1.0
+            - result.springbackRatio
+            );
+
+    result.finalCurvatureError =
+        result.predictedFinalCurvature
+        - result.finalTargetCurvature;
+
+    result.springbackPredictionValid =
+        std::isfinite(
+            result.loadedCurvatureCommand
+        )
+        && std::isfinite(
+            result.predictedFinalCurvature
+        )
+        && std::isfinite(
+            result.finalCurvatureError
+        );
+
     result.axialStretchStrain =
         input.axialStretchStrain;
 
@@ -127,10 +201,13 @@ StretchBendingEvaluator::evaluate(
     // epsilon_inner = epsilon_0 - epsilon_b
     // =====================================================
 
-    result.bendingStrain =
-        result.targetCurvature
+    result.loadedBendingStrain =
+        result.loadedCurvatureCommand
         * input.pipeSection.outerDiameter
         / 2.0;
+
+    result.bendingStrain =
+        result.loadedBendingStrain;
 
     result.outerWallStrain =
         result.axialStretchStrain
@@ -269,7 +346,7 @@ StretchBendingEvaluator::evaluate(
     result.elasticBendingMoment =
         input.material.youngModulus
         * result.secondMomentArea
-        * result.targetCurvature;
+        * result.loadedCurvatureCommand;
 
     // =====================================================
     // 8. SAFETY MARGINS
@@ -431,6 +508,25 @@ bool StretchBendingEvaluator::isFiniteResult(
             )
             && std::isfinite(
                 result.recommendedTension
+            )
+
+            && std::isfinite(
+                result.finalTargetCurvature
+            )
+            && std::isfinite(
+                result.springbackRatio
+            )
+            && std::isfinite(
+                result.loadedCurvatureCommand
+            )
+            && std::isfinite(
+                result.predictedFinalCurvature
+            )
+            && std::isfinite(
+                result.finalCurvatureError
+            )
+            && std::isfinite(
+                result.loadedBendingStrain
             )
         );
 }

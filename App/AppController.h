@@ -319,5 +319,6 @@ private:
    SpatialCurveIntegrationResult
        debugStretchBendingIntegrationResult;
    void debugTestStretchBendingGeometry();
+   void debugTestStretchBendingSpringback() const;
 }; 
       
