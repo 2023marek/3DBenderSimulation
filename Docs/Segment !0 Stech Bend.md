@@ -610,3 +610,489 @@ public:
         const StretchBendingEvaluationResult& evaluation
     );
 };
+
+The output is correct. Phase 10F is successful.
+
+The accepted case produced the expected constant profile:
+
+s=0      ?=0.002 ?=0
+s=200    ?=0.002 ?=0
+
+That confirms:
+
+? profile length matches 200 mm
+? curvature is constant
+? torsion is zero
+? two-sample representation is correct
+
+The rejection test is especially important:
+
+evaluationStatus=GeometryNotFeasible
+profileValid=0
+samples=0
+
+This proves the safety boundary works:
+
+invalid stretch-bending evaluation
+        ?
+no ?/? profile
+        ?
+shared integrator cannot be called accidentally
+
+====================================================
+Phase 10G
+Generate and store standalone stretch-bending geometry
+
+Phase 10G — Generate and store standalone stretch-bending geometry
+Goal
+
+Use the accepted stretch-bending profile from Phase 10F with the shared Segment 9 integrator, then store the result separately for later debug rendering.
+
+Flow:
+
+valid StretchBendingProcessInput
+        ?
+StretchBendingEvaluator
+        ?
+valid StretchBendingEvaluationResult
+        ?
+StretchBendingProfileBuilder
+        ?
+CurvatureTorsionProfile
+        ?
+SpatialCurveIntegrator
+        ?
+SpatialCurveIntegrationResult
+
+Still no manufacturing state changes.
+
+1. Add stored result in AppController.h
+
+Add in private::
+
+SpatialCurveIntegrationResult
+    debugStretchBendingIntegrationResult;
+
+Optional public getter:
+
+const SpatialCurveIntegrationResult&
+getDebugStretchBendingIntegrationResult() const
+{
+    return debugStretchBendingIntegrationResult;
+}
+2. Add debug helper declaration
+
+In AppController.h, private section:
+
+void debugTestStretchBendingGeometry();
+
+This method is not const because it stores the result.
+
+3. Implement the geometry test
+
+Add to AppController.cpp:
+
+void AppController::debugTestStretchBendingGeometry()
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    // =====================================================
+    // 1. BUILD KNOWN VALID STRETCH-BENDING INPUT
+    // =====================================================
+
+    StretchBendingProcessInput input =
+        buildTestStretchBendingProcessInput();
+
+    input.geometry.targetCurvature =
+        0.002;
+
+    input.geometry.targetTorsion =
+        0.0;
+
+    input.geometry.targetArcLength =
+        200.0;
+
+    input.axialStretchStrain =
+        0.03;
+
+    input.sampleStep =
+        0.25;
+
+    // =====================================================
+    // 2. EVALUATE MATERIAL / PROCESS FEASIBILITY
+    // =====================================================
+
+    StretchBendingEvaluator evaluator;
+
+    const StretchBendingEvaluationResult evaluation =
+        evaluator.evaluate(
+            input
+        );
+
+    if (!evaluation.valid)
+    {
+        debugStretchBendingIntegrationResult.clear();
+
+        std::cout
+            << "[STRETCH GEOMETRY]"
+            << " evaluationStatus="
+            << stretchBendingEvaluationStatusToString(
+                evaluation.status
+            )
+            << " result=REJECTED"
+            << std::endl;
+
+        return;
+    }
+
+    // =====================================================
+    // 3. BUILD ACCEPTED KAPPA / TAU PROFILE
+    // =====================================================
+
+    const CurvatureTorsionProfile profile =
+        StretchBendingProfileBuilder::build(
+            input,
+            evaluation
+        );
+
+    if (!profile.valid)
+    {
+        debugStretchBendingIntegrationResult.clear();
+
+        std::cout
+            << "[STRETCH GEOMETRY]"
+            << " profileValid=0"
+            << " result=REJECTED"
+            << std::endl;
+
+        return;
+    }
+
+    // =====================================================
+    // 4. DEFINE A SEPARATE DEBUG START FRAME
+    //
+    // Keep the standalone stretch result away from:
+    //
+    //     normal manufacturing pipe
+    //     planar integrator test
+    //     helix integrator test
+    //
+    // Start tangent:
+    //     +X
+    //
+    // Bending normal:
+    //     +Y
+    //
+    // Therefore the generated curve lies initially in
+    // the XY plane when torsion is zero.
+    // =====================================================
+
+    Frame startFrame;
+
+    startFrame.P =
+        Vec3D{
+            0.0,
+            -220.0,
+            0.0
+        };
+
+    startFrame.T =
+        Vec3D{
+            1.0,
+            0.0,
+            0.0
+        };
+
+    startFrame.N =
+        Vec3D{
+            0.0,
+            1.0,
+            0.0
+        };
+
+    startFrame.B =
+        Vec3D{
+            0.0,
+            0.0,
+            1.0
+        };
+
+    // =====================================================
+    // 5. GENERATE TEMPORARY STRETCH-BENDING GEOMETRY
+    // =====================================================
+
+    SpatialCurveIntegrator integrator;
+
+    debugStretchBendingIntegrationResult =
+        integrator.integrate(
+            startFrame,
+            profile,
+            input.sampleStep
+        );
+
+    const SpatialCurveIntegrationResult& result =
+        debugStretchBendingIntegrationResult;
+
+    // =====================================================
+    // 6. BASIC DIAGNOSTICS
+    // =====================================================
+
+    std::cout
+        << "[STRETCH GEOMETRY]"
+        << " evaluationStatus="
+        << stretchBendingEvaluationStatusToString(
+            evaluation.status
+        )
+        << " profileValid="
+        << profile.valid
+        << " resultValid="
+        << result.valid
+        << " complete="
+        << result.isComplete()
+        << " nodes="
+        << result.nodes.size()
+        << " requestedLength="
+        << result.requestedArcLength
+        << " integratedLength="
+        << result.integratedArcLength
+        << " curvature="
+        << input.geometry.targetCurvature
+        << " torsion="
+        << input.geometry.targetTorsion
+        << std::endl;
+
+    if (!result.nodes.empty())
+    {
+        const PipeNode& first =
+            result.nodes.front();
+
+        const PipeNode& last =
+            result.nodes.back();
+
+        std::cout
+            << "[STRETCH GEOMETRY ENDPOINT]"
+            << " firstP=("
+            << first.pos.x << ", "
+            << first.pos.y << ", "
+            << first.pos.z << ")"
+            << " lastP=("
+            << last.pos.x << ", "
+            << last.pos.y << ", "
+            << last.pos.z << ")"
+            << std::endl;
+    }
+}
+4. Add includes if missing
+
+In AppController.cpp:
+
+#include "Core/Forming/StretchBendingEvaluator.h"
+#include "Core/Forming/StretchBendingProfileBuilder.h"
+#include "Core/Geometry/SpatialCurveIntegrator.h"
+
+You likely already have them.
+
+5. Call the test once
+
+In the constructor:
+
+debugTestStretchBendingEvaluation();
+debugTestStretchBendingFeasibilityCases();
+debugTestStretchBendingProfileBuilder();
+debugTestStretchBendingGeometry();
+6. Expected geometry
+
+Input:
+
+? = 0.002 /mm
+? = 0
+length = 200 mm
+
+Radius:
+
+R = 1 / ? = 500 mm
+
+Total bend angle:
+
+angle = ? × length
+      = 0.002 × 200
+      = 0.4 rad
+
+Approximately:
+
+22.918°
+
+Expected local endpoint relative to the start frame:
+
+x = R sin(angle)
+y = R(1 - cos(angle))
+z = 0
+
+Approximately:
+
+x ? 194.709 mm
+y ? 39.4709 mm
+z = 0
+
+Since the start point is:
+
+(0, -220, 0)
+
+expected world endpoint is approximately:
+
+(194.709, -180.529, 0)
+7. Add analytical endpoint check
+
+Inside the debug method, after successful integration:
+
+if (result.isComplete()
+    && !result.nodes.empty())
+{
+    const double curvature =
+        input.geometry.targetCurvature;
+
+    const double length =
+        input.geometry.targetArcLength;
+
+    const double angle =
+        curvature * length;
+
+    Vec3D expectedEnd;
+
+    if (curvature > 1e-12)
+    {
+        const double radius =
+            1.0 / curvature;
+
+        expectedEnd =
+            startFrame.P
+            + Vec3D{
+                radius * std::sin(angle),
+                radius
+                    * (
+                        1.0
+                        - std::cos(angle)
+                    ),
+                0.0
+            };
+    }
+    else
+    {
+        expectedEnd =
+            startFrame.P
+            + startFrame.T * length;
+    }
+
+    const Vec3D error =
+        result.nodes.back().pos
+        - expectedEnd;
+
+    std::cout
+        << "[STRETCH GEOMETRY ACCURACY]"
+        << " expectedEnd=("
+        << expectedEnd.x << ", "
+        << expectedEnd.y << ", "
+        << expectedEnd.z << ")"
+        << " positionError="
+        << error.length()
+        << std::endl;
+}
+
+With sampleStep=0.25, the error should be small.
+
+8. Optional standalone rendering
+
+You already have:
+
+spatialDebugRenderer
+drawSpatialIntegratorResult(...)
+
+Extend drawSpatialIntegratorDebugPreviews():
+
+drawSpatialIntegratorResult(
+    app->getDebugStretchBendingIntegrationResult(),
+    glm::vec3(
+        0.9f,
+        0.2f,
+        0.8f
+    ),
+    SPATIAL_INTEGRATOR_MESH_RADIUS
+);
+
+Suggested meaning:
+
+orange      = general planar integrator test
+blue        = general helix integrator test
+pink/purple = accepted stretch-bending geometry
+
+Place it after the existing two previews:
+
+drawSpatialIntegratorResult(
+    planar,
+    SPATIAL_PLANAR_PREVIEW_COLOR,
+    SPATIAL_INTEGRATOR_MESH_RADIUS
+);
+
+drawSpatialIntegratorResult(
+    helix,
+    SPATIAL_HELIX_PREVIEW_COLOR,
+    SPATIAL_INTEGRATOR_MESH_RADIUS
+);
+
+drawSpatialIntegratorResult(
+    app->getDebugStretchBendingIntegrationResult(),
+    SPATIAL_STRETCH_PREVIEW_COLOR,
+    SPATIAL_INTEGRATOR_MESH_RADIUS
+);
+
+Add color constant:
+
+constexpr glm::vec3 SPATIAL_STRETCH_PREVIEW_COLOR =
+    glm::vec3(
+        0.9f,
+        0.2f,
+        0.8f
+    );
+
+This remains under the same spatial-preview visibility toggle.
+
+Expected Phase 10G result
+
+Console:
+
+[STRETCH GEOMETRY]
+evaluationStatus=Valid
+profileValid=1
+resultValid=1
+complete=1
+nodes=801
+requestedLength=200
+integratedLength=200
+curvature=0.002
+torsion=0
+
+Why 801 nodes:
+
+200 / 0.25 = 800 steps
++ initial node = 801
+
+Expected endpoint:
+
+approximately:
+(194.709, -180.529, 0)
+
+Visual result:
+
+a smooth, shallow purple planar arc
+separate from normal manufacturing geometry
+
+Acceptance:
+
+? valid evaluation produces geometry
+? profile and integration complete
+? analytical endpoint error small
+? standalone curve visible in LINE mode
+? standalone tube round in MESH mode
+? invalid stretch input still produces no geometry
+? rotary-draw path unchanged

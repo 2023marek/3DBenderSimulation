@@ -243,6 +243,12 @@ public:
      {
          return debugStretchBendingProfile;
      }
+     // Getter
+     const SpatialCurveIntegrationResult&
+         getDebugStretchBendingIntegrationResult() const
+     {
+         return debugStretchBendingIntegrationResult;
+     }
 
 private:
     
@@ -310,5 +316,8 @@ private:
    CurvatureTorsionProfile
        debugStretchBendingProfile;
    void debugTestStretchBendingProfileBuilder();
+   SpatialCurveIntegrationResult
+       debugStretchBendingIntegrationResult;
+   void debugTestStretchBendingGeometry();
 }; 
       

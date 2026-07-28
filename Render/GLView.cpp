@@ -189,7 +189,12 @@ glm::vec3(
     0.8f,
     1.0f
 );
-
+constexpr glm::vec3 SPATIAL_STRETCH_PREVIEW_COLOR =
+glm::vec3(
+    0.9f,
+    0.2f,
+    0.8f
+);
 constexpr float SPATIAL_INTEGRATOR_LINE_WIDTH =
 4.0f;
 
@@ -1561,6 +1566,16 @@ void GLView::drawSpatialIntegratorDebugPreviews()
         SPATIAL_HELIX_PREVIEW_COLOR,
         SPATIAL_INTEGRATOR_MESH_RADIUS
     );
+    drawSpatialIntegratorResult(
+        app->getDebugStretchBendingIntegrationResult(),
+        glm::vec3(
+            0.9f,
+            0.2f,
+            0.8f
+        ),
+        SPATIAL_INTEGRATOR_MESH_RADIUS
+    );
+
 }
 void GLView::drawSpatialDebugTube(
     const std::vector<PipeNode>& nodes,

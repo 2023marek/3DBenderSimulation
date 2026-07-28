@@ -220,6 +220,7 @@ AppController::AppController()
     debugTestStretchBendingEvaluation();
     debugTestStretchBendingFeasibilityCases();
     debugTestStretchBendingProfileBuilder();
+    debugTestStretchBendingGeometry();
 }
 
 
@@ -1844,6 +1845,275 @@ void AppController::toggleSimulationMode()
                 << last.curvature
                 << " lastTau="
                 << last.torsion
+                << std::endl;
+        }
+
+        StretchBendingProcessInput rejectedInput =
+            buildTestStretchBendingProcessInput();
+
+        const StretchBendingEvaluationResult rejectedEvaluation =
+            evaluator.evaluate(
+                rejectedInput
+            );
+
+        const CurvatureTorsionProfile rejectedProfile =
+            StretchBendingProfileBuilder::build(
+                rejectedInput,
+                rejectedEvaluation
+            );
+
+        std::cout
+            << "[STRETCH PROFILE REJECTION]"
+            << " evaluationStatus="
+            << stretchBendingEvaluationStatusToString(
+                rejectedEvaluation.status
+            )
+            << " profileValid="
+            << rejectedProfile.valid
+            << " samples="
+            << rejectedProfile.samples.size()
+            << std::endl;
+    }
+
+    void AppController::debugTestStretchBendingGeometry()
+    {
+        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+            return;
+
+        // =====================================================
+        // 1. BUILD KNOWN VALID STRETCH-BENDING INPUT
+        // =====================================================
+
+        StretchBendingProcessInput input =
+            buildTestStretchBendingProcessInput();
+
+        input.geometry.targetCurvature =
+            0.002;
+
+        input.geometry.targetTorsion =
+            0.0;
+
+        input.geometry.targetArcLength =
+            200.0;
+
+        input.axialStretchStrain =
+            0.03;
+
+        input.sampleStep =
+            0.25;
+
+        // =====================================================
+        // 2. EVALUATE MATERIAL / PROCESS FEASIBILITY
+        // =====================================================
+
+        StretchBendingEvaluator evaluator;
+
+        const StretchBendingEvaluationResult evaluation =
+            evaluator.evaluate(
+                input
+            );
+
+        if (!evaluation.valid)
+        {
+            debugStretchBendingIntegrationResult.clear();
+
+            std::cout
+                << "[STRETCH GEOMETRY]"
+                << " evaluationStatus="
+                << stretchBendingEvaluationStatusToString(
+                    evaluation.status
+                )
+                << " result=REJECTED"
+                << std::endl;
+
+            return;
+        }
+
+        // =====================================================
+        // 3. BUILD ACCEPTED KAPPA / TAU PROFILE
+        // =====================================================
+
+        const CurvatureTorsionProfile profile =
+            StretchBendingProfileBuilder::build(
+                input,
+                evaluation
+            );
+
+        if (!profile.valid)
+        {
+            debugStretchBendingIntegrationResult.clear();
+
+            std::cout
+                << "[STRETCH GEOMETRY]"
+                << " profileValid=0"
+                << " result=REJECTED"
+                << std::endl;
+
+            return;
+        }
+
+        // =====================================================
+        // 4. DEFINE A SEPARATE DEBUG START FRAME
+        //
+        // Keep the standalone stretch result away from:
+        //
+        //     normal manufacturing pipe
+        //     planar integrator test
+        //     helix integrator test
+        //
+        // Start tangent:
+        //     +X
+        //
+        // Bending normal:
+        //     +Y
+        //
+        // Therefore the generated curve lies initially in
+        // the XY plane when torsion is zero.
+        // =====================================================
+
+        Frame startFrame;
+
+        startFrame.P =
+            Vec3D{
+                0.0,
+                -220.0,
+                0.0
+        };
+
+        startFrame.T =
+            Vec3D{
+                1.0,
+                0.0,
+                0.0
+        };
+
+        startFrame.N =
+            Vec3D{
+                0.0,
+                1.0,
+                0.0
+        };
+
+        startFrame.B =
+            Vec3D{
+                0.0,
+                0.0,
+                1.0
+        };
+
+        // =====================================================
+        // 5. GENERATE TEMPORARY STRETCH-BENDING GEOMETRY
+        // =====================================================
+
+        SpatialCurveIntegrator integrator;
+
+        debugStretchBendingIntegrationResult =
+            integrator.integrate(
+                startFrame,
+                profile,
+                input.sampleStep
+            );
+
+        const SpatialCurveIntegrationResult& result =
+            debugStretchBendingIntegrationResult;
+        if (result.isComplete()
+            && !result.nodes.empty())
+        {
+            const double curvature =
+                input.geometry.targetCurvature;
+
+            const double length =
+                input.geometry.targetArcLength;
+
+            const double angle =
+                curvature * length;
+
+            Vec3D expectedEnd;
+
+            if (curvature > 1e-12)
+            {
+                const double radius =
+                    1.0 / curvature;
+
+                expectedEnd =
+                    startFrame.P
+                    + Vec3D{
+                        radius * std::sin(angle),
+                        radius
+                            * (
+                                1.0
+                                - std::cos(angle)
+                            ),
+                        0.0
+                };
+            }
+            else
+            {
+                expectedEnd =
+                    startFrame.P
+                    + startFrame.T * length;
+            }
+
+            const Vec3D error =
+                result.nodes.back().pos
+                - expectedEnd;
+
+            std::cout
+                << "[STRETCH GEOMETRY ACCURACY]"
+                << " expectedEnd=("
+                << expectedEnd.x << ", "
+                << expectedEnd.y << ", "
+                << expectedEnd.z << ")"
+                << " positionError="
+                << error.length()
+                << std::endl;
+        }
+        // =====================================================
+        // 6. BASIC DIAGNOSTICS
+        // =====================================================
+
+        std::cout
+            << "[STRETCH GEOMETRY]"
+            << " evaluationStatus="
+            << stretchBendingEvaluationStatusToString(
+                evaluation.status
+            )
+            << " profileValid="
+            << profile.valid
+            << " resultValid="
+            << result.valid
+            << " complete="
+            << result.isComplete()
+            << " nodes="
+            << result.nodes.size()
+            << " requestedLength="
+            << result.requestedArcLength
+            << " integratedLength="
+            << result.integratedArcLength
+            << " curvature="
+            << input.geometry.targetCurvature
+            << " torsion="
+            << input.geometry.targetTorsion
+            << std::endl;
+
+        if (!result.nodes.empty())
+        {
+            const PipeNode& first =
+                result.nodes.front();
+
+            const PipeNode& last =
+                result.nodes.back();
+
+            std::cout
+                << "[STRETCH GEOMETRY ENDPOINT]"
+                << " firstP=("
+                << first.pos.x << ", "
+                << first.pos.y << ", "
+                << first.pos.z << ")"
+                << " lastP=("
+                << last.pos.x << ", "
+                << last.pos.y << ", "
+                << last.pos.z << ")"
                 << std::endl;
         }
     }
