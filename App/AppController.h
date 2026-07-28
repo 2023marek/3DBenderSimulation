@@ -19,6 +19,8 @@
 #include "Core/Forming/LocalDeformableRegion.h"
 #include "Core/Geometry/SpatialCurveAccuracyReport.h"
 #include "Core/Geometry/SpatialCurveIntegrationResult.h"
+#include "Core/Forming/StretchBendingProcessInput.h"
+#include "Core/Geometry/CurvatureTorsionProfile.h"
 
 
 class AppController
@@ -236,7 +238,11 @@ public:
          spatialIntegratorPreviewVisible =
              !spatialIntegratorPreviewVisible;
      }
-
+     const CurvatureTorsionProfile&
+         getDebugStretchBendingProfile() const
+     {
+         return debugStretchBendingProfile;
+     }
 
 private:
     
@@ -294,6 +300,15 @@ private:
 
    bool spatialIntegratorPreviewVisible =
        true;
-  
+  // Strech bending
+   StretchBendingProcessInput
+       buildTestStretchBendingProcessInput() const;
+
+   void debugTestStretchBendingEvaluation() const;
+
+   void debugTestStretchBendingFeasibilityCases() const;
+   CurvatureTorsionProfile
+       debugStretchBendingProfile;
+   void debugTestStretchBendingProfileBuilder();
 }; 
       

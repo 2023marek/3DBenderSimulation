@@ -17,6 +17,10 @@
 #include "Core/Geometry/ConstantCurvatureTorsionProfileBuilder.h"
 #include "Core/Geometry/SpatialCurveIntegrator.h"
 #include "Core/Geometry/SpatialCurveIntegrationResult.h"
+#include "Core/Forming/StretchBendingEvaluationResult.h"
+#include "Core/Forming/StretchBendingEvaluator.h"
+#include "Core/Forming/StretchBendingEvaluationStatus.h"
+#include "Core/Forming/StretchBendingProfileBuilder.h"
 
 
 
@@ -105,6 +109,61 @@ namespace
 
     constexpr double TEST_SPATIAL_HELIX_SAMPLE_STEP =
         0.125; // mm
+
+    // Test strech
+    constexpr bool DEBUG_TEST_STRETCH_BENDING_INPUT =
+        true;
+
+    constexpr double TEST_STRETCH_OUTER_DIAMETER =
+        20.0;
+
+    constexpr double TEST_STRETCH_WALL_THICKNESS =
+        1.5;
+
+    constexpr double TEST_STRETCH_YOUNG_MODULUS =
+        70000.0;
+
+    constexpr double TEST_STRETCH_YIELD_STRESS =
+        250.0;
+
+    constexpr double TEST_STRETCH_HARDENING_MODULUS =
+        1000.0;
+
+    constexpr double TEST_STRETCH_ALLOWABLE_STRAIN =
+        0.08;
+
+    constexpr double TEST_STRETCH_TARGET_LENGTH =
+        200.0;
+
+    constexpr double TEST_STRETCH_TARGET_CURVATURE =
+        0.01;
+
+    constexpr double TEST_STRETCH_TARGET_TORSION =
+        0.0;
+
+    constexpr double TEST_STRETCH_AXIAL_STRAIN =
+        0.02;
+
+    constexpr double TEST_STRETCH_FEED_SPEED =
+        40.0;
+
+    constexpr double TEST_STRETCH_SAMPLE_STEP =
+        0.5;
+
+    struct StretchEvaluationTestCase
+    {
+        const char* name =
+            "";
+
+        double targetCurvature =
+            0.0;
+
+        double axialStretchStrain =
+            0.0;
+
+        StretchBendingEvaluationStatus expectedStatus =
+            StretchBendingEvaluationStatus::NotEvaluated;
+    };
 }
 
 
@@ -124,15 +183,18 @@ AppController::AppController()
         TEST_INCOMING_STOCK_LENGTH
     );
 
-
     configureManufacturingDebug();
-
+    configureControllerDebug();
 
     rebuildTestManufacturingPlan();
 
     configureInitialMode();
+   
 
-    std::cout << "[APP PLACEMENT PRESET] "
+    
+
+    std::cout
+        << "[APP PLACEMENT PRESET] "
         << testPlacementPresetToString(
             activePlacementPreset
         )
@@ -141,16 +203,24 @@ AppController::AppController()
     auto& preview =
         sim.getManufacturingPlanPreview();
 
-    preview.setShowInsertionMarker(true);
-    preview.setShowInsertionFrame(false);
-    preview.setShowTransformedInsertOverlay(true);
+    preview.setShowInsertionMarker(
+        true
+    );
 
-    configureManufacturingDebug();
-    configureControllerDebug();
+    preview.setShowInsertionFrame(
+        false
+    );
+
+    preview.setShowTransformedInsertOverlay(
+        true
+    );
+
     debugTestSpatialCurveIntegrator();
     debugTestSpatialHelixIntegrator();
+    debugTestStretchBendingEvaluation();
+    debugTestStretchBendingFeasibilityCases();
+    debugTestStretchBendingProfileBuilder();
 }
-
 
 
 void AppController::update(double dt)
@@ -1361,4 +1431,419 @@ void AppController::toggleSimulationMode()
                 : "FAIL"
                 )
             << std::endl;
+    }
+    //Strech bending
+    StretchBendingProcessInput
+        AppController::buildTestStretchBendingProcessInput() const
+    {
+        StretchBendingProcessInput input;
+
+        input.pipeSection.outerDiameter =
+            TEST_STRETCH_OUTER_DIAMETER;
+
+        input.pipeSection.wallThickness =
+            TEST_STRETCH_WALL_THICKNESS;
+
+        input.material.youngModulus =
+            TEST_STRETCH_YOUNG_MODULUS;
+
+        input.material.yieldStress =
+            TEST_STRETCH_YIELD_STRESS;
+
+        input.material.hardeningModulus =
+            TEST_STRETCH_HARDENING_MODULUS;
+
+        input.material.allowableStrain =
+            TEST_STRETCH_ALLOWABLE_STRAIN;
+
+        input.geometry.targetArcLength =
+            TEST_STRETCH_TARGET_LENGTH;
+
+        input.geometry.targetCurvature =
+            TEST_STRETCH_TARGET_CURVATURE;
+
+        input.geometry.targetTorsion =
+            TEST_STRETCH_TARGET_TORSION;
+
+        input.axialStretchStrain =
+            TEST_STRETCH_AXIAL_STRAIN;
+
+        input.feedSpeed =
+            TEST_STRETCH_FEED_SPEED;
+
+        input.sampleStep =
+            TEST_STRETCH_SAMPLE_STEP;
+
+        input.enabled =
+            true;
+
+        return input;
+    }
+
+    void AppController::debugTestStretchBendingEvaluation() const
+    {
+        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+            return;
+
+        const StretchBendingProcessInput input =
+            buildTestStretchBendingProcessInput();
+
+        StretchBendingEvaluator evaluator;
+
+        const StretchBendingEvaluationResult result =
+            evaluator.evaluate(
+                input
+            );
+
+        std::cout
+            << "[STRETCH EVALUATION]"
+            << " status="
+            << stretchBendingEvaluationStatusToString(
+                result.status
+            )
+            << " valid="
+            << result.valid
+            << " inputValid="
+            << result.inputValid
+            << " geometryFeasible="
+            << result.geometryFeasible
+            << " aboveYield="
+            << result.aboveYield
+            << " innerSafe="
+            << result.innerWallSafe
+            << " outerSafe="
+            << result.outerWallSafe
+            << std::endl;
+
+        std::cout
+            << "[STRETCH STRAIN]"
+            << " yield="
+            << result.yieldStrain
+            << " bending="
+            << result.bendingStrain
+            << " axial="
+            << result.axialStretchStrain
+            << " inner="
+            << result.innerWallStrain
+            << " outer="
+            << result.outerWallStrain
+            << " minAxial="
+            << result.minimumRequiredAxialStrain
+            << " maxAxial="
+            << result.maximumAllowedAxialStrain
+            << std::endl;
+
+        std::cout
+            << "[STRETCH FORCE MOMENT]"
+            << " tension="
+            << result.axialTension
+            << " elasticMoment="
+            << result.elasticBendingMoment
+            << " innerMargin="
+            << result.innerCompressionMargin
+            << " outerMargin="
+            << result.outerStrainMargin
+            << std::endl;
+
+        std::cout
+            << "[STRETCH AXIAL COMMAND]"
+            << " minStrain="
+            << result.minimumRequiredAxialStrain
+            << " recommendedStrain="
+            << result.recommendedAxialStrain
+            << " maxStrain="
+            << result.maximumAllowedAxialStrain
+            << " range="
+            << result.axialStrainRange
+            << " commandedStrain="
+            << result.axialStretchStrain
+            << " commandInsideRange="
+            << result.commandedStrainInsideRecommendedRange
+            << std::endl;
+
+        std::cout
+            << "[STRETCH TENSION COMMAND]"
+            << " minTension="
+            << result.minimumRequiredTension
+            << " recommendedTension="
+            << result.recommendedTension
+            << " maxTension="
+            << result.maximumAllowedTension
+            << " commandedTension="
+            << result.commandedTension
+            << std::endl;
+    }
+
+    void AppController::debugTestStretchBendingFeasibilityCases() const
+    {
+        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+            return;
+
+        StretchBendingEvaluator evaluator;
+
+        // =====================================================
+        // TEST FOUNDATION
+        //
+        // Current test material:
+        //
+        //     D = 20 mm
+        //     allowable strain = 0.08
+        //     yield strain ? 0.003571
+        //
+        // bending strain:
+        //
+        //     epsilon_b = kappa * D / 2
+        //
+        // For kappa = 0.002:
+        //
+        //     epsilon_b = 0.02
+        //
+        // Feasible axial range:
+        //
+        //     0.02 <= epsilon_0 <= 0.06
+        // =====================================================
+
+        const std::vector<StretchEvaluationTestCase> testCases =
+        {
+            // -------------------------------------------------
+            // VALID
+            //
+            // bending = 0.02
+            // axial   = 0.03
+            //
+            // inner = 0.01
+            // outer = 0.05
+            //
+            // Both walls are safe and outer wall is above yield.
+            // -------------------------------------------------
+            {
+                "Valid",
+                0.002,
+                0.030,
+                StretchBendingEvaluationStatus::Valid
+            },
+
+            // -------------------------------------------------
+            // INNER-WALL COMPRESSION RISK
+            //
+            // bending = 0.02
+            // axial   = 0.01
+            //
+            // inner = -0.01
+            // outer =  0.03
+            //
+            // Geometry itself has a feasible axial range, but
+            // the selected axial stretch is too low.
+            // -------------------------------------------------
+            {
+                "InnerCompression",
+                0.002,
+                0.010,
+                StretchBendingEvaluationStatus::
+                    InnerWallCompressionRisk
+            },
+
+            // -------------------------------------------------
+            // OUTER-WALL STRAIN EXCEEDED
+            //
+            // bending = 0.02
+            // axial   = 0.07
+            //
+            // inner = 0.05
+            // outer = 0.09 > allowable 0.08
+            // -------------------------------------------------
+            {
+                "OuterLimit",
+                0.002,
+                0.070,
+                StretchBendingEvaluationStatus::
+                    OuterWallStrainExceeded
+            },
+
+            // -------------------------------------------------
+            // BELOW YIELD
+            //
+            // bending = 0.001
+            // axial   = 0.001
+            //
+            // inner = 0
+            // outer = 0.002
+            //
+            // outer strain remains below yield strain:
+            //
+            //     0.002 < 0.003571
+            // -------------------------------------------------
+            {
+                "BelowYield",
+                0.0001,
+                0.001,
+                StretchBendingEvaluationStatus::BelowYield
+            }
+        };
+
+        size_t passedCount =
+            0;
+
+        for (const StretchEvaluationTestCase& testCase :
+            testCases)
+        {
+            StretchBendingProcessInput input =
+                buildTestStretchBendingProcessInput();
+
+            input.geometry.targetCurvature =
+                testCase.targetCurvature;
+
+            input.axialStretchStrain =
+                testCase.axialStretchStrain;
+
+            const StretchBendingEvaluationResult result =
+                evaluator.evaluate(
+                    input
+                );
+
+            const bool passed =
+                result.status
+                == testCase.expectedStatus;
+
+            if (passed)
+            {
+                ++passedCount;
+            }
+
+            std::cout
+                << "[STRETCH CASE]"
+                << " name="
+                << testCase.name
+                << " expected="
+                << stretchBendingEvaluationStatusToString(
+                    testCase.expectedStatus
+                )
+                << " actual="
+                << stretchBendingEvaluationStatusToString(
+                    result.status
+                )
+                << " pass="
+                << passed
+                << " minAxial="
+                << result.minimumRequiredAxialStrain
+                << " recommendedAxial="
+                << result.recommendedAxialStrain
+                << " maxAxial="
+                << result.maximumAllowedAxialStrain
+                << " commandedInsideRange="
+                << result.commandedStrainInsideRecommendedRange
+                << " recommendedTension="
+                << result.recommendedTension
+                << " kappa="
+                << result.targetCurvature
+                << " bending="
+                << result.bendingStrain
+                << " axial="
+                << result.axialStretchStrain
+                << " inner="
+                << result.innerWallStrain
+                << " outer="
+                << result.outerWallStrain
+                << " feasible="
+                << result.geometryFeasible
+                << " aboveYield="
+                << result.aboveYield
+                << std::endl;
+
+        }
+
+        const bool allPassed =
+            passedCount
+            == testCases.size();
+
+        std::cout
+            << "[STRETCH CASE SUMMARY]"
+            << " passed="
+            << passedCount
+            << "/"
+            << testCases.size()
+            << " result="
+            << (
+                allPassed
+                ? "PASS"
+                : "FAIL"
+                )
+            << std::endl;
+    }
+
+    void AppController::debugTestStretchBendingProfileBuilder()
+    {
+        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+            return;
+
+        // =====================================================
+        // BUILD A KNOWN VALID TEST CASE
+        //
+        // Do not use the original severe kappa=0.01 case,
+        // because it is intentionally GeometryNotFeasible.
+        // =====================================================
+
+        StretchBendingProcessInput input =
+            buildTestStretchBendingProcessInput();
+
+        input.geometry.targetCurvature =
+            0.002;
+
+        input.geometry.targetTorsion =
+            0.0;
+
+        input.axialStretchStrain =
+            0.03;
+
+        StretchBendingEvaluator evaluator;
+
+        const StretchBendingEvaluationResult evaluation =
+            evaluator.evaluate(
+                input
+            );
+
+        debugStretchBendingProfile =
+            StretchBendingProfileBuilder::build(
+                input,
+                evaluation
+            );
+
+        std::cout
+            << "[STRETCH PROFILE]"
+            << " evaluationStatus="
+            << stretchBendingEvaluationStatusToString(
+                evaluation.status
+            )
+            << " valid="
+            << debugStretchBendingProfile.valid
+            << " samples="
+            << debugStretchBendingProfile.samples.size()
+            << " totalLength="
+            << debugStretchBendingProfile.totalArcLength
+            << std::endl;
+
+        if (!debugStretchBendingProfile.samples.empty())
+        {
+            const CurvatureTorsionSample& first =
+                debugStretchBendingProfile.samples.front();
+
+            const CurvatureTorsionSample& last =
+                debugStretchBendingProfile.samples.back();
+
+            std::cout
+                << "[STRETCH PROFILE VALUES]"
+                << " firstS="
+                << first.arcLength
+                << " firstKappa="
+                << first.curvature
+                << " firstTau="
+                << first.torsion
+                << " lastS="
+                << last.arcLength
+                << " lastKappa="
+                << last.curvature
+                << " lastTau="
+                << last.torsion
+                << std::endl;
+        }
     }
