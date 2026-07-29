@@ -22,6 +22,10 @@
 #include "Core/Forming/StretchBendingEvaluationStatus.h"
 #include "Core/Forming/StretchBendingProfileBuilder.h"
 #include "Core/Forming/StretchBendingFinalProfileBuilder.h"
+#include "Core/Forming/StretchBendingActiveZone.h"
+#include "Core/Forming/StretchBendingManufacturingState.h"
+#include "Core/Forming/StretchBendingManufacturingStateBuilder.h"
+#include "Core/Forming/StretchBendingManufacturingStage.h"
 
 
 
@@ -194,9 +198,9 @@ AppController::AppController()
     rebuildTestManufacturingPlan();
 
     configureInitialMode();
-   
 
-    
+
+
 
     std::cout
         << "[APP PLACEMENT PRESET] "
@@ -307,7 +311,7 @@ HUDData AppController::buildHUDData() const
         plannedPreviewDebugVisible ? "ON" : "OFF";
 
     data.placementModeName =
-      sim.getManufacturingPlanPreview().getActivePlacementModeName();
+        sim.getManufacturingPlanPreview().getActivePlacementModeName();
     data.attachModeName =
         activeAttachModeName();
     data.currentOpIndex = sim.getCurrentOperationIndex();
@@ -453,7 +457,7 @@ void AppController::useCADPreview()
     sim.setMode(
         SimulationController::SimulationMode::CADPreview
     );
-   
+
 }
 
 void AppController::usePlannedShapePreview()
@@ -461,7 +465,7 @@ void AppController::usePlannedShapePreview()
     sim.setMode(
         SimulationController::SimulationMode::PlannedShapePreview
     );
-    
+
 }
 
 void AppController::useManufacturingPlayback()
@@ -469,7 +473,7 @@ void AppController::useManufacturingPlayback()
     sim.setMode(
         SimulationController::SimulationMode::ManufacturingPlayback
     );
-    
+
 }
 
 void AppController::toggleSimulationMode()
@@ -494,1048 +498,1297 @@ void AppController::toggleSimulationMode()
 
 
 // Helpers
-    std::vector<Operation> AppController::buildTestOperations() const
+std::vector<Operation> AppController::buildTestOperations() const
+{
+    std::vector<Operation> ops;
+
+    Operation op1;
+    op1.type = Operation::FEED;
+    op1.length = TEST_FEED_1_LENGTH;
+
+    Operation op2;
+    op2.type = Operation::BEND;
+    op2.R = TEST_BEND_RADIUS;
+    op2.angle = TEST_BEND_ANGLE;
+    op2.bendDirection = BendDirection::CCW;
+
+    Operation op3;
+    op3.type = Operation::ROTATE;
+    op3.angle = PI / 2.0;
+    op3.rotationDirection = RotationDirection::CCW;
+
+    Operation op4;
+    op4.type = Operation::FEED;
+    op4.length = TEST_FEED_2_LENGTH;
+
+    ops.push_back(op1);
+    ops.push_back(op2);
+    ops.push_back(op3);
+    ops.push_back(op4);
+
+    return ops;
+}
+
+ManufacturingPlan AppController::buildTestManufacturingPlan(
+    const std::vector<Operation>& ops
+) const
+{
+    // =====================================================
+    // PRIMARY ROTARY-DRAW PASS
+    // =====================================================
+
+    ManufacturingPass rotaryPass =
+        RotaryDrawPassBuilder::buildPass(
+            ops,
+            "Rotary draw bending pass"
+        );
+
+    // =====================================================
+    // ADDITIONAL HELIX-FORMING PASS
+    // =====================================================
+
+    HelixOperation helixPassOp;
+
+    helixPassOp.inputMode =
+        HelixOperation::InputMode::RadiusPitch;
+
+    helixPassOp.length =
+        TEST_HELIX_LENGTH;
+
+    helixPassOp.helixRadius =
+        TEST_HELIX_RADIUS;
+
+    helixPassOp.pitch =
+        TEST_HELIX_PITCH;
+
+    helixPassOp.feedSpeed =
+        TEST_HELIX_FEED_SPEED;
+
+    ManufacturingPass helixPass =
+        HelixFormingPassBuilder::buildPass(
+            helixPassOp,
+            "Heating element helix pass"
+        );
+
+    // Where the additional pass enters the previously
+    // manufactured pipe.
+    helixPass.placement =
+        buildTestPlacement(
+            activePlacementPreset
+        );
+
+    // Physical arc-length range that may be deformed by
+    // the additional helix-forming pass.
+    helixPass.deformableRegion.startArcLength =
+        TEST_INSERT_ARC_LENGTH;
+
+    helixPass.deformableRegion.endArcLength =
+        TEST_INSERT_ARC_LENGTH
+        + TEST_HELIX_LENGTH;
+
+    // =====================================================
+    // MANUFACTURING PLAN
+    // =====================================================
+
+    ManufacturingPlan plan;
+
+    plan.addPass(
+        rotaryPass
+    );
+
+    plan.addPass(
+        helixPass
+    );
+
+    return plan;
+}
+
+void AppController::configureInitialMode()
+{
+    usePlannedShapePreview();
+
+    // Alternatives for testing:
+    //
+    // useManufacturingPlayback();
+    // useCADPreview();
+}
+
+PassPlacement AppController::buildTestPlacement(
+    TestPlacementPreset preset) const
+{
+    if (preset == TestPlacementPreset::ArcLength)
     {
-        std::vector<Operation> ops;
-
-        Operation op1;
-        op1.type = Operation::FEED;
-        op1.length = TEST_FEED_1_LENGTH;
-
-        Operation op2;
-        op2.type = Operation::BEND;
-        op2.R = TEST_BEND_RADIUS;
-        op2.angle = TEST_BEND_ANGLE;
-        op2.bendDirection = BendDirection::CCW;
-
-        Operation op3;
-        op3.type = Operation::ROTATE;
-        op3.angle = PI / 2.0;
-        op3.rotationDirection = RotationDirection::CCW;
-
-        Operation op4;
-        op4.type = Operation::FEED;
-        op4.length = TEST_FEED_2_LENGTH;
-
-        ops.push_back(op1);
-        ops.push_back(op2);
-        ops.push_back(op3);
-        ops.push_back(op4);
-
-        return ops;
-    }
-
-    ManufacturingPlan AppController::buildTestManufacturingPlan(
-        const std::vector<Operation>& ops
-    ) const
-    {
-        // =====================================================
-        // PRIMARY ROTARY-DRAW PASS
-        // =====================================================
-
-        ManufacturingPass rotaryPass =
-            RotaryDrawPassBuilder::buildPass(
-                ops,
-                "Rotary draw bending pass"
-            );
-
-        // =====================================================
-        // ADDITIONAL HELIX-FORMING PASS
-        // =====================================================
-
-        HelixOperation helixPassOp;
-
-        helixPassOp.inputMode =
-            HelixOperation::InputMode::RadiusPitch;
-
-        helixPassOp.length =
-            TEST_HELIX_LENGTH;
-
-        helixPassOp.helixRadius =
-            TEST_HELIX_RADIUS;
-
-        helixPassOp.pitch =
-            TEST_HELIX_PITCH;
-
-        helixPassOp.feedSpeed =
-            TEST_HELIX_FEED_SPEED;
-
-        ManufacturingPass helixPass =
-            HelixFormingPassBuilder::buildPass(
-                helixPassOp,
-                "Heating element helix pass"
-            );
-
-        // Where the additional pass enters the previously
-        // manufactured pipe.
-        helixPass.placement =
-            buildTestPlacement(
-                activePlacementPreset
-            );
-
-        // Physical arc-length range that may be deformed by
-        // the additional helix-forming pass.
-        helixPass.deformableRegion.startArcLength =
-            TEST_INSERT_ARC_LENGTH;
-
-        helixPass.deformableRegion.endArcLength =
+        return PassPlacement::atArcLength(
             TEST_INSERT_ARC_LENGTH
-            + TEST_HELIX_LENGTH;
-
-        // =====================================================
-        // MANUFACTURING PLAN
-        // =====================================================
-
-        ManufacturingPlan plan;
-
-        plan.addPass(
-            rotaryPass
-        );
-
-        plan.addPass(
-            helixPass
-        );
-
-        return plan;
-    }
-
-    void AppController::configureInitialMode()
-    {
-        usePlannedShapePreview();
-
-        // Alternatives for testing:
-        //
-        // useManufacturingPlayback();
-        // useCADPreview();
-    }
-
-    PassPlacement AppController::buildTestPlacement(
-        TestPlacementPreset preset) const
-    {
-        if (preset == TestPlacementPreset::ArcLength)
-        {
-            return PassPlacement::atArcLength(
-                TEST_INSERT_ARC_LENGTH
-            );
-        }
-
-        if (preset == TestPlacementPreset::NodeIndex)
-        {
-            return PassPlacement::atNodeIndex(
-                TEST_INSERT_NODE_INDEX
-            );
-        }
-
-        if (preset == TestPlacementPreset::ExplicitFrame)
-        {
-            Frame frame;
-
-            frame.P = { 200.0, 80.0, 0.0 };
-            frame.T = { 1.0, 0.0, 0.0 };
-            frame.N = { 0.0, 1.0, 0.0 };
-            frame.B = { 0.0, 0.0, 1.0 };
-
-            return PassPlacement::atFrame(
-                frame,
-                activeExplicitAttachMode
-            );
-        }
-
-        return PassPlacement::append();
-
-
-        
-
-    }
-
-
-    void AppController::toggleExplicitAttachMode()
-    {
-        if (activeExplicitAttachMode
-            == ExplicitFrameAttachMode::InsertedOnly)
-        {
-            activeExplicitAttachMode =
-                ExplicitFrameAttachMode::AppendAfterFrame;
-        }
-        else if (activeExplicitAttachMode
-            == ExplicitFrameAttachMode::AppendAfterFrame)
-        {
-            activeExplicitAttachMode =
-                ExplicitFrameAttachMode::AttachBaseAfterInsert;
-        }
-        else if (activeExplicitAttachMode
-            == ExplicitFrameAttachMode::AttachBaseAfterInsert)
-        {
-            activeExplicitAttachMode =
-                ExplicitFrameAttachMode::InsertedOnly;
-        }
-
-        rebuildTestManufacturingPlan();
-
-        std::cout << "[APP EXPLICIT ATTACH] "
-            << explicitFrameAttachModeToString(
-                activeExplicitAttachMode
-            )
-            << std::endl;
-    }
-
-    void AppController::togglePlacementPreset()
-    {
-        if (activePlacementPreset
-            == TestPlacementPreset::ArcLength)
-        {
-            activePlacementPreset =
-                TestPlacementPreset::NodeIndex;
-        }
-        else if (activePlacementPreset
-            == TestPlacementPreset::NodeIndex)
-        {
-            activePlacementPreset =
-                TestPlacementPreset::ExplicitFrame;
-        }
-        else if (activePlacementPreset
-            == TestPlacementPreset::ExplicitFrame)
-        {
-            activePlacementPreset =
-                TestPlacementPreset::ArcLength;
-        }
-
-        rebuildTestManufacturingPlan();
-
-        std::cout << "[APP PLACEMENT PRESET] "
-            << testPlacementPresetToString(
-                activePlacementPreset
-            )
-            << std::endl;
-    }
-
-    void AppController::rebuildTestManufacturingPlan()
-    {
-        
-
-        ManufacturingPlan plan =
-            buildTestManufacturingPlan(
-                testOperations
-            );
-
-        auto& preview =
-            sim.getManufacturingPlanPreview();
-
-        preview.setPlan(
-            plan
-        );
-
-        ManufacturingHistory& history =
-            sim.getManufacturingHistory();
-
-        buildManufacturingHistoryFromPlan(
-            plan,
-            history
-        );
-
-        // ManufacturingHistory is fully populated here.
-        // The additional-pass placeholder must run only now.
-        
-        if (DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER)
-        {
-            sim.debugExecuteFirstAdditionalPassPlaceholder();
-        }
-
-        if (DEBUG_PRINT_MANUFACTURING_HISTORY)
-        {
-            std::cout
-                << "[MFG HISTORY REAL PASSES] primary="
-                << history.primaryPasses.size()
-                << " additional="
-                << history.additionalPasses.size()
-                << std::endl;
-
-            debugPrintManufacturingHistory(
-                history
-            );
-        }
-
-        preview.setDebugLogging(
-            true
-        );
-
-        preview.setShowInsertionMarker(
-            true
-        );
-
-        preview.setShowInsertionFrame(
-            true
-        );
-
-        preview.setShowTransformedInsertOverlay(
-            false
         );
     }
-    const char* AppController::testPlacementPresetToString(
-        TestPlacementPreset preset) const
+
+    if (preset == TestPlacementPreset::NodeIndex)
     {
-        if (preset == TestPlacementPreset::ArcLength)
-        {
-            return "ArcLength";
-        }
-
-        if (preset == TestPlacementPreset::NodeIndex)
-        {
-            return "NodeIndex";
-        }
-
-        if (preset == TestPlacementPreset::ExplicitFrame)
-        {
-            return "ExplicitFrame";
-        }
-
-        return "Unknown";
-    }
-    void AppController::togglePlannedPreviewDebug()
-    {
-        plannedPreviewDebugVisible =
-            !plannedPreviewDebugVisible;
-
-        auto& preview =
-            sim.getManufacturingPlanPreview();
-
-        preview.setShowInsertionMarker(
-            plannedPreviewDebugVisible
+        return PassPlacement::atNodeIndex(
+            TEST_INSERT_NODE_INDEX
         );
-
-        preview.setShowInsertionFrame(
-            plannedPreviewDebugVisible
-        );
-
-        preview.setShowTransformedInsertOverlay(
-            false
-        );
-
-        std::cout << "[APP PREVIEW DEBUG] "
-            << (plannedPreviewDebugVisible ? "ON" : "OFF")
-            << std::endl;
     }
 
-   
-    // Support for HUD============================
-    const char* AppController::activeAttachModeName() const
+    if (preset == TestPlacementPreset::ExplicitFrame)
     {
-        if (activePlacementPreset
-            != TestPlacementPreset::ExplicitFrame)
-        {
-            return "-";
-        }
+        Frame frame;
 
-        return explicitFrameAttachModeToString(
+        frame.P = { 200.0, 80.0, 0.0 };
+        frame.T = { 1.0, 0.0, 0.0 };
+        frame.N = { 0.0, 1.0, 0.0 };
+        frame.B = { 0.0, 0.0, 1.0 };
+
+        return PassPlacement::atFrame(
+            frame,
             activeExplicitAttachMode
         );
     }
 
-    void AppController::configureManufacturingDebug()
+    return PassPlacement::append();
+
+
+
+
+}
+
+
+void AppController::toggleExplicitAttachMode()
+{
+    if (activeExplicitAttachMode
+        == ExplicitFrameAttachMode::InsertedOnly)
     {
-        auto& mfgPipe =
-            sim.getManufacturingPipe();
-
-        mfgPipe.setDebugAll(
-            DEBUG_MANUFACTURING_SIMULATOR
-        );
-
-        mfgPipe.setDebugActiveWindow(
-            DEBUG_MFG_ACTIVE_WINDOW
-        );
-
-        mfgPipe.setDebugBendStep(
-            DEBUG_MFG_BEND_STEP
-        );
-
-        mfgPipe.setDebugSnapshot(
-            DEBUG_MFG_SNAPSHOT
-        );
+        activeExplicitAttachMode =
+            ExplicitFrameAttachMode::AppendAfterFrame;
+    }
+    else if (activeExplicitAttachMode
+        == ExplicitFrameAttachMode::AppendAfterFrame)
+    {
+        activeExplicitAttachMode =
+            ExplicitFrameAttachMode::AttachBaseAfterInsert;
+    }
+    else if (activeExplicitAttachMode
+        == ExplicitFrameAttachMode::AttachBaseAfterInsert)
+    {
+        activeExplicitAttachMode =
+            ExplicitFrameAttachMode::InsertedOnly;
     }
 
-    void AppController::configureControllerDebug()
+    rebuildTestManufacturingPlan();
+
+    std::cout << "[APP EXPLICIT ATTACH] "
+        << explicitFrameAttachModeToString(
+            activeExplicitAttachMode
+        )
+        << std::endl;
+}
+
+void AppController::togglePlacementPreset()
+{
+    if (activePlacementPreset
+        == TestPlacementPreset::ArcLength)
     {
-        sim.setDebugOperationStop(
-            DEBUG_OPERATION_STOP
+        activePlacementPreset =
+            TestPlacementPreset::NodeIndex;
+    }
+    else if (activePlacementPreset
+        == TestPlacementPreset::NodeIndex)
+    {
+        activePlacementPreset =
+            TestPlacementPreset::ExplicitFrame;
+    }
+    else if (activePlacementPreset
+        == TestPlacementPreset::ExplicitFrame)
+    {
+        activePlacementPreset =
+            TestPlacementPreset::ArcLength;
+    }
+
+    rebuildTestManufacturingPlan();
+
+    std::cout << "[APP PLACEMENT PRESET] "
+        << testPlacementPresetToString(
+            activePlacementPreset
+        )
+        << std::endl;
+}
+
+void AppController::rebuildTestManufacturingPlan()
+{
+
+
+    ManufacturingPlan plan =
+        buildTestManufacturingPlan(
+            testOperations
         );
 
-        sim.setDebugDeformableRegionSelection(
-            DEBUG_DEFORMABLE_REGION_SELECTION
-        );
+    auto& preview =
+        sim.getManufacturingPlanPreview();
+
+    preview.setPlan(
+        plan
+    );
+
+    ManufacturingHistory& history =
+        sim.getManufacturingHistory();
+
+    buildManufacturingHistoryFromPlan(
+        plan,
+        history
+    );
+
+    // ManufacturingHistory is fully populated here.
+    // The additional-pass placeholder must run only now.
+
+    if (DEBUG_EXECUTE_ADDITIONAL_PASS_PLACEHOLDER)
+    {
+        sim.debugExecuteFirstAdditionalPassPlaceholder();
     }
 
-    const DeformableRegionSelection&
-        AppController::getLastDeformableRegionSelection() const
+    if (DEBUG_PRINT_MANUFACTURING_HISTORY)
     {
-        return sim.getLastDeformableRegionSelection();
-    }
-
-    const LocalDeformableRegion&
-        AppController::getLastLocalDeformableRegion() const
-    {
-        return sim.getLastLocalDeformableRegion();
-    }
-
-
-
-
-    //debug test standalone
-
-    void AppController::debugTestSpatialCurveIntegrator() 
-    {
-        if (!DEBUG_TEST_SPATIAL_CURVE_INTEGRATOR)
-            return;
-
-        // =====================================================
-        // TEST START FRAME
-        //
-        // The curve begins at the world origin and initially
-        // travels along +X.
-        //
-        // Curvature acts toward +Y because N starts along +Y.
-        // =====================================================
-
-        Frame startFrame;
-
-        startFrame.P =
-            Vec3D{
-                0.0,
-                -120.0,
-                0.0
-        };
-
-        startFrame.T =
-            Vec3D{
-                1.0,
-                0.0,
-                0.0
-        };
-
-        startFrame.N =
-            Vec3D{
-                0.0,
-                1.0,
-                0.0
-        };
-
-        startFrame.B =
-            Vec3D{
-                0.0,
-                0.0,
-                1.0
-        };
-
-        // =====================================================
-        // BUILD CONSTANT ? / ? PROFILE
-        // =====================================================
-
-        CurvatureTorsionProfile profile =
-            ConstantCurvatureTorsionProfileBuilder::build(
-                TEST_INTEGRATOR_ARC_LENGTH,
-                TEST_INTEGRATOR_CURVATURE,
-                TEST_INTEGRATOR_TORSION
-            );
-
-        // =====================================================
-        // INTEGRATE TEMPORARY GEOMETRY
-        // =====================================================
-
-        SpatialCurveIntegrator integrator;
-
-        debugPlanarIntegrationResult =
-            integrator.integrate(
-                startFrame,
-                profile,
-                TEST_INTEGRATOR_SAMPLE_STEP
-            );
-
-
-
-        const SpatialCurveIntegrationResult& result =
-            debugPlanarIntegrationResult;
-
-        // =====================================================
-        // DIAGNOSTICS
-        // =====================================================
-
         std::cout
-            << "[SPATIAL INTEGRATOR TEST]"
-            << " valid="
-            << result.valid
-            << " complete="
-            << result.isComplete()
-            << " nodes="
-            << result.nodes.size()
-            << " requestedLength="
-            << result.requestedArcLength
-            << " integratedLength="
-            << result.integratedArcLength
-            << " requestedSteps="
-            << result.requestedStepCount
-            << " completedSteps="
-            << result.completedStepCount
+            << "[MFG HISTORY REAL PASSES] primary="
+            << history.primaryPasses.size()
+            << " additional="
+            << history.additionalPasses.size()
             << std::endl;
 
-        if (!result.nodes.empty())
-        {
-            const PipeNode& first =
-                result.nodes.front();
-
-            const PipeNode& last =
-                result.nodes.back();
-
-            std::cout
-                << "[SPATIAL INTEGRATOR ENDPOINT]"
-                << " firstP=("
-                << first.pos.x << ", "
-                << first.pos.y << ", "
-                << first.pos.z << ")"
-                << " lastP=("
-                << last.pos.x << ", "
-                << last.pos.y << ", "
-                << last.pos.z << ")"
-                << std::endl;
-
-            std::cout
-                << "[SPATIAL INTEGRATOR END FRAME]"
-                << " T=("
-                << last.T.x << ", "
-                << last.T.y << ", "
-                << last.T.z << ")"
-                << " N=("
-                << last.N.x << ", "
-                << last.N.y << ", "
-                << last.N.z << ")"
-                << " B=("
-                << last.B.x << ", "
-                << last.B.y << ", "
-                << last.B.z << ")"
-                << std::endl;
-        }
-        if (!result.nodes.empty())
-        {
-            const double radius =
-                1.0
-                / TEST_INTEGRATOR_CURVATURE;
-
-            const double angle =
-                TEST_INTEGRATOR_CURVATURE
-                * TEST_INTEGRATOR_ARC_LENGTH;
-
-            Vec3D expectedEnd{
-     startFrame.P.x
-         + radius * std::sin(angle),
-
-     startFrame.P.y
-         + radius * (
-             1.0 - std::cos(angle)
-         ),
-
-     startFrame.P.z
-            };
-
-            Vec3D endpointError =
-                result.nodes.back().pos
-                - expectedEnd;
-
-            SpatialCurveAccuracyReport accuracy;
-
-            const PipeNode& generatedEnd =
-                result.nodes.back();
-
-            Vec3D positionDifference =
-                generatedEnd.pos
-                - expectedEnd;
-
-            accuracy.endpointPositionError =
-                positionDifference.length();
-
-            Vec3D expectedEndTangent{
-                std::cos(angle),
-                std::sin(angle),
-                0.0
-            };
-
-            Vec3D tangentDifference =
-                generatedEnd.T
-                - expectedEndTangent;
-
-            accuracy.endpointTangentError =
-                tangentDifference.length();
-
-            accuracy.integratedLengthError =
-                std::abs(
-                    result.integratedArcLength
-                    - result.requestedArcLength
-                );
-
-            if (result.requestedArcLength > 1e-12)
-            {
-                accuracy.relativePositionError =
-                    accuracy.endpointPositionError
-                    / result.requestedArcLength;
-            }
-
-            accuracy.positionAccepted =
-                accuracy.endpointPositionError
-                <= TEST_MAX_ENDPOINT_POSITION_ERROR;
-
-            accuracy.tangentAccepted =
-                accuracy.endpointTangentError
-                <= TEST_MAX_ENDPOINT_TANGENT_ERROR;
-
-            accuracy.lengthAccepted =
-                accuracy.integratedLengthError
-                <= TEST_MAX_INTEGRATED_LENGTH_ERROR;
-
-            accuracy.accepted =
-                accuracy.positionAccepted
-                && accuracy.tangentAccepted
-                && accuracy.lengthAccepted
-                && accuracy.relativePositionError
-                <= TEST_MAX_RELATIVE_POSITION_ERROR;
-
-            const char* accuracyStatus =
-                accuracy.accepted
-                ? "PASS"
-                : "FAIL";
-
-            std::cout
-                << "[SPATIAL INTEGRATOR ACCEPTANCE] "
-                << accuracyStatus
-                << std::endl;
-
-            std::cout
-                << "[SPATIAL INTEGRATOR ACCURACY]"
-                << " positionError="
-                << accuracy.endpointPositionError
-                << " tangentError="
-                << accuracy.endpointTangentError
-                << " lengthError="
-                << accuracy.integratedLengthError
-                << " relativePositionError="
-                << accuracy.relativePositionError
-                << " positionAccepted="
-                << accuracy.positionAccepted
-                << " tangentAccepted="
-                << accuracy.tangentAccepted
-                << " lengthAccepted="
-                << accuracy.lengthAccepted
-                << " accepted="
-                << accuracy.accepted
-                << std::endl;
-
-
-
-
-            std::cout
-                << "[SPATIAL INTEGRATOR ERROR]"
-                << " expectedEnd=("
-                << expectedEnd.x << ", "
-                << expectedEnd.y << ", "
-                << expectedEnd.z << ")"
-                << " errorLength="
-                << endpointError.length()
-                << std::endl;
-        }
+        debugPrintManufacturingHistory(
+            history
+        );
     }
+
+    preview.setDebugLogging(
+        true
+    );
+
+    preview.setShowInsertionMarker(
+        true
+    );
+
+    preview.setShowInsertionFrame(
+        true
+    );
+
+    preview.setShowTransformedInsertOverlay(
+        false
+    );
+}
+const char* AppController::testPlacementPresetToString(
+    TestPlacementPreset preset) const
+{
+    if (preset == TestPlacementPreset::ArcLength)
+    {
+        return "ArcLength";
+    }
+
+    if (preset == TestPlacementPreset::NodeIndex)
+    {
+        return "NodeIndex";
+    }
+
+    if (preset == TestPlacementPreset::ExplicitFrame)
+    {
+        return "ExplicitFrame";
+    }
+
+    return "Unknown";
+}
+void AppController::togglePlannedPreviewDebug()
+{
+    plannedPreviewDebugVisible =
+        !plannedPreviewDebugVisible;
+
+    auto& preview =
+        sim.getManufacturingPlanPreview();
+
+    preview.setShowInsertionMarker(
+        plannedPreviewDebugVisible
+    );
+
+    preview.setShowInsertionFrame(
+        plannedPreviewDebugVisible
+    );
+
+    preview.setShowTransformedInsertOverlay(
+        false
+    );
+
+    std::cout << "[APP PREVIEW DEBUG] "
+        << (plannedPreviewDebugVisible ? "ON" : "OFF")
+        << std::endl;
+}
+
+
+// Support for HUD============================
+const char* AppController::activeAttachModeName() const
+{
+    if (activePlacementPreset
+        != TestPlacementPreset::ExplicitFrame)
+    {
+        return "-";
+    }
+
+    return explicitFrameAttachModeToString(
+        activeExplicitAttachMode
+    );
+}
+
+void AppController::configureManufacturingDebug()
+{
+    auto& mfgPipe =
+        sim.getManufacturingPipe();
+
+    mfgPipe.setDebugAll(
+        DEBUG_MANUFACTURING_SIMULATOR
+    );
+
+    mfgPipe.setDebugActiveWindow(
+        DEBUG_MFG_ACTIVE_WINDOW
+    );
+
+    mfgPipe.setDebugBendStep(
+        DEBUG_MFG_BEND_STEP
+    );
+
+    mfgPipe.setDebugSnapshot(
+        DEBUG_MFG_SNAPSHOT
+    );
+}
+
+void AppController::configureControllerDebug()
+{
+    sim.setDebugOperationStop(
+        DEBUG_OPERATION_STOP
+    );
+
+    sim.setDebugDeformableRegionSelection(
+        DEBUG_DEFORMABLE_REGION_SELECTION
+    );
+}
+
+const DeformableRegionSelection&
+AppController::getLastDeformableRegionSelection() const
+{
+    return sim.getLastDeformableRegionSelection();
+}
+
+const LocalDeformableRegion&
+AppController::getLastLocalDeformableRegion() const
+{
+    return sim.getLastLocalDeformableRegion();
+}
+
+
+
+
+//debug test standalone
+
+void AppController::debugTestSpatialCurveIntegrator()
+{
+    if (!DEBUG_TEST_SPATIAL_CURVE_INTEGRATOR)
+        return;
+
+    // =====================================================
+    // TEST START FRAME
+    //
+    // The curve begins at the world origin and initially
+    // travels along +X.
+    //
+    // Curvature acts toward +Y because N starts along +Y.
+    // =====================================================
+
+    Frame startFrame;
+
+    startFrame.P =
+        Vec3D{
+            0.0,
+            -120.0,
+            0.0
+    };
+
+    startFrame.T =
+        Vec3D{
+            1.0,
+            0.0,
+            0.0
+    };
+
+    startFrame.N =
+        Vec3D{
+            0.0,
+            1.0,
+            0.0
+    };
+
+    startFrame.B =
+        Vec3D{
+            0.0,
+            0.0,
+            1.0
+    };
+
+    // =====================================================
+    // BUILD CONSTANT ? / ? PROFILE
+    // =====================================================
+
+    CurvatureTorsionProfile profile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            TEST_INTEGRATOR_ARC_LENGTH,
+            TEST_INTEGRATOR_CURVATURE,
+            TEST_INTEGRATOR_TORSION
+        );
+
+    // =====================================================
+    // INTEGRATE TEMPORARY GEOMETRY
+    // =====================================================
+
+    SpatialCurveIntegrator integrator;
+
+    debugPlanarIntegrationResult =
+        integrator.integrate(
+            startFrame,
+            profile,
+            TEST_INTEGRATOR_SAMPLE_STEP
+        );
+
+
+
+    const SpatialCurveIntegrationResult& result =
+        debugPlanarIntegrationResult;
+
+    // =====================================================
+    // DIAGNOSTICS
+    // =====================================================
+
+    std::cout
+        << "[SPATIAL INTEGRATOR TEST]"
+        << " valid="
+        << result.valid
+        << " complete="
+        << result.isComplete()
+        << " nodes="
+        << result.nodes.size()
+        << " requestedLength="
+        << result.requestedArcLength
+        << " integratedLength="
+        << result.integratedArcLength
+        << " requestedSteps="
+        << result.requestedStepCount
+        << " completedSteps="
+        << result.completedStepCount
+        << std::endl;
+
+    if (!result.nodes.empty())
+    {
+        const PipeNode& first =
+            result.nodes.front();
+
+        const PipeNode& last =
+            result.nodes.back();
+
+        std::cout
+            << "[SPATIAL INTEGRATOR ENDPOINT]"
+            << " firstP=("
+            << first.pos.x << ", "
+            << first.pos.y << ", "
+            << first.pos.z << ")"
+            << " lastP=("
+            << last.pos.x << ", "
+            << last.pos.y << ", "
+            << last.pos.z << ")"
+            << std::endl;
+
+        std::cout
+            << "[SPATIAL INTEGRATOR END FRAME]"
+            << " T=("
+            << last.T.x << ", "
+            << last.T.y << ", "
+            << last.T.z << ")"
+            << " N=("
+            << last.N.x << ", "
+            << last.N.y << ", "
+            << last.N.z << ")"
+            << " B=("
+            << last.B.x << ", "
+            << last.B.y << ", "
+            << last.B.z << ")"
+            << std::endl;
+    }
+    if (!result.nodes.empty())
+    {
+        const double radius =
+            1.0
+            / TEST_INTEGRATOR_CURVATURE;
+
+        const double angle =
+            TEST_INTEGRATOR_CURVATURE
+            * TEST_INTEGRATOR_ARC_LENGTH;
+
+        Vec3D expectedEnd{
+ startFrame.P.x
+     + radius * std::sin(angle),
+
+ startFrame.P.y
+     + radius * (
+         1.0 - std::cos(angle)
+     ),
+
+ startFrame.P.z
+        };
+
+        Vec3D endpointError =
+            result.nodes.back().pos
+            - expectedEnd;
+
+        SpatialCurveAccuracyReport accuracy;
+
+        const PipeNode& generatedEnd =
+            result.nodes.back();
+
+        Vec3D positionDifference =
+            generatedEnd.pos
+            - expectedEnd;
+
+        accuracy.endpointPositionError =
+            positionDifference.length();
+
+        Vec3D expectedEndTangent{
+            std::cos(angle),
+            std::sin(angle),
+            0.0
+        };
+
+        Vec3D tangentDifference =
+            generatedEnd.T
+            - expectedEndTangent;
+
+        accuracy.endpointTangentError =
+            tangentDifference.length();
+
+        accuracy.integratedLengthError =
+            std::abs(
+                result.integratedArcLength
+                - result.requestedArcLength
+            );
+
+        if (result.requestedArcLength > 1e-12)
+        {
+            accuracy.relativePositionError =
+                accuracy.endpointPositionError
+                / result.requestedArcLength;
+        }
+
+        accuracy.positionAccepted =
+            accuracy.endpointPositionError
+            <= TEST_MAX_ENDPOINT_POSITION_ERROR;
+
+        accuracy.tangentAccepted =
+            accuracy.endpointTangentError
+            <= TEST_MAX_ENDPOINT_TANGENT_ERROR;
+
+        accuracy.lengthAccepted =
+            accuracy.integratedLengthError
+            <= TEST_MAX_INTEGRATED_LENGTH_ERROR;
+
+        accuracy.accepted =
+            accuracy.positionAccepted
+            && accuracy.tangentAccepted
+            && accuracy.lengthAccepted
+            && accuracy.relativePositionError
+            <= TEST_MAX_RELATIVE_POSITION_ERROR;
+
+        const char* accuracyStatus =
+            accuracy.accepted
+            ? "PASS"
+            : "FAIL";
+
+        std::cout
+            << "[SPATIAL INTEGRATOR ACCEPTANCE] "
+            << accuracyStatus
+            << std::endl;
+
+        std::cout
+            << "[SPATIAL INTEGRATOR ACCURACY]"
+            << " positionError="
+            << accuracy.endpointPositionError
+            << " tangentError="
+            << accuracy.endpointTangentError
+            << " lengthError="
+            << accuracy.integratedLengthError
+            << " relativePositionError="
+            << accuracy.relativePositionError
+            << " positionAccepted="
+            << accuracy.positionAccepted
+            << " tangentAccepted="
+            << accuracy.tangentAccepted
+            << " lengthAccepted="
+            << accuracy.lengthAccepted
+            << " accepted="
+            << accuracy.accepted
+            << std::endl;
+
+
+
+
+        std::cout
+            << "[SPATIAL INTEGRATOR ERROR]"
+            << " expectedEnd=("
+            << expectedEnd.x << ", "
+            << expectedEnd.y << ", "
+            << expectedEnd.z << ")"
+            << " errorLength="
+            << endpointError.length()
+            << std::endl;
+    }
+}
 
 
 
 // spatial helix test
 
 
-    void AppController::debugTestSpatialHelixIntegrator()
-    {
-        if (!DEBUG_TEST_SPATIAL_HELIX_INTEGRATOR)
-            return;
+void AppController::debugTestSpatialHelixIntegrator()
+{
+    if (!DEBUG_TEST_SPATIAL_HELIX_INTEGRATOR)
+        return;
 
-        // =====================================================
-        // 1. TARGET HELIX PARAMETERS
-        // =====================================================
+    // =====================================================
+    // 1. TARGET HELIX PARAMETERS
+    // =====================================================
 
-        const double radius =
-            TEST_SPATIAL_HELIX_RADIUS;
+    const double radius =
+        TEST_SPATIAL_HELIX_RADIUS;
 
-        const double pitch =
-            TEST_SPATIAL_HELIX_PITCH;
+    const double pitch =
+        TEST_SPATIAL_HELIX_PITCH;
 
-        const double turns =
-            TEST_SPATIAL_HELIX_TURNS;
+    const double turns =
+        TEST_SPATIAL_HELIX_TURNS;
 
-        const double b =
-            pitch / (2.0 * PI);
+    const double b =
+        pitch / (2.0 * PI);
 
-        const double q =
-            std::sqrt(
-                radius * radius
-                + b * b
+    const double q =
+        std::sqrt(
+            radius * radius
+            + b * b
+        );
+
+    const double curvature =
+        radius
+        / (
+            radius * radius
+            + b * b
             );
 
-        const double curvature =
-            radius
-            / (
-                radius * radius
-                + b * b
-                );
-
-        const double torsion =
-            b
-            / (
-                radius * radius
-                + b * b
-                );
-
-        const double lengthPerTurn =
-            2.0 * PI * q;
-
-        const double totalArcLength =
-            turns * lengthPerTurn;
-
-        // =====================================================
-        // 2. ANALYTICALLY CONSISTENT START FRAME
-        //
-        // Canonical helix:
-        //
-        //     x = r cos(u)
-        //     y = r sin(u)
-        //     z = b u
-        //
-        // At u = 0:
-        //
-        //     P = (r, 0, 0)
-        // =====================================================
-
-        Frame startFrame;
-
-        startFrame.P =
-            Vec3D{
-                radius,
-                120.0,
-                0.0
-        };
-
-        startFrame.T =
-            Vec3D{
-                0.0,
-                radius / q,
-                b / q
-        };
-
-        startFrame.N =
-            Vec3D{
-                -1.0,
-                0.0,
-                0.0
-        };
-
-        startFrame.B =
-            cross(
-                startFrame.T,
-                startFrame.N
-            ).normalized();
-
-        // =====================================================
-        // 3. CONSTANT ? / ? PROFILE
-        // =====================================================
-
-        CurvatureTorsionProfile profile =
-            ConstantCurvatureTorsionProfileBuilder::build(
-                totalArcLength,
-                curvature,
-                torsion
+    const double torsion =
+        b
+        / (
+            radius * radius
+            + b * b
             );
 
-        // =====================================================
-        // 4. INTEGRATE TEMPORARY 3D CURVE
-        // =====================================================
+    const double lengthPerTurn =
+        2.0 * PI * q;
 
-        SpatialCurveIntegrator integrator;
+    const double totalArcLength =
+        turns * lengthPerTurn;
 
-        debugHelixIntegrationResult =
-            integrator.integrate(
-                startFrame,
-                profile,
-                TEST_SPATIAL_HELIX_SAMPLE_STEP
-            );
+    // =====================================================
+    // 2. ANALYTICALLY CONSISTENT START FRAME
+    //
+    // Canonical helix:
+    //
+    //     x = r cos(u)
+    //     y = r sin(u)
+    //     z = b u
+    //
+    // At u = 0:
+    //
+    //     P = (r, 0, 0)
+    // =====================================================
 
+    Frame startFrame;
 
-        const SpatialCurveIntegrationResult& result =
-            debugHelixIntegrationResult;
+    startFrame.P =
+        Vec3D{
+            radius,
+            120.0,
+            0.0
+    };
 
-        std::cout
-            << "[SPATIAL HELIX TEST]"
-            << " valid="
-            << result.valid
-            << " complete="
-            << result.isComplete()
-            << " radius="
-            << radius
-            << " pitch="
-            << pitch
-            << " turns="
-            << turns
-            << " curvature="
-            << curvature
-            << " torsion="
-            << torsion
-            << " requestedLength="
-            << totalArcLength
-            << " integratedLength="
-            << result.integratedArcLength
-            << " nodes="
-            << result.nodes.size()
-            << std::endl;
-
-        if (!result.isComplete()
-            || result.nodes.empty())
-        {
-            std::cout
-                << "[SPATIAL HELIX ACCEPTANCE] FAIL"
-                << std::endl;
-
-            return;
-        }
-
-        // =====================================================
-        // 5. ANALYTICAL ENDPOINT
-        // =====================================================
-
-        const double finalAngle =
-            2.0 * PI * turns;
-
-        Vec3D expectedEnd{
-    radius * std::cos(finalAngle),
-    120.0
-        + radius * std::sin(finalAngle),
-    b * finalAngle
-        };
-
-        const PipeNode& generatedEnd =
-            result.nodes.back();
-
-        const Vec3D positionDifference =
-            generatedEnd.pos
-            - expectedEnd;
-
-        const double positionError =
-            positionDifference.length();
-
-        // After a whole number of turns, X/Y return to the
-        // starting angular position and Z rises by turns*pitch.
-        std::cout
-            << "[SPATIAL HELIX ENDPOINT]"
-            << " generated=("
-            << generatedEnd.pos.x << ", "
-            << generatedEnd.pos.y << ", "
-            << generatedEnd.pos.z << ")"
-            << " expected=("
-            << expectedEnd.x << ", "
-            << expectedEnd.y << ", "
-            << expectedEnd.z << ")"
-            << " positionError="
-            << positionError
-            << std::endl;
-
-        // =====================================================
-        // 6. ANALYTICAL END TANGENT
-        // =====================================================
-
-        Vec3D expectedEndTangent{
-            -radius
-                * std::sin(finalAngle)
-                / q,
-
-            radius
-                * std::cos(finalAngle)
-                / q,
-
+    startFrame.T =
+        Vec3D{
+            0.0,
+            radius / q,
             b / q
-        };
+    };
 
-        const Vec3D tangentDifference =
-            generatedEnd.T
-            - expectedEndTangent;
+    startFrame.N =
+        Vec3D{
+            -1.0,
+            0.0,
+            0.0
+    };
 
-        const double tangentError =
-            tangentDifference.length();
+    startFrame.B =
+        cross(
+            startFrame.T,
+            startFrame.N
+        ).normalized();
 
-        const double lengthError =
-            std::abs(
-                result.integratedArcLength
-                - totalArcLength
-            );
+    // =====================================================
+    // 3. CONSTANT ? / ? PROFILE
+    // =====================================================
 
-        const double relativePositionError =
-            positionError
-            / totalArcLength;
+    CurvatureTorsionProfile profile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            totalArcLength,
+            curvature,
+            torsion
+        );
 
-        // =====================================================
-        // 7. INITIAL ACCEPTANCE THRESHOLDS
+    // =====================================================
+    // 4. INTEGRATE TEMPORARY 3D CURVE
+    // =====================================================
+
+    SpatialCurveIntegrator integrator;
+
+    debugHelixIntegrationResult =
+        integrator.integrate(
+            startFrame,
+            profile,
+            TEST_SPATIAL_HELIX_SAMPLE_STEP
+        );
+
+
+    const SpatialCurveIntegrationResult& result =
+        debugHelixIntegrationResult;
+
+    std::cout
+        << "[SPATIAL HELIX TEST]"
+        << " valid="
+        << result.valid
+        << " complete="
+        << result.isComplete()
+        << " radius="
+        << radius
+        << " pitch="
+        << pitch
+        << " turns="
+        << turns
+        << " curvature="
+        << curvature
+        << " torsion="
+        << torsion
+        << " requestedLength="
+        << totalArcLength
+        << " integratedLength="
+        << result.integratedArcLength
+        << " nodes="
+        << result.nodes.size()
+        << std::endl;
+
+    if (!result.isComplete()
+        || result.nodes.empty())
+    {
+        std::cout
+            << "[SPATIAL HELIX ACCEPTANCE] FAIL"
+            << std::endl;
+
+        return;
+    }
+
+    // =====================================================
+    // 5. ANALYTICAL ENDPOINT
+    // =====================================================
+
+    const double finalAngle =
+        2.0 * PI * turns;
+
+    Vec3D expectedEnd{
+radius * std::cos(finalAngle),
+120.0
+    + radius * std::sin(finalAngle),
+b * finalAngle
+    };
+
+    const PipeNode& generatedEnd =
+        result.nodes.back();
+
+    const Vec3D positionDifference =
+        generatedEnd.pos
+        - expectedEnd;
+
+    const double positionError =
+        positionDifference.length();
+
+    // After a whole number of turns, X/Y return to the
+    // starting angular position and Z rises by turns*pitch.
+    std::cout
+        << "[SPATIAL HELIX ENDPOINT]"
+        << " generated=("
+        << generatedEnd.pos.x << ", "
+        << generatedEnd.pos.y << ", "
+        << generatedEnd.pos.z << ")"
+        << " expected=("
+        << expectedEnd.x << ", "
+        << expectedEnd.y << ", "
+        << expectedEnd.z << ")"
+        << " positionError="
+        << positionError
+        << std::endl;
+
+    // =====================================================
+    // 6. ANALYTICAL END TANGENT
+    // =====================================================
+
+    Vec3D expectedEndTangent{
+        -radius
+            * std::sin(finalAngle)
+            / q,
+
+        radius
+            * std::cos(finalAngle)
+            / q,
+
+        b / q
+    };
+
+    const Vec3D tangentDifference =
+        generatedEnd.T
+        - expectedEndTangent;
+
+    const double tangentError =
+        tangentDifference.length();
+
+    const double lengthError =
+        std::abs(
+            result.integratedArcLength
+            - totalArcLength
+        );
+
+    const double relativePositionError =
+        positionError
+        / totalArcLength;
+
+    // =====================================================
+    // 7. INITIAL ACCEPTANCE THRESHOLDS
+    //
+    // The test is longer and spatial, so use a slightly
+    // larger endpoint tolerance than the planar 100 mm test.
+    // =====================================================
+
+    constexpr double MAX_HELIX_POSITION_ERROR =
+        0.10; // mm
+
+    constexpr double MAX_HELIX_TANGENT_ERROR =
+        2e-3;
+
+    constexpr double MAX_HELIX_LENGTH_ERROR =
+        1e-6; // mm
+
+    constexpr double MAX_HELIX_RELATIVE_ERROR =
+        1e-3; // 0.1%
+
+    const bool positionAccepted =
+        positionError
+        <= MAX_HELIX_POSITION_ERROR;
+
+    const bool tangentAccepted =
+        tangentError
+        <= MAX_HELIX_TANGENT_ERROR;
+
+    const bool lengthAccepted =
+        lengthError
+        <= MAX_HELIX_LENGTH_ERROR;
+
+    const bool relativeAccepted =
+        relativePositionError
+        <= MAX_HELIX_RELATIVE_ERROR;
+
+    const bool accepted =
+        positionAccepted
+        && tangentAccepted
+        && lengthAccepted
+        && relativeAccepted;
+
+    std::cout
+        << "[SPATIAL HELIX ACCURACY]"
+        << " positionError="
+        << positionError
+        << " tangentError="
+        << tangentError
+        << " lengthError="
+        << lengthError
+        << " relativePositionError="
+        << relativePositionError
+        << " positionAccepted="
+        << positionAccepted
+        << " tangentAccepted="
+        << tangentAccepted
+        << " lengthAccepted="
+        << lengthAccepted
+        << " relativeAccepted="
+        << relativeAccepted
+        << " accepted="
+        << accepted
+        << std::endl;
+
+    std::cout
+        << "[SPATIAL HELIX ACCEPTANCE] "
+        << (
+            accepted
+            ? "PASS"
+            : "FAIL"
+            )
+        << std::endl;
+}
+//Strech bending
+StretchBendingProcessInput
+AppController::buildTestStretchBendingProcessInput() const
+{
+    StretchBendingProcessInput input;
+
+    input.pipeSection.outerDiameter =
+        TEST_STRETCH_OUTER_DIAMETER;
+
+    input.pipeSection.wallThickness =
+        TEST_STRETCH_WALL_THICKNESS;
+
+    input.material.youngModulus =
+        TEST_STRETCH_YOUNG_MODULUS;
+
+    input.material.yieldStress =
+        TEST_STRETCH_YIELD_STRESS;
+
+    input.material.hardeningModulus =
+        TEST_STRETCH_HARDENING_MODULUS;
+
+    input.material.allowableStrain =
+        TEST_STRETCH_ALLOWABLE_STRAIN;
+
+    input.geometry.targetArcLength =
+        TEST_STRETCH_TARGET_LENGTH;
+
+    input.geometry.targetCurvature =
+        TEST_STRETCH_TARGET_CURVATURE;
+
+    input.geometry.targetTorsion =
+        TEST_STRETCH_TARGET_TORSION;
+
+    input.axialStretchStrain =
+        TEST_STRETCH_AXIAL_STRAIN;
+
+    input.feedSpeed =
+        TEST_STRETCH_FEED_SPEED;
+
+    input.sampleStep =
+        TEST_STRETCH_SAMPLE_STEP;
+
+    input.springbackRatio =
+        TEST_STRETCH_SPRINGBACK_RATIO;
+
+
+    input.compensateSpringback =
+        true;
+
+    input.enabled =
+        true;
+
+    return input;
+}
+
+void AppController::debugTestStretchBendingEvaluation() const
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    const StretchBendingProcessInput input =
+        buildTestStretchBendingProcessInput();
+
+    StretchBendingEvaluator evaluator;
+
+    const StretchBendingEvaluationResult result =
+        evaluator.evaluate(
+            input
+        );
+
+    std::cout
+        << "[STRETCH EVALUATION]"
+        << " status="
+        << stretchBendingEvaluationStatusToString(
+            result.status
+        )
+        << " valid="
+        << result.valid
+        << " inputValid="
+        << result.inputValid
+        << " geometryFeasible="
+        << result.geometryFeasible
+        << " aboveYield="
+        << result.aboveYield
+        << " innerSafe="
+        << result.innerWallSafe
+        << " outerSafe="
+        << result.outerWallSafe
+        << std::endl;
+
+    std::cout
+        << "[STRETCH STRAIN]"
+        << " yield="
+        << result.yieldStrain
+        << " bending="
+        << result.bendingStrain
+        << " axial="
+        << result.axialStretchStrain
+        << " inner="
+        << result.innerWallStrain
+        << " outer="
+        << result.outerWallStrain
+        << " minAxial="
+        << result.minimumRequiredAxialStrain
+        << " maxAxial="
+        << result.maximumAllowedAxialStrain
+        << std::endl;
+
+    std::cout
+        << "[STRETCH FORCE MOMENT]"
+        << " tension="
+        << result.axialTension
+        << " elasticMoment="
+        << result.elasticBendingMoment
+        << " innerMargin="
+        << result.innerCompressionMargin
+        << " outerMargin="
+        << result.outerStrainMargin
+        << std::endl;
+
+    std::cout
+        << "[STRETCH AXIAL COMMAND]"
+        << " minStrain="
+        << result.minimumRequiredAxialStrain
+        << " recommendedStrain="
+        << result.recommendedAxialStrain
+        << " maxStrain="
+        << result.maximumAllowedAxialStrain
+        << " range="
+        << result.axialStrainRange
+        << " commandedStrain="
+        << result.axialStretchStrain
+        << " commandInsideRange="
+        << result.commandedStrainInsideRecommendedRange
+        << std::endl;
+
+    std::cout
+        << "[STRETCH TENSION COMMAND]"
+        << " minTension="
+        << result.minimumRequiredTension
+        << " recommendedTension="
+        << result.recommendedTension
+        << " maxTension="
+        << result.maximumAllowedTension
+        << " commandedTension="
+        << result.commandedTension
+        << std::endl;
+
+    std::cout
+        << "[STRETCH SPRINGBACK]"
+        << " targetFinalKappa="
+        << result.finalTargetCurvature
+        << " ratio="
+        << result.springbackRatio
+        << " compensationApplied="
+        << result.springbackCompensationApplied
+        << " loadedKappa="
+        << result.loadedCurvatureCommand
+        << " predictedFinalKappa="
+        << result.predictedFinalCurvature
+        << " finalError="
+        << result.finalCurvatureError
+        << " loadedBendingStrain="
+        << result.loadedBendingStrain
+        << " predictionValid="
+        << result.springbackPredictionValid
+        << std::endl;
+}
+
+void AppController::debugTestStretchBendingFeasibilityCases() const
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    StretchBendingEvaluator evaluator;
+
+    // =====================================================
+    // TEST FOUNDATION
+    //
+    // Current test material:
+    //
+    //     D = 20 mm
+    //     allowable strain = 0.08
+    //     yield strain ? 0.003571
+    //
+    // bending strain:
+    //
+    //     epsilon_b = kappa * D / 2
+    //
+    // For kappa = 0.002:
+    //
+    //     epsilon_b = 0.02
+    //
+    // Feasible axial range:
+    //
+    //     0.02 <= epsilon_0 <= 0.06
+    // =====================================================
+
+    const std::vector<StretchEvaluationTestCase> testCases =
+    {
+        // -------------------------------------------------
+        // VALID
         //
-        // The test is longer and spatial, so use a slightly
-        // larger endpoint tolerance than the planar 100 mm test.
-        // =====================================================
+        // bending = 0.02
+        // axial   = 0.03
+        //
+        // inner = 0.01
+        // outer = 0.05
+        //
+        // Both walls are safe and outer wall is above yield.
+        // -------------------------------------------------
+        {
+            "Valid",
+            0.002,
+            0.030,
+            StretchBendingEvaluationStatus::Valid
+        },
 
-        constexpr double MAX_HELIX_POSITION_ERROR =
-            0.10; // mm
+        // -------------------------------------------------
+        // INNER-WALL COMPRESSION RISK
+        //
+        // bending = 0.02
+        // axial   = 0.01
+        //
+        // inner = -0.01
+        // outer =  0.03
+        //
+        // Geometry itself has a feasible axial range, but
+        // the selected axial stretch is too low.
+        // -------------------------------------------------
+        {
+            "InnerCompression",
+            0.002,
+            0.010,
+            StretchBendingEvaluationStatus::
+                InnerWallCompressionRisk
+        },
 
-        constexpr double MAX_HELIX_TANGENT_ERROR =
-            2e-3;
+        // -------------------------------------------------
+        // OUTER-WALL STRAIN EXCEEDED
+        //
+        // bending = 0.02
+        // axial   = 0.07
+        //
+        // inner = 0.05
+        // outer = 0.09 > allowable 0.08
+        // -------------------------------------------------
+        {
+            "OuterLimit",
+            0.002,
+            0.070,
+            StretchBendingEvaluationStatus::
+                OuterWallStrainExceeded
+        },
 
-        constexpr double MAX_HELIX_LENGTH_ERROR =
-            1e-6; // mm
+        // -------------------------------------------------
+        // BELOW YIELD
+        //
+        // bending = 0.001
+        // axial   = 0.001
+        //
+        // inner = 0
+        // outer = 0.002
+        //
+        // outer strain remains below yield strain:
+        //
+        //     0.002 < 0.003571
+        // -------------------------------------------------
+        {
+            "BelowYield",
+            0.0001,
+            0.001,
+            StretchBendingEvaluationStatus::BelowYield
+        }
+    };
 
-        constexpr double MAX_HELIX_RELATIVE_ERROR =
-            1e-3; // 0.1%
+    size_t passedCount =
+        0;
 
-        const bool positionAccepted =
-            positionError
-            <= MAX_HELIX_POSITION_ERROR;
-
-        const bool tangentAccepted =
-            tangentError
-            <= MAX_HELIX_TANGENT_ERROR;
-
-        const bool lengthAccepted =
-            lengthError
-            <= MAX_HELIX_LENGTH_ERROR;
-
-        const bool relativeAccepted =
-            relativePositionError
-            <= MAX_HELIX_RELATIVE_ERROR;
-
-        const bool accepted =
-            positionAccepted
-            && tangentAccepted
-            && lengthAccepted
-            && relativeAccepted;
-
-        std::cout
-            << "[SPATIAL HELIX ACCURACY]"
-            << " positionError="
-            << positionError
-            << " tangentError="
-            << tangentError
-            << " lengthError="
-            << lengthError
-            << " relativePositionError="
-            << relativePositionError
-            << " positionAccepted="
-            << positionAccepted
-            << " tangentAccepted="
-            << tangentAccepted
-            << " lengthAccepted="
-            << lengthAccepted
-            << " relativeAccepted="
-            << relativeAccepted
-            << " accepted="
-            << accepted
-            << std::endl;
-
-        std::cout
-            << "[SPATIAL HELIX ACCEPTANCE] "
-            << (
-                accepted
-                ? "PASS"
-                : "FAIL"
-                )
-            << std::endl;
-    }
-    //Strech bending
-    StretchBendingProcessInput
-        AppController::buildTestStretchBendingProcessInput() const
+    for (const StretchEvaluationTestCase& testCase :
+        testCases)
     {
-        StretchBendingProcessInput input;
-
-        input.pipeSection.outerDiameter =
-            TEST_STRETCH_OUTER_DIAMETER;
-
-        input.pipeSection.wallThickness =
-            TEST_STRETCH_WALL_THICKNESS;
-
-        input.material.youngModulus =
-            TEST_STRETCH_YOUNG_MODULUS;
-
-        input.material.yieldStress =
-            TEST_STRETCH_YIELD_STRESS;
-
-        input.material.hardeningModulus =
-            TEST_STRETCH_HARDENING_MODULUS;
-
-        input.material.allowableStrain =
-            TEST_STRETCH_ALLOWABLE_STRAIN;
-
-        input.geometry.targetArcLength =
-            TEST_STRETCH_TARGET_LENGTH;
-
-        input.geometry.targetCurvature =
-            TEST_STRETCH_TARGET_CURVATURE;
-
-        input.geometry.targetTorsion =
-            TEST_STRETCH_TARGET_TORSION;
-
-        input.axialStretchStrain =
-            TEST_STRETCH_AXIAL_STRAIN;
-
-        input.feedSpeed =
-            TEST_STRETCH_FEED_SPEED;
-
-        input.sampleStep =
-            TEST_STRETCH_SAMPLE_STEP;
-
-        input.springbackRatio =
-            TEST_STRETCH_SPRINGBACK_RATIO;
-
-
-        input.compensateSpringback =
-            true;
-
-        input.enabled =
-            true;
-
-        return input;
-    }
-
-    void AppController::debugTestStretchBendingEvaluation() const
-    {
-        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
-            return;
-
-        const StretchBendingProcessInput input =
+        StretchBendingProcessInput input =
             buildTestStretchBendingProcessInput();
 
-        StretchBendingEvaluator evaluator;
+        input.springbackRatio =
+            0.0;
+
+        input.compensateSpringback =
+            false;
+
+        input.geometry.targetCurvature =
+            testCase.targetCurvature;
+
+        input.axialStretchStrain =
+            testCase.axialStretchStrain;
+
+        input.geometry.targetCurvature =
+            testCase.targetCurvature;
+
+        input.axialStretchStrain =
+            testCase.axialStretchStrain;
 
         const StretchBendingEvaluationResult result =
             evaluator.evaluate(
                 input
             );
 
+        const bool passed =
+            result.status
+            == testCase.expectedStatus;
+
+        if (passed)
+        {
+            ++passedCount;
+        }
+
         std::cout
-            << "[STRETCH EVALUATION]"
-            << " status="
+            << "[STRETCH CASE]"
+            << " name="
+            << testCase.name
+            << " expected="
+            << stretchBendingEvaluationStatusToString(
+                testCase.expectedStatus
+            )
+            << " actual="
             << stretchBendingEvaluationStatusToString(
                 result.status
             )
-            << " valid="
-            << result.valid
-            << " inputValid="
-            << result.inputValid
-            << " geometryFeasible="
-            << result.geometryFeasible
-            << " aboveYield="
-            << result.aboveYield
-            << " innerSafe="
-            << result.innerWallSafe
-            << " outerSafe="
-            << result.outerWallSafe
-            << std::endl;
-
-        std::cout
-            << "[STRETCH STRAIN]"
-            << " yield="
-            << result.yieldStrain
+            << " pass="
+            << passed
+            << " minAxial="
+            << result.minimumRequiredAxialStrain
+            << " recommendedAxial="
+            << result.recommendedAxialStrain
+            << " maxAxial="
+            << result.maximumAllowedAxialStrain
+            << " commandedInsideRange="
+            << result.commandedStrainInsideRecommendedRange
+            << " recommendedTension="
+            << result.recommendedTension
+            << " kappa="
+            << result.targetCurvature
             << " bending="
             << result.bendingStrain
             << " axial="
@@ -1544,836 +1797,739 @@ void AppController::toggleSimulationMode()
             << result.innerWallStrain
             << " outer="
             << result.outerWallStrain
-            << " minAxial="
-            << result.minimumRequiredAxialStrain
-            << " maxAxial="
-            << result.maximumAllowedAxialStrain
+            << " feasible="
+            << result.geometryFeasible
+            << " aboveYield="
+            << result.aboveYield
             << std::endl;
 
-        std::cout
-            << "[STRETCH FORCE MOMENT]"
-            << " tension="
-            << result.axialTension
-            << " elasticMoment="
-            << result.elasticBendingMoment
-            << " innerMargin="
-            << result.innerCompressionMargin
-            << " outerMargin="
-            << result.outerStrainMargin
-            << std::endl;
-
-        std::cout
-            << "[STRETCH AXIAL COMMAND]"
-            << " minStrain="
-            << result.minimumRequiredAxialStrain
-            << " recommendedStrain="
-            << result.recommendedAxialStrain
-            << " maxStrain="
-            << result.maximumAllowedAxialStrain
-            << " range="
-            << result.axialStrainRange
-            << " commandedStrain="
-            << result.axialStretchStrain
-            << " commandInsideRange="
-            << result.commandedStrainInsideRecommendedRange
-            << std::endl;
-
-        std::cout
-            << "[STRETCH TENSION COMMAND]"
-            << " minTension="
-            << result.minimumRequiredTension
-            << " recommendedTension="
-            << result.recommendedTension
-            << " maxTension="
-            << result.maximumAllowedTension
-            << " commandedTension="
-            << result.commandedTension
-            << std::endl;
-
-        std::cout
-            << "[STRETCH SPRINGBACK]"
-            << " targetFinalKappa="
-            << result.finalTargetCurvature
-            << " ratio="
-            << result.springbackRatio
-            << " compensationApplied="
-            << result.springbackCompensationApplied
-            << " loadedKappa="
-            << result.loadedCurvatureCommand
-            << " predictedFinalKappa="
-            << result.predictedFinalCurvature
-            << " finalError="
-            << result.finalCurvatureError
-            << " loadedBendingStrain="
-            << result.loadedBendingStrain
-            << " predictionValid="
-            << result.springbackPredictionValid
-            << std::endl;
     }
 
-    void AppController::debugTestStretchBendingFeasibilityCases() const
-    {
-        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
-            return;
+    const bool allPassed =
+        passedCount
+        == testCases.size();
 
-        StretchBendingEvaluator evaluator;
-
-        // =====================================================
-        // TEST FOUNDATION
-        //
-        // Current test material:
-        //
-        //     D = 20 mm
-        //     allowable strain = 0.08
-        //     yield strain ? 0.003571
-        //
-        // bending strain:
-        //
-        //     epsilon_b = kappa * D / 2
-        //
-        // For kappa = 0.002:
-        //
-        //     epsilon_b = 0.02
-        //
-        // Feasible axial range:
-        //
-        //     0.02 <= epsilon_0 <= 0.06
-        // =====================================================
-
-        const std::vector<StretchEvaluationTestCase> testCases =
-        {
-            // -------------------------------------------------
-            // VALID
-            //
-            // bending = 0.02
-            // axial   = 0.03
-            //
-            // inner = 0.01
-            // outer = 0.05
-            //
-            // Both walls are safe and outer wall is above yield.
-            // -------------------------------------------------
-            {
-                "Valid",
-                0.002,
-                0.030,
-                StretchBendingEvaluationStatus::Valid
-            },
-
-            // -------------------------------------------------
-            // INNER-WALL COMPRESSION RISK
-            //
-            // bending = 0.02
-            // axial   = 0.01
-            //
-            // inner = -0.01
-            // outer =  0.03
-            //
-            // Geometry itself has a feasible axial range, but
-            // the selected axial stretch is too low.
-            // -------------------------------------------------
-            {
-                "InnerCompression",
-                0.002,
-                0.010,
-                StretchBendingEvaluationStatus::
-                    InnerWallCompressionRisk
-            },
-
-            // -------------------------------------------------
-            // OUTER-WALL STRAIN EXCEEDED
-            //
-            // bending = 0.02
-            // axial   = 0.07
-            //
-            // inner = 0.05
-            // outer = 0.09 > allowable 0.08
-            // -------------------------------------------------
-            {
-                "OuterLimit",
-                0.002,
-                0.070,
-                StretchBendingEvaluationStatus::
-                    OuterWallStrainExceeded
-            },
-
-            // -------------------------------------------------
-            // BELOW YIELD
-            //
-            // bending = 0.001
-            // axial   = 0.001
-            //
-            // inner = 0
-            // outer = 0.002
-            //
-            // outer strain remains below yield strain:
-            //
-            //     0.002 < 0.003571
-            // -------------------------------------------------
-            {
-                "BelowYield",
-                0.0001,
-                0.001,
-                StretchBendingEvaluationStatus::BelowYield
-            }
-        };
-
-        size_t passedCount =
-            0;
-
-        for (const StretchEvaluationTestCase& testCase :
-            testCases)
-        {
-            StretchBendingProcessInput input =
-                buildTestStretchBendingProcessInput();
-
-            input.springbackRatio =
-                0.0;
-
-            input.compensateSpringback =
-                false;
-
-            input.geometry.targetCurvature =
-                testCase.targetCurvature;
-
-            input.axialStretchStrain =
-                testCase.axialStretchStrain;
-
-            input.geometry.targetCurvature =
-                testCase.targetCurvature;
-
-            input.axialStretchStrain =
-                testCase.axialStretchStrain;
-
-            const StretchBendingEvaluationResult result =
-                evaluator.evaluate(
-                    input
-                );
-
-            const bool passed =
-                result.status
-                == testCase.expectedStatus;
-
-            if (passed)
-            {
-                ++passedCount;
-            }
-
-            std::cout
-                << "[STRETCH CASE]"
-                << " name="
-                << testCase.name
-                << " expected="
-                << stretchBendingEvaluationStatusToString(
-                    testCase.expectedStatus
-                )
-                << " actual="
-                << stretchBendingEvaluationStatusToString(
-                    result.status
-                )
-                << " pass="
-                << passed
-                << " minAxial="
-                << result.minimumRequiredAxialStrain
-                << " recommendedAxial="
-                << result.recommendedAxialStrain
-                << " maxAxial="
-                << result.maximumAllowedAxialStrain
-                << " commandedInsideRange="
-                << result.commandedStrainInsideRecommendedRange
-                << " recommendedTension="
-                << result.recommendedTension
-                << " kappa="
-                << result.targetCurvature
-                << " bending="
-                << result.bendingStrain
-                << " axial="
-                << result.axialStretchStrain
-                << " inner="
-                << result.innerWallStrain
-                << " outer="
-                << result.outerWallStrain
-                << " feasible="
-                << result.geometryFeasible
-                << " aboveYield="
-                << result.aboveYield
-                << std::endl;
-
-        }
-
-        const bool allPassed =
-            passedCount
-            == testCases.size();
-
-        std::cout
-            << "[STRETCH CASE SUMMARY]"
-            << " passed="
-            << passedCount
-            << "/"
-            << testCases.size()
-            << " result="
-            << (
-                allPassed
-                ? "PASS"
-                : "FAIL"
-                )
-            << std::endl;
-    }
-
-    void AppController::debugTestStretchBendingProfileBuilder()
-    {
-        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
-            return;
-
-        // =====================================================
-        // BUILD A KNOWN VALID TEST CASE
-        //
-        // Do not use the original severe kappa=0.01 case,
-        // because it is intentionally GeometryNotFeasible.
-        // =====================================================
-
-        StretchBendingProcessInput input =
-            buildTestStretchBendingProcessInput();
-
-        input.geometry.targetCurvature =
-            0.002;
-
-        input.geometry.targetTorsion =
-            0.0;
-
-        input.axialStretchStrain =
-            0.03;
-
-        StretchBendingEvaluator evaluator;
-
-        const StretchBendingEvaluationResult evaluation =
-            evaluator.evaluate(
-                input
-            );
-
-        debugStretchBendingProfile =
-            StretchBendingProfileBuilder::build(
-                input,
-                evaluation
-            );
-
-        std::cout
-            << "[STRETCH PROFILE]"
-            << " evaluationStatus="
-            << stretchBendingEvaluationStatusToString(
-                evaluation.status
+    std::cout
+        << "[STRETCH CASE SUMMARY]"
+        << " passed="
+        << passedCount
+        << "/"
+        << testCases.size()
+        << " result="
+        << (
+            allPassed
+            ? "PASS"
+            : "FAIL"
             )
-            << " valid="
-            << debugStretchBendingProfile.valid
-            << " samples="
-            << debugStretchBendingProfile.samples.size()
-            << " totalLength="
-            << debugStretchBendingProfile.totalArcLength
-            << std::endl;
+        << std::endl;
+}
 
-        if (!debugStretchBendingProfile.samples.empty())
-        {
-            const CurvatureTorsionSample& first =
-                debugStretchBendingProfile.samples.front();
+void AppController::debugTestStretchBendingProfileBuilder()
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
 
-            const CurvatureTorsionSample& last =
-                debugStretchBendingProfile.samples.back();
+    // =====================================================
+    // BUILD A KNOWN VALID TEST CASE
+    //
+    // Do not use the original severe kappa=0.01 case,
+    // because it is intentionally GeometryNotFeasible.
+    // =====================================================
 
-            std::cout
-                << "[STRETCH PROFILE VALUES]"
-                << " firstS="
-                << first.arcLength
-                << " firstKappa="
-                << first.curvature
-                << " firstTau="
-                << first.torsion
-                << " lastS="
-                << last.arcLength
-                << " lastKappa="
-                << last.curvature
-                << " lastTau="
-                << last.torsion
-                << std::endl;
-        }
+    StretchBendingProcessInput input =
+        buildTestStretchBendingProcessInput();
 
-        StretchBendingProcessInput rejectedInput =
-            buildTestStretchBendingProcessInput();
+    input.geometry.targetCurvature =
+        0.002;
 
-        const StretchBendingEvaluationResult rejectedEvaluation =
-            evaluator.evaluate(
-                rejectedInput
-            );
+    input.geometry.targetTorsion =
+        0.0;
 
-        const CurvatureTorsionProfile rejectedProfile =
-            StretchBendingProfileBuilder::build(
-                rejectedInput,
-                rejectedEvaluation
-            );
+    input.axialStretchStrain =
+        0.03;
+
+    StretchBendingEvaluator evaluator;
+
+    const StretchBendingEvaluationResult evaluation =
+        evaluator.evaluate(
+            input
+        );
+
+    debugStretchBendingProfile =
+        StretchBendingProfileBuilder::build(
+            input,
+            evaluation
+        );
+
+    std::cout
+        << "[STRETCH PROFILE]"
+        << " evaluationStatus="
+        << stretchBendingEvaluationStatusToString(
+            evaluation.status
+        )
+        << " valid="
+        << debugStretchBendingProfile.valid
+        << " samples="
+        << debugStretchBendingProfile.samples.size()
+        << " totalLength="
+        << debugStretchBendingProfile.totalArcLength
+        << std::endl;
+
+    if (!debugStretchBendingProfile.samples.empty())
+    {
+        const CurvatureTorsionSample& first =
+            debugStretchBendingProfile.samples.front();
+
+        const CurvatureTorsionSample& last =
+            debugStretchBendingProfile.samples.back();
 
         std::cout
-            << "[STRETCH PROFILE REJECTION]"
-            << " evaluationStatus="
-            << stretchBendingEvaluationStatusToString(
-                rejectedEvaluation.status
-            )
-            << " profileValid="
-            << rejectedProfile.valid
-            << " samples="
-            << rejectedProfile.samples.size()
+            << "[STRETCH PROFILE VALUES]"
+            << " firstS="
+            << first.arcLength
+            << " firstKappa="
+            << first.curvature
+            << " firstTau="
+            << first.torsion
+            << " lastS="
+            << last.arcLength
+            << " lastKappa="
+            << last.curvature
+            << " lastTau="
+            << last.torsion
             << std::endl;
     }
 
-    void AppController::debugTestStretchBendingGeometry()
+    StretchBendingProcessInput rejectedInput =
+        buildTestStretchBendingProcessInput();
+
+    const StretchBendingEvaluationResult rejectedEvaluation =
+        evaluator.evaluate(
+            rejectedInput
+        );
+
+    const CurvatureTorsionProfile rejectedProfile =
+        StretchBendingProfileBuilder::build(
+            rejectedInput,
+            rejectedEvaluation
+        );
+
+    std::cout
+        << "[STRETCH PROFILE REJECTION]"
+        << " evaluationStatus="
+        << stretchBendingEvaluationStatusToString(
+            rejectedEvaluation.status
+        )
+        << " profileValid="
+        << rejectedProfile.valid
+        << " samples="
+        << rejectedProfile.samples.size()
+        << std::endl;
+}
+
+void AppController::debugTestStretchBendingGeometry()
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    // =====================================================
+    // 1. BUILD KNOWN VALID STRETCH-BENDING INPUT
+    //
+    // This is a standalone process prototype. It does not
+    // modify rotary-draw playback or manufacturing history.
+    // =====================================================
+
+    StretchBendingProcessInput input =
+        buildTestStretchBendingProcessInput();
+
+    input.geometry.targetCurvature =
+        0.002;
+
+    input.geometry.targetTorsion =
+        0.0;
+
+    input.geometry.targetArcLength =
+        200.0;
+
+    input.axialStretchStrain =
+        0.03;
+
+    input.sampleStep =
+        0.25;
+
+    // =====================================================
+    // 2. EVALUATE MATERIAL / PROCESS FEASIBILITY
+    //
+    // Exactly one evaluator and one evaluation result belong
+    // to this function. Previous compiler errors were caused
+    // by declaring these variables a second time below.
+    // =====================================================
+
+    StretchBendingEvaluator evaluator;
+
+    const StretchBendingEvaluationResult evaluation =
+        evaluator.evaluate(
+            input
+        );
+
+    if (!evaluation.valid)
     {
-        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
-            return;
+        // Clear every output owned by this debug scenario so
+        // stale geometry/state cannot remain visible.
+        debugStretchLoadedIntegrationResult.clear();
+        debugStretchFinalIntegrationResult.clear();
 
-        // =====================================================
-        // 1. BUILD KNOWN VALID STRETCH-BENDING INPUT
-        // =====================================================
+        debugStretchManufacturingState =
+            StretchBendingManufacturingState{};
 
-        StretchBendingProcessInput input =
-            buildTestStretchBendingProcessInput();
-
-        input.geometry.targetCurvature =
-            0.002;
-
-        input.geometry.targetTorsion =
-            0.0;
-
-        input.geometry.targetArcLength =
-            200.0;
-
-        input.axialStretchStrain =
-            0.03;
-
-        input.sampleStep =
-            0.25;
-
-        // =====================================================
-        // 2. EVALUATE MATERIAL / PROCESS FEASIBILITY
-        // =====================================================
-
-        StretchBendingEvaluator evaluator;
-
-        const StretchBendingEvaluationResult evaluation =
-            evaluator.evaluate(
-                input
-            );
-
-        if (!evaluation.valid)
-        {
-            debugStretchLoadedIntegrationResult.clear();
-
-            std::cout
-                << "[STRETCH GEOMETRY]"
-                << " evaluationStatus="
-                << stretchBendingEvaluationStatusToString(
-                    evaluation.status
-                )
-                << " result=REJECTED"
-                << std::endl;
-
-            return;
-        }
-
-        // =====================================================
-        // 3. BUILD ACCEPTED KAPPA / TAU PROFILE
-        // =====================================================
-
-        const CurvatureTorsionProfile profile =
-            StretchBendingProfileBuilder::build(
-                input,
-                evaluation
-            );
-
-        const CurvatureTorsionProfile loadedProfile =
-            StretchBendingProfileBuilder::build(
-                input,
-                evaluation
-            );
-
-        const CurvatureTorsionProfile finalProfile =
-            StretchBendingFinalProfileBuilder::build(
-                input,
-                evaluation
-            );
-
-        if (!profile.valid)
-        {
-            debugStretchLoadedIntegrationResult.clear();
-
-            std::cout
-                << "[STRETCH GEOMETRY]"
-                << " profileValid=0"
-                << " result=REJECTED"
-                << std::endl;
-
-            return;
-        }
-
-        if (!loadedProfile.valid
-            || !finalProfile.valid)
-        {
-            debugStretchLoadedIntegrationResult.clear();
-            debugStretchFinalIntegrationResult.clear();
-
-            std::cout
-                << "[STRETCH SHAPE COMPARISON]"
-                << " loadedProfileValid="
-                << loadedProfile.valid
-                << " finalProfileValid="
-                << finalProfile.valid
-                << " result=REJECTED"
-                << std::endl;
-
-            return;
-        }
-
-        // =====================================================
-        // 4. DEFINE A SEPARATE DEBUG START FRAME
-        //
-        // Keep the standalone stretch result away from:
-        //
-        //     normal manufacturing pipe
-        //     planar integrator test
-        //     helix integrator test
-        //
-        // Start tangent:
-        //     +X
-        //
-        // Bending normal:
-        //     +Y
-        //
-        // Therefore the generated curve lies initially in
-        // the XY plane when torsion is zero.
-        // =====================================================
-
-        Frame startFrame;
-
-        startFrame.P =
-            Vec3D{
-                0.0,
-                -220.0,
-                0.0
-        };
-
-        startFrame.T =
-            Vec3D{
-                1.0,
-                0.0,
-                0.0
-        };
-
-        startFrame.N =
-            Vec3D{
-                0.0,
-                1.0,
-                0.0
-        };
-
-        startFrame.B =
-            Vec3D{
-                0.0,
-                0.0,
-                1.0
-        };
-
-        // =====================================================
-        // 5. GENERATE TEMPORARY STRETCH-BENDING GEOMETRY
-        // =====================================================
-
-        SpatialCurveIntegrator integrator;
-
-        debugStretchLoadedIntegrationResult =
-            integrator.integrate(
-                startFrame,
-                loadedProfile,
-                input.sampleStep
-            );
-
-        debugStretchFinalIntegrationResult =
-            integrator.integrate(
-                startFrame,
-                finalProfile,
-                input.sampleStep
-            );
-
-        const SpatialCurveIntegrationResult& loadedResult =
-            debugStretchLoadedIntegrationResult;
-
-        const SpatialCurveIntegrationResult& finalResult =
-            debugStretchFinalIntegrationResult;
-
-        const SpatialCurveIntegrationResult& result =
-            debugStretchLoadedIntegrationResult;
-        if (result.isComplete()
-            && !result.nodes.empty())
-
-
-        // =====================================================
-        // 6. BASIC DIAGNOSTICS
-        // =====================================================
-            std::cout
-            << "[STRETCH SHAPE COMPARISON]"
-            << " loadedValid="
-            << loadedResult.valid
-            << " loadedComplete="
-            << loadedResult.isComplete()
-            << " finalValid="
-            << finalResult.valid
-            << " finalComplete="
-            << finalResult.isComplete()
-            << " loadedKappa="
-            << evaluation.loadedCurvatureCommand
-            << " finalKappa="
-            << evaluation.predictedFinalCurvature
-            << " targetKappa="
-            << evaluation.finalTargetCurvature
-            << std::endl;
-
-        if (loadedResult.isComplete()
-            && finalResult.isComplete()
-            && !loadedResult.nodes.empty()
-            && !finalResult.nodes.empty())
-        {
-            const Vec3D loadedEnd =
-                loadedResult.nodes.back().pos;
-
-            const Vec3D finalEnd =
-                finalResult.nodes.back().pos;
-
-            const Vec3D endpointRecovery =
-                finalEnd - loadedEnd;
-
-            std::cout
-                << "[STRETCH SPRINGBACK DISPLACEMENT]"
-                << " loadedEnd=("
-                << loadedEnd.x << ", "
-                << loadedEnd.y << ", "
-                << loadedEnd.z << ")"
-                << " finalEnd=("
-                << finalEnd.x << ", "
-                << finalEnd.y << ", "
-                << finalEnd.z << ")"
-                << " endpointRecoveryLength="
-                << endpointRecovery.length()
-                << std::endl;
-        }
         std::cout
             << "[STRETCH GEOMETRY]"
             << " evaluationStatus="
             << stretchBendingEvaluationStatusToString(
                 evaluation.status
             )
-            << " profileValid="
-            << profile.valid
-            << " resultValid="
-            << result.valid
-            << " complete="
-            << result.isComplete()
-            << " nodes="
-            << result.nodes.size()
-            << " requestedLength="
-            << result.requestedArcLength
-            << " integratedLength="
-            << result.integratedArcLength
-            << " curvature="
-            << input.geometry.targetCurvature
-            << " torsion="
-            << input.geometry.targetTorsion
+            << " result=REJECTED"
             << std::endl;
 
-        if (!result.nodes.empty())
+        return;
+    }
+
+    // =====================================================
+    // 3. BUILD LOADED AND FINAL REFERENCE PROFILES
+    //
+    // loadedProfile:
+    //     machine-loaded compensated curvature
+    //
+    // finalProfile:
+    //     predicted curvature after unloading/springback
+    // =====================================================
+
+    const CurvatureTorsionProfile loadedProfile =
+        StretchBendingProfileBuilder::build(
+            input,
+            evaluation
+        );
+
+    const CurvatureTorsionProfile finalProfile =
+        StretchBendingFinalProfileBuilder::build(
+            input,
+            evaluation
+        );
+
+    if (!loadedProfile.valid
+        || !finalProfile.valid)
+    {
+        debugStretchLoadedIntegrationResult.clear();
+        debugStretchFinalIntegrationResult.clear();
+
+        debugStretchManufacturingState =
+            StretchBendingManufacturingState{};
+
+        std::cout
+            << "[STRETCH SHAPE COMPARISON]"
+            << " loadedProfileValid="
+            << loadedProfile.valid
+            << " finalProfileValid="
+            << finalProfile.valid
+            << " result=REJECTED"
+            << std::endl;
+
+        return;
+    }
+
+    // =====================================================
+    // 4. DEFINE FIXED ACTIVE ZONE
+    //
+    // Pipe coordinates use centerline arc length:
+    //
+    //     s=0       s=40             s=160      s=200
+    //      |---------|=================|----------|
+    //                 fixed active zone
+    //
+    // The local activeZone is copied into the stored
+    // manufacturing state by the builder below.
+    // =====================================================
+
+    StretchBendingActiveZone activeZone;
+
+    activeZone.startS =
+        40.0;
+
+    activeZone.endS =
+        160.0;
+
+    // =====================================================
+    // 5. BUILD INITIAL MANUFACTURING STATE
+    //
+    // Phase 10J creates data only. This state does not yet
+    // deform or recolor geometry.
+    // =====================================================
+
+    debugStretchManufacturingState =
+        StretchBendingManufacturingStateBuilder::buildReadyState(
+            input,
+            evaluation,
+            activeZone
+        );
+
+    // =====================================================
+    // 6. DEFINE A SEPARATE DEBUG START FRAME
+    //
+    // Keep the standalone stretch result away from:
+    //
+    //     normal manufacturing pipe
+    //     planar integrator test
+    //     helix integrator test
+    //
+    // Start tangent:  +X
+    // Bending normal: +Y
+    // =====================================================
+
+    Frame startFrame;
+
+    startFrame.P =
+        Vec3D{
+            0.0,
+            -220.0,
+            0.0
+    };
+
+    startFrame.T =
+        Vec3D{
+            1.0,
+            0.0,
+            0.0
+    };
+
+    startFrame.N =
+        Vec3D{
+            0.0,
+            1.0,
+            0.0
+    };
+
+    startFrame.B =
+        Vec3D{
+            0.0,
+            0.0,
+            1.0
+    };
+
+    // =====================================================
+    // 7. INTEGRATE LOADED AND FINAL GEOMETRY
+    //
+    // Both profiles use the same start frame and sample step.
+    // Therefore their visible separation is caused only by
+    // the springback curvature difference.
+    // =====================================================
+
+    SpatialCurveIntegrator integrator;
+
+    debugStretchLoadedIntegrationResult =
+        integrator.integrate(
+            startFrame,
+            loadedProfile,
+            input.sampleStep
+        );
+
+    debugStretchFinalIntegrationResult =
+        integrator.integrate(
+            startFrame,
+            finalProfile,
+            input.sampleStep
+        );
+
+    // Local const-reference aliases improve readability and
+    // do not copy either integration result.
+    const SpatialCurveIntegrationResult& loadedResult =
+        debugStretchLoadedIntegrationResult;
+
+    const SpatialCurveIntegrationResult& finalResult =
+        debugStretchFinalIntegrationResult;
+
+    // =====================================================
+    // 8. LOADED / FINAL SHAPE DIAGNOSTICS
+    // =====================================================
+
+    std::cout
+        << "[STRETCH SHAPE COMPARISON]"
+        << " loadedValid="
+        << loadedResult.valid
+        << " loadedComplete="
+        << loadedResult.isComplete()
+        << " finalValid="
+        << finalResult.valid
+        << " finalComplete="
+        << finalResult.isComplete()
+        << " loadedKappa="
+        << evaluation.loadedCurvatureCommand
+        << " finalKappa="
+        << evaluation.predictedFinalCurvature
+        << " targetKappa="
+        << evaluation.finalTargetCurvature
+        << std::endl;
+
+    if (loadedResult.isComplete()
+        && finalResult.isComplete()
+        && !loadedResult.nodes.empty()
+        && !finalResult.nodes.empty())
+    {
+        const Vec3D loadedEnd =
+            loadedResult.nodes.back().pos;
+
+        const Vec3D finalEnd =
+            finalResult.nodes.back().pos;
+
+        const Vec3D endpointRecovery =
+            finalEnd - loadedEnd;
+
+        std::cout
+            << "[STRETCH SPRINGBACK DISPLACEMENT]"
+            << " loadedEnd=("
+            << loadedEnd.x << ", "
+            << loadedEnd.y << ", "
+            << loadedEnd.z << ")"
+            << " finalEnd=("
+            << finalEnd.x << ", "
+            << finalEnd.y << ", "
+            << finalEnd.z << ")"
+            << " endpointRecoveryLength="
+            << endpointRecovery.length()
+            << std::endl;
+    }
+
+    std::cout
+        << "[STRETCH GEOMETRY]"
+        << " evaluationStatus="
+        << stretchBendingEvaluationStatusToString(
+            evaluation.status
+        )
+        << " loadedProfileValid="
+        << loadedProfile.valid
+        << " resultValid="
+        << loadedResult.valid
+        << " complete="
+        << loadedResult.isComplete()
+        << " nodes="
+        << loadedResult.nodes.size()
+        << " requestedLength="
+        << loadedResult.requestedArcLength
+        << " integratedLength="
+        << loadedResult.integratedArcLength
+        << " loadedCurvature="
+        << evaluation.loadedCurvatureCommand
+        << " torsion="
+        << input.geometry.targetTorsion
+        << std::endl;
+
+    if (!loadedResult.nodes.empty())
+    {
+        const PipeNode& first =
+            loadedResult.nodes.front();
+
+        const PipeNode& last =
+            loadedResult.nodes.back();
+
+        std::cout
+            << "[STRETCH GEOMETRY ENDPOINT]"
+            << " firstP=("
+            << first.pos.x << ", "
+            << first.pos.y << ", "
+            << first.pos.z << ")"
+            << " lastP=("
+            << last.pos.x << ", "
+            << last.pos.y << ", "
+            << last.pos.z << ")"
+            << std::endl;
+    }
+
+    // =====================================================
+    // 9. LOADED GEOMETRY ANALYTICAL ACCURACY
+    //
+    // Guard nodes.back() with completeness and emptiness.
+    // =====================================================
+
+    if (loadedResult.isComplete()
+        && !loadedResult.nodes.empty())
+    {
+        const double curvature =
+            evaluation.loadedCurvatureCommand;
+
+        const double length =
+            input.geometry.targetArcLength;
+
+        const double angle =
+            curvature * length;
+
+        Vec3D expectedEnd;
+
+        if (curvature > 1e-12)
         {
-            const PipeNode& first =
-                result.nodes.front();
+            const double radius =
+                1.0 / curvature;
 
-            const PipeNode& last =
-                result.nodes.back();
+            expectedEnd =
+                startFrame.P
+                + Vec3D{
+                    radius * std::sin(angle),
 
-            std::cout
-                << "[STRETCH GEOMETRY ENDPOINT]"
-                << " firstP=("
-                << first.pos.x << ", "
-                << first.pos.y << ", "
-                << first.pos.z << ")"
-                << " lastP=("
-                << last.pos.x << ", "
-                << last.pos.y << ", "
-                << last.pos.z << ")"
-                << std::endl;
+                    radius
+                        * (
+                            1.0
+                            - std::cos(angle)
+                        ),
+
+                    0.0
+            };
+        }
+        else
+        {
+            expectedEnd =
+                startFrame.P
+                + startFrame.T * length;
         }
 
-        {
-            // This result represents machine-loaded geometry,
-            // so the analytical comparison must use the loaded
-            // curvature command, not the final target curvature.
-            const double curvature =
-                evaluation.loadedCurvatureCommand;
+        const Vec3D error =
+            loadedResult.nodes.back().pos
+            - expectedEnd;
 
-            const double length =
-                input.geometry.targetArcLength;
+        std::cout
+            << "[STRETCH LOADED GEOMETRY ACCURACY]"
+            << " loadedKappa="
+            << curvature
+            << " expectedEnd=("
+            << expectedEnd.x << ", "
+            << expectedEnd.y << ", "
+            << expectedEnd.z << ")"
+            << " positionError="
+            << error.length()
+            << std::endl;
+    }
 
-            const double angle =
-                curvature * length;
+    // =====================================================
+    // 10. FINAL UNLOADED GEOMETRY ANALYTICAL ACCURACY
+    // =====================================================
 
-            Vec3D expectedEnd;
-
-            if (curvature > 1e-12)
-            {
-                const double radius =
-                    1.0 / curvature;
-
-                expectedEnd =
-                    startFrame.P
-                    + Vec3D{
-                        radius * std::sin(angle),
-
-                        radius
-                            * (
-                                1.0
-                                - std::cos(angle)
-                            ),
-
-                        0.0
-                };
-            }
-            else
-            {
-                expectedEnd =
-                    startFrame.P
-                    + startFrame.T * length;
-            }
-
-            const Vec3D error =
-                result.nodes.back().pos
-                - expectedEnd;
-
-            std::cout
-                << "[STRETCH LOADED GEOMETRY ACCURACY]"
-                << " loadedKappa="
-                << curvature
-                << " expectedEnd=("
-                << expectedEnd.x << ", "
-                << expectedEnd.y << ", "
-                << expectedEnd.z << ")"
-                << " positionError="
-                << error.length()
-                << std::endl;
-        }
-
+    if (finalResult.isComplete()
+        && !finalResult.nodes.empty())
+    {
         const double finalCurvature =
             evaluation.predictedFinalCurvature;
 
-        if (finalResult.isComplete()
-            && !finalResult.nodes.empty())
+        const double length =
+            input.geometry.targetArcLength;
+
+        const double angle =
+            finalCurvature * length;
+
+        Vec3D expectedFinalEnd;
+
+        if (finalCurvature > 1e-12)
         {
-            const double length =
-                input.geometry.targetArcLength;
+            const double radius =
+                1.0 / finalCurvature;
 
-            const double angle =
-                finalCurvature * length;
+            expectedFinalEnd =
+                startFrame.P
+                + Vec3D{
+                    radius * std::sin(angle),
 
-            Vec3D expectedFinalEnd;
+                    radius
+                        * (
+                            1.0
+                            - std::cos(angle)
+                        ),
 
-            if (finalCurvature > 1e-12)
-            {
-                const double radius =
-                    1.0 / finalCurvature;
-
-                expectedFinalEnd =
-                    startFrame.P
-                    + Vec3D{
-                        radius * std::sin(angle),
-
-                        radius
-                            * (
-                                1.0
-                                - std::cos(angle)
-                            ),
-
-                        0.0
-                };
-            }
-            else
-            {
-                expectedFinalEnd =
-                    startFrame.P
-                    + startFrame.T * length;
-            }
-
-            const Vec3D finalError =
-                finalResult.nodes.back().pos
-                - expectedFinalEnd;
-
-            std::cout
-                << "[STRETCH FINAL GEOMETRY ACCURACY]"
-                << " finalKappa="
-                << finalCurvature
-                << " expectedEnd=("
-                << expectedFinalEnd.x << ", "
-                << expectedFinalEnd.y << ", "
-                << expectedFinalEnd.z << ")"
-                << " positionError="
-                << finalError.length()
-                << std::endl;
+                    0.0
+            };
         }
-    }
-    void AppController::debugTestStretchBendingSpringback() const
-    {
-        if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
-            return;
+        else
+        {
+            expectedFinalEnd =
+                startFrame.P
+                + startFrame.T * length;
+        }
 
-        StretchBendingProcessInput input =
-            buildTestStretchBendingProcessInput();
-
-        input.geometry.targetCurvature =
-            0.002;
-
-        input.axialStretchStrain =
-            0.04;
-
-        input.springbackRatio =
-            0.10;
-
-        input.compensateSpringback =
-            true;
-
-        StretchBendingEvaluator evaluator;
-
-        const StretchBendingEvaluationResult result =
-            evaluator.evaluate(
-                input
-            );
-
-        const double tolerance =
-            1e-12;
-
-        const bool finalCurvatureAccepted =
-            std::abs(
-                result.predictedFinalCurvature
-                - input.geometry.targetCurvature
-            )
-            <= tolerance;
+        const Vec3D finalError =
+            finalResult.nodes.back().pos
+            - expectedFinalEnd;
 
         std::cout
-            << "[STRETCH SPRINGBACK TEST]"
-            << " status="
-            << stretchBendingEvaluationStatusToString(
-                result.status
-            )
-            << " targetKappa="
-            << input.geometry.targetCurvature
-            << " loadedKappa="
-            << result.loadedCurvatureCommand
-            << " predictedFinalKappa="
-            << result.predictedFinalCurvature
-            << " ratio="
-            << result.springbackRatio
-            << " error="
-            << result.finalCurvatureError
-            << " accepted="
-            << finalCurvatureAccepted
+            << "[STRETCH FINAL GEOMETRY ACCURACY]"
+            << " finalKappa="
+            << finalCurvature
+            << " expectedEnd=("
+            << expectedFinalEnd.x << ", "
+            << expectedFinalEnd.y << ", "
+            << expectedFinalEnd.z << ")"
+            << " positionError="
+            << finalError.length()
             << std::endl;
     }
+
+    // =====================================================
+    // 11. PHASE 10J MANUFACTURING-STATE DIAGNOSTICS
+    // =====================================================
+
+    const StretchBendingManufacturingState& manufacturingState =
+        debugStretchManufacturingState;
+
+    std::cout
+        << "[STRETCH MANUFACTURING STATE]"
+        << " stage="
+        << stretchBendingManufacturingStageToString(
+            manufacturingState.stage
+        )
+        << " progress="
+        << manufacturingState.processProgress
+        << " tensionFraction="
+        << manufacturingState.tensionFraction
+        << " bendingFraction="
+        << manufacturingState.bendingFraction
+        << " unloadingFraction="
+        << manufacturingState.unloadingFraction
+        << " valid="
+        << manufacturingState.isValidForLength(
+            input.geometry.targetArcLength
+        )
+        << std::endl;
+
+    std::cout
+        << "[STRETCH ACTIVE ZONE]"
+        << " startS="
+        << manufacturingState.activeZone.startS
+        << " endS="
+        << manufacturingState.activeZone.endS
+        << " length="
+        << manufacturingState.activeZone.length()
+        << " totalLength="
+        << input.geometry.targetArcLength
+        << " valid="
+        << manufacturingState.activeZone.isValidForLength(
+            input.geometry.targetArcLength
+        )
+        << std::endl;
+
+    const double beforeZoneS =
+        20.0;
+
+    const double insideZoneS =
+        100.0;
+
+    const double afterZoneS =
+        180.0;
+
+    std::cout
+        << "[STRETCH ACTIVE ZONE CLASSIFICATION]"
+        << " beforeS="
+        << beforeZoneS
+        << " beforeActive="
+        << manufacturingState.activeZone.contains(
+            beforeZoneS
+        )
+        << " insideS="
+        << insideZoneS
+        << " insideActive="
+        << manufacturingState.activeZone.contains(
+            insideZoneS
+        )
+        << " afterS="
+        << afterZoneS
+        << " afterActive="
+        << manufacturingState.activeZone.contains(
+            afterZoneS
+        )
+        << std::endl;
+
+    // Verify that a zone extending beyond the pipe length is
+    // rejected and produces the default Invalid state.
+    StretchBendingActiveZone invalidZone;
+
+    invalidZone.startS =
+        170.0;
+
+    invalidZone.endS =
+        230.0;
+
+    const StretchBendingManufacturingState invalidState =
+        StretchBendingManufacturingStateBuilder::buildReadyState(
+            input,
+            evaluation,
+            invalidZone
+        );
+
+    std::cout
+        << "[STRETCH ACTIVE ZONE REJECTION]"
+        << " zoneStart="
+        << invalidZone.startS
+        << " zoneEnd="
+        << invalidZone.endS
+        << " pipeLength="
+        << input.geometry.targetArcLength
+        << " stateStage="
+        << stretchBendingManufacturingStageToString(
+            invalidState.stage
+        )
+        << " stateValid="
+        << invalidState.isValidForLength(
+            input.geometry.targetArcLength
+        )
+        << std::endl;
+}
+void AppController::debugTestStretchBendingSpringback() const
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    StretchBendingProcessInput input =
+        buildTestStretchBendingProcessInput();
+
+    input.geometry.targetCurvature =
+        0.002;
+
+    input.axialStretchStrain =
+        0.04;
+
+    input.springbackRatio =
+        0.10;
+
+    input.compensateSpringback =
+        true;
+
+    StretchBendingEvaluator evaluator;
+
+    const StretchBendingEvaluationResult result =
+        evaluator.evaluate(
+            input
+        );
+
+    const double tolerance =
+        1e-12;
+
+    const bool finalCurvatureAccepted =
+        std::abs(
+            result.predictedFinalCurvature
+            - input.geometry.targetCurvature
+        )
+        <= tolerance;
+
+    std::cout
+        << "[STRETCH SPRINGBACK TEST]"
+        << " status="
+        << stretchBendingEvaluationStatusToString(
+            result.status
+        )
+        << " targetKappa="
+        << input.geometry.targetCurvature
+        << " loadedKappa="
+        << result.loadedCurvatureCommand
+        << " predictedFinalKappa="
+        << result.predictedFinalCurvature
+        << " ratio="
+        << result.springbackRatio
+        << " error="
+        << result.finalCurvatureError
+        << " accepted="
+        << finalCurvatureAccepted
+        << std::endl;
+}

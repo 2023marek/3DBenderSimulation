@@ -21,6 +21,7 @@
 #include "Core/Geometry/SpatialCurveIntegrationResult.h"
 #include "Core/Forming/StretchBendingProcessInput.h"
 #include "Core/Geometry/CurvatureTorsionProfile.h"
+#include "Core/Forming/StretchBendingManufacturingState.h"
 
 
 class AppController
@@ -256,6 +257,12 @@ public:
          return debugStretchFinalIntegrationResult;
      }
 
+     const StretchBendingManufacturingState&
+         getDebugStretchManufacturingState() const
+     {
+         return debugStretchManufacturingState;
+     }
+
 private:
     
 
@@ -327,6 +334,9 @@ private:
        debugStretchLoadedIntegrationResult;
    SpatialCurveIntegrationResult
        debugStretchFinalIntegrationResult;
+
+   StretchBendingManufacturingState
+       debugStretchManufacturingState;
    //
    void debugTestStretchBendingGeometry();
    void debugTestStretchBendingSpringback() const;

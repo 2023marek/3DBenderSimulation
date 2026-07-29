@@ -1635,3 +1635,956 @@ Phase 10J
 Define stretch-bending manufacturing state 
 
 and fixed active-zone data
+
+
+==
+Why?
+
+You now have three completely independent debug tests:
+
+Segment 9
+
+debugTestSpatialCurveIntegrator()
+        ?
+        ??? profile = constant curvature
+        ??? stores:
+            debugPlanarIntegrationResult
+debugTestSpatialHelixIntegrator()
+        ?
+        ??? profile = constant ? + ?
+        ??? stores:
+            debugHelixIntegrationResult
+Segment 10
+
+debugTestStretchBendingGeometry()
+        ?
+        ??? loadedProfile
+        ??? finalProfile
+        ??? stores:
+            debugStretchLoadedIntegrationResult
+            debugStretchFinalIntegrationResult
+
+They are separate demonstrations of the same shared geometry engine.
+
+The correct place
+
+The new code belongs inside:
+
+void AppController::debugTestStretchBendingGeometry()
+
+where you currently have something like:
+
+StretchBendingEvaluator evaluator;
+
+StretchBendingEvaluationResult evaluation =
+    evaluator.evaluate(input);
+
+CurvatureTorsionProfile profile =
+    StretchBendingProfileBuilder::build(
+        input,
+        evaluation
+    );
+
+Frame startFrame;
+...
+
+Currently you probably have:
+
+SpatialCurveIntegrator integrator;
+
+debugStretchLoadedIntegrationResult =
+    integrator.integrate(
+        startFrame,
+        profile,
+        input.sampleStep
+    );
+
+Replace that section with:
+
+SpatialCurveIntegrator integrator;
+
+debugStretchLoadedIntegrationResult =
+    integrator.integrate(
+        startFrame,
+        loadedProfile,
+        input.sampleStep
+    );
+
+debugStretchFinalIntegrationResult =
+    integrator.integrate(
+        startFrame,
+        finalProfile,
+        input.sampleStep
+    );
+
+
+Architecturally
+
+Think of your project like this:
+
+                     SpatialCurveIntegrator
+                              ?
+                              ?
+         ???????????????????????????????????????????
+         ?                    ?                    ?
+         ?                    ?                    ?
+ Planar test            Helix test          Stretch test
+ (Segment 9)           (Segment 9)         (Segment 10)
+
+debugPlanar...     debugHelix...      debugStretchLoaded...
+                                      debugStretchFinal...
+
+Every test owns its own integration result.
+
+None of them should overwrite another.
+
+======================================================
+
+
+
+Phase 10J — Stretch-bending manufacturing state and fixed active zone
+Goal
+
+Introduce a manufacturing-state model for stretch bending.
+
+This phase does not animate anything yet.
+
+It defines:
+
+what the machine is doing
+where forming occurs
+which part of the pipe is active
+which part is already formed
+which part remains undeformed
+
+The geometry generated in Phase 10I remains independent and unchanged.
+
+Phase 10I
+loaded/final reference geometry
+
+Phase 10J
+manufacturing-state description
+1. Manufacturing model
+
+For the first stretch-bending prototype, use one fixed active zone.
+
+pipe start                                         pipe end
+
+|--------------------|===============|--------------------|
+     formed region       active zone       undeformed region
+
+0                 activeStart       activeEnd             L
+
+The active zone is defined in pipe arc-length coordinates.
+
+activeStartS
+activeEndS
+
+For Phase 10J, these values remain fixed during the process.
+
+Later phases can move or resize the active zone.
+
+2. Add process-stage enum
+
+Create:
+
+Core/Forming/StretchBendingManufacturingStage.h
+#pragma once
+
+// =====================================================
+// STRETCH-BENDING MANUFACTURING STAGE
+//
+// Describes the high-level state of the stretch-bending
+// manufacturing process.
+//
+// This is intentionally independent from the existing
+// rotary-draw manufacturing state.
+//
+// Phase 10J only defines the states.
+// Later phases will use them during playback.
+// =====================================================
+
+enum class StretchBendingManufacturingStage
+{
+    // -------------------------------------------------
+    // No valid manufacturing process has been prepared.
+    // -------------------------------------------------
+
+    Invalid,
+
+    // -------------------------------------------------
+    // Pipe and machine are ready, but no forming load
+    // has yet been applied.
+    // -------------------------------------------------
+
+    Ready,
+
+    // -------------------------------------------------
+    // Axial tension is being established.
+    //
+    // The pipe may be stretched, but bending has not
+    // yet reached the commanded loaded curvature.
+    // -------------------------------------------------
+
+    ApplyingTension,
+
+    // -------------------------------------------------
+    // Bending is actively occurring inside the fixed
+    // active zone.
+    // -------------------------------------------------
+
+    Forming,
+
+    // -------------------------------------------------
+    // Loaded machine geometry has been reached.
+    //
+    // The forming load is still considered present.
+    // -------------------------------------------------
+
+    LoadedHold,
+
+    // -------------------------------------------------
+    // Bending load is being removed and elastic
+    // springback is occurring.
+    // -------------------------------------------------
+
+    Unloading,
+
+    // -------------------------------------------------
+    // Final unloaded geometry has been reached.
+    // -------------------------------------------------
+
+    Complete
+};
+3. Add stage-to-string helper
+
+Create:
+
+Core/Forming/StretchBendingManufacturingStage.cpp
+
+or place this helper next to the enum if your project commonly uses header-only helpers.
+
+#include "Core/Forming/StretchBendingManufacturingStage.h"
+
+const char*
+stretchBendingManufacturingStageToString(
+    StretchBendingManufacturingStage stage
+)
+{
+    switch (stage)
+    {
+        case StretchBendingManufacturingStage::Invalid:
+            return "Invalid";
+
+        case StretchBendingManufacturingStage::Ready:
+            return "Ready";
+
+        case StretchBendingManufacturingStage::ApplyingTension:
+            return "ApplyingTension";
+
+        case StretchBendingManufacturingStage::Forming:
+            return "Forming";
+
+        case StretchBendingManufacturingStage::LoadedHold:
+            return "LoadedHold";
+
+        case StretchBendingManufacturingStage::Unloading:
+            return "Unloading";
+
+        case StretchBendingManufacturingStage::Complete:
+            return "Complete";
+    }
+
+    return "Unknown";
+}
+...........................................
+Add fixed active-zone data
+
+Create:
+
+Core/Forming/StretchBendingActiveZone.h
+#pragma once
+
+#include <cmath>
+
+// =====================================================
+// STRETCH-BENDING ACTIVE ZONE
+//
+// Defines the part of the pipe where bending deformation
+// is currently allowed to occur.
+//
+// Coordinates use pipe arc length:
+//
+//     s = 0              pipe start
+//     s = totalLength    pipe end
+//
+// Phase 10J uses a fixed zone.
+//
+// Later phases may introduce:
+//
+//     moving active zones
+//     growing active zones
+//     machine-relative active zones
+// =====================================================
+
+struct StretchBendingActiveZone
+{
+    // -------------------------------------------------
+    // Arc-length coordinate where the active zone begins.
+    // -------------------------------------------------
+
+    double startS = 0.0;
+
+    // -------------------------------------------------
+    // Arc-length coordinate where the active zone ends.
+    // -------------------------------------------------
+
+    double endS = 0.0;
+
+    // -------------------------------------------------
+    // Returns the zone length.
+    // -------------------------------------------------
+
+    double length() const
+    {
+        return endS - startS;
+    }
+
+    // -------------------------------------------------
+    // Basic mathematical validity.
+    //
+    // This function does not know the pipe length.
+    // Full validation against the pipe belongs in
+    // isValidForLength().
+    // -------------------------------------------------
+
+    bool isValid() const
+    {
+        return
+            std::isfinite(startS)
+            && std::isfinite(endS)
+            && startS >= 0.0
+            && endS > startS;
+    }
+
+    // -------------------------------------------------
+    // Checks whether this zone fits inside a pipe with
+    // the supplied total arc length.
+    // -------------------------------------------------
+
+    bool isValidForLength(
+        double totalLength
+    ) const
+    {
+        return
+            isValid()
+            && std::isfinite(totalLength)
+            && totalLength > 0.0
+            && endS <= totalLength;
+    }
+
+    // -------------------------------------------------
+    // Returns true when the supplied pipe coordinate lies
+    // inside the active zone.
+    //
+    // Inclusive boundaries are useful for rendering and
+    // sample classification.
+    // -------------------------------------------------
+
+    bool contains(
+        double s
+    ) const
+    {
+        return
+            isValid()
+            && std::isfinite(s)
+            && s >= startS
+            && s <= endS;
+    }
+};
+5. Add manufacturing-state structure
+
+Create:
+
+Core/Forming/StretchBendingManufacturingState.h
+#pragma once
+
+#include <cmath>
+
+#include "Core/Forming/StretchBendingManufacturingStage.h"
+#include "Core/Forming/StretchBendingActiveZone.h"
+
+// =====================================================
+// STRETCH-BENDING MANUFACTURING STATE
+//
+// Represents one snapshot of the stretch-bending process.
+//
+// It does not own geometry.
+//
+// It describes:
+//
+//     process stage
+//     overall progress
+//     active forming zone
+//     applied tension fraction
+//     applied bending fraction
+//     unloading fraction
+//
+// Geometry generation and rendering remain separate.
+// =====================================================
+
+struct StretchBendingManufacturingState
+{
+    // -------------------------------------------------
+    // Current high-level manufacturing stage.
+    // -------------------------------------------------
+
+    StretchBendingManufacturingStage stage =
+        StretchBendingManufacturingStage::Invalid;
+
+    // -------------------------------------------------
+    // Overall normalized playback progress.
+    //
+    // Expected range:
+    //
+    //     0.0 = process beginning
+    //     1.0 = process complete
+    // -------------------------------------------------
+
+    double processProgress = 0.0;
+
+    // -------------------------------------------------
+    // Fixed pipe region where bending deformation occurs.
+    // -------------------------------------------------
+
+    StretchBendingActiveZone activeZone;
+
+    // -------------------------------------------------
+    // Fraction of commanded axial tension currently
+    // applied.
+    //
+    //     0.0 = no tension
+    //     1.0 = full commanded tension
+    // -------------------------------------------------
+
+    double tensionFraction = 0.0;
+
+    // -------------------------------------------------
+    // Fraction of loaded bending command currently
+    // applied.
+    //
+    //     0.0 = straight/unbent state
+    //     1.0 = full loaded curvature
+    // -------------------------------------------------
+
+    double bendingFraction = 0.0;
+
+    // -------------------------------------------------
+    // Fraction of unloading completed.
+    //
+    //     0.0 = loaded shape
+    //     1.0 = final unloaded shape
+    //
+    // This remains zero before the Unloading stage.
+    // -------------------------------------------------
+
+    double unloadingFraction = 0.0;
+
+    // -------------------------------------------------
+    // Returns true if all scalar values are finite and
+    // inside their normalized ranges.
+    // -------------------------------------------------
+
+    bool isValidForLength(
+        double totalLength
+    ) const
+    {
+        if (stage
+            == StretchBendingManufacturingStage::Invalid)
+        {
+            return false;
+        }
+
+        if (!std::isfinite(processProgress)
+            || !std::isfinite(tensionFraction)
+            || !std::isfinite(bendingFraction)
+            || !std::isfinite(unloadingFraction))
+        {
+            return false;
+        }
+
+        if (processProgress < 0.0
+            || processProgress > 1.0)
+        {
+            return false;
+        }
+
+        if (tensionFraction < 0.0
+            || tensionFraction > 1.0)
+        {
+            return false;
+        }
+
+        if (bendingFraction < 0.0
+            || bendingFraction > 1.0)
+        {
+            return false;
+        }
+
+        if (unloadingFraction < 0.0
+            || unloadingFraction > 1.0)
+        {
+            return false;
+        }
+
+        return activeZone.isValidForLength(
+            totalLength
+        );
+    }
+};
+6. State meaning
+
+The three fractions have different meanings.
+
+tensionFraction
+    controls axial stretching load
+
+bendingFraction
+    controls progress toward loaded curvature
+
+unloadingFraction
+    interpolates loaded shape toward final shape
+
+Conceptually:
+
+Ready
+    tension = 0
+    bending = 0
+    unloading = 0
+
+ApplyingTension
+    tension = 0 ? 1
+    bending = 0
+    unloading = 0
+
+Forming
+    tension = 1
+    bending = 0 ? 1
+    unloading = 0
+
+LoadedHold
+    tension = 1
+    bending = 1
+    unloading = 0
+
+Unloading
+    tension may reduce
+    bending = 1
+    unloading = 0 ? 1
+
+Complete
+    final unloaded geometry
+    unloading = 1
+7. Add a fixed-state builder
+
+Do not manually construct manufacturing states throughout the application.
+
+Create one builder responsible for initial Phase 10J state creation.
+
+Create:
+
+Core/Forming/StretchBendingManufacturingStateBuilder.h
+#pragma once
+
+#include "Core/Forming/StretchBendingProcessInput.h"
+#include "Core/Forming/StretchBendingEvaluationResult.h"
+#include "Core/Forming/StretchBendingManufacturingState.h"
+
+// =====================================================
+// STRETCH-BENDING MANUFACTURING-STATE BUILDER
+//
+// Creates the initial fixed-zone manufacturing state.
+//
+// Phase 10J does not calculate time-dependent playback.
+// It only prepares a valid Ready state.
+// =====================================================
+
+class StretchBendingManufacturingStateBuilder
+{
+public:
+    static StretchBendingManufacturingState buildReadyState(
+        const StretchBendingProcessInput& input,
+        const StretchBendingEvaluationResult& evaluation,
+        const StretchBendingActiveZone& activeZone
+    );
+};
+
+Create:
+
+Core/Forming/StretchBendingManufacturingStateBuilder.cpp
+#include "Core/Forming/StretchBendingManufacturingStateBuilder.h"
+
+StretchBendingManufacturingState
+StretchBendingManufacturingStateBuilder::buildReadyState(
+    const StretchBendingProcessInput& input,
+    const StretchBendingEvaluationResult& evaluation,
+    const StretchBendingActiveZone& activeZone
+)
+{
+    StretchBendingManufacturingState state;
+
+    // -------------------------------------------------
+    // A manufacturing state can only be prepared from
+    // accepted stretch-bending input.
+    // -------------------------------------------------
+
+    if (!input.isValid())
+        return state;
+
+    if (!evaluation.valid)
+        return state;
+
+    if (evaluation.status
+        != StretchBendingEvaluationStatus::Valid)
+    {
+        return state;
+    }
+
+    const double totalLength =
+        input.geometry.targetArcLength;
+
+    if (!activeZone.isValidForLength(
+            totalLength
+        ))
+    {
+        return state;
+    }
+
+    // -------------------------------------------------
+    // Initial ready state.
+    //
+    // No tension or bending load has been applied yet.
+    // -------------------------------------------------
+
+    state.stage =
+        StretchBendingManufacturingStage::Ready;
+
+    state.processProgress =
+        0.0;
+
+    state.activeZone =
+        activeZone;
+
+    state.tensionFraction =
+        0.0;
+
+    state.bendingFraction =
+        0.0;
+
+    state.unloadingFraction =
+        0.0;
+
+    return state;
+}
+8. Choose the Phase 10J fixed zone
+
+For the existing test length:
+
+total pipe length = 200 mm
+
+Use:
+
+active zone = 40 mm to 160 mm
+
+ASCII:
+
+s=0          s=40                         s=160       s=200
+|-------------|=============================|-----------|
+  inactive             active zone             inactive
+
+This gives:
+
+active-zone length = 120 mm
+
+In your stretch debug test:
+
+StretchBendingActiveZone activeZone;
+
+activeZone.startS =
+    40.0;
+
+activeZone.endS =
+    160.0;
+
+Avoid making the whole pipe active for this test.
+
+A smaller region makes later visual classification easier.
+
+9. Store the debug manufacturing state
+
+In the class that currently stores:
+
+debugStretchLoadedIntegrationResult;
+debugStretchFinalIntegrationResult;
+
+add:
+
+StretchBendingManufacturingState
+    debugStretchManufacturingState;
+
+Add getter:
+
+const StretchBendingManufacturingState&
+getDebugStretchManufacturingState() const
+{
+    return debugStretchManufacturingState;
+}
+
+Initialize it using the builder:
+
+debugStretchManufacturingState =
+    StretchBendingManufacturingStateBuilder::buildReadyState(
+        input,
+        evaluation,
+        activeZone
+    );
+
+Place this after evaluation and active-zone creation, but before future manufacturing rendering.
+
+Suggested order:
+
+evaluate process
+    ?
+build loaded profile
+    ?
+build final profile
+    ?
+integrate reference geometry
+    ?
+build fixed active zone
+    ?
+build manufacturing state
+    ?
+print diagnostics
+10. Add active-zone diagnostics
+const StretchBendingManufacturingState& manufacturingState =
+    debugStretchManufacturingState;
+
+std::cout
+    << "[STRETCH MANUFACTURING STATE]"
+    << " stage="
+    << stretchBendingManufacturingStageToString(
+        manufacturingState.stage
+    )
+    << " progress="
+    << manufacturingState.processProgress
+    << " tensionFraction="
+    << manufacturingState.tensionFraction
+    << " bendingFraction="
+    << manufacturingState.bendingFraction
+    << " unloadingFraction="
+    << manufacturingState.unloadingFraction
+    << " valid="
+    << manufacturingState.isValidForLength(
+        input.geometry.targetArcLength
+    )
+    << std::endl;
+
+Add zone diagnostics:
+
+std::cout
+    << "[STRETCH ACTIVE ZONE]"
+    << " startS="
+    << manufacturingState.activeZone.startS
+    << " endS="
+    << manufacturingState.activeZone.endS
+    << " length="
+    << manufacturingState.activeZone.length()
+    << " totalLength="
+    << input.geometry.targetArcLength
+    << " valid="
+    << manufacturingState.activeZone.isValidForLength(
+        input.geometry.targetArcLength
+    )
+    << std::endl;
+11. Add classification diagnostics
+
+Check representative coordinates:
+
+const double beforeZoneS =
+    20.0;
+
+const double insideZoneS =
+    100.0;
+
+const double afterZoneS =
+    180.0;
+
+std::cout
+    << "[STRETCH ACTIVE ZONE CLASSIFICATION]"
+    << " beforeS="
+    << beforeZoneS
+    << " beforeActive="
+    << manufacturingState.activeZone.contains(
+        beforeZoneS
+    )
+    << " insideS="
+    << insideZoneS
+    << " insideActive="
+    << manufacturingState.activeZone.contains(
+        insideZoneS
+    )
+    << " afterS="
+    << afterZoneS
+    << " afterActive="
+    << manufacturingState.activeZone.contains(
+        afterZoneS
+    )
+    << std::endl;
+
+Expected:
+
+beforeActive=0
+insideActive=1
+afterActive=0
+12. Add invalid-zone test
+
+Test one invalid zone separately.
+
+StretchBendingActiveZone invalidZone;
+
+invalidZone.startS =
+    170.0;
+
+invalidZone.endS =
+    230.0;
+
+Build:
+
+const StretchBendingManufacturingState invalidState =
+    StretchBendingManufacturingStateBuilder::buildReadyState(
+        input,
+        evaluation,
+        invalidZone
+    );
+
+Diagnostic:
+
+std::cout
+    << "[STRETCH ACTIVE ZONE REJECTION]"
+    << " zoneStart="
+    << invalidZone.startS
+    << " zoneEnd="
+    << invalidZone.endS
+    << " pipeLength="
+    << input.geometry.targetArcLength
+    << " stateStage="
+    << stretchBendingManufacturingStageToString(
+        invalidState.stage
+    )
+    << " stateValid="
+    << invalidState.isValidForLength(
+        input.geometry.targetArcLength
+    )
+    << std::endl;
+
+Expected:
+
+stateStage=Invalid
+stateValid=0
+13. Expected console output
+
+Approximately:
+
+[STRETCH MANUFACTURING STATE]
+stage=Ready
+progress=0
+tensionFraction=0
+bendingFraction=0
+unloadingFraction=0
+valid=1
+[STRETCH ACTIVE ZONE]
+startS=40
+endS=160
+length=120
+totalLength=200
+valid=1
+[STRETCH ACTIVE ZONE CLASSIFICATION]
+beforeS=20
+beforeActive=0
+insideS=100
+insideActive=1
+afterS=180
+afterActive=0
+[STRETCH ACTIVE ZONE REJECTION]
+zoneStart=170
+zoneEnd=230
+pipeLength=200
+stateStage=Invalid
+stateValid=0
+14. Do not render manufacturing geometry yet
+
+Phase 10J should not deform or recolor the pipe.
+
+The current display should remain:
+
+purple = complete loaded reference shape
+green  = complete final unloaded reference shape
+
+The new state is data only.
+
+manufacturing state
+        |
+        X no rendering yet
+        |
+future Phase 10K renderer
+
+This separation prevents rendering decisions from
+contaminating the process model.
+
+15. Ownership
+
+Recommended ownership:
+
+AppController
+    |
+    +-- debugStretchLoadedIntegrationResult
+    |
+    +-- debugStretchFinalIntegrationResult
+    |
+    +-- debugStretchManufacturingState
+
+Core types remain independent:
+
+StretchBendingProcessInput
+StretchBendingEvaluationResult
+StretchBendingActiveZone
+StretchBendingManufacturingState
+
+The renderer may read state later, but it should not modify it.
+
+Phase 10J acceptance
+? manufacturing-stage enum exists
+? fixed active-zone type exists
+? active-zone validation works
+? manufacturing state has normalized fractions
+? Ready state builds from valid input
+? invalid process input produces Invalid state
+? out-of-range active zone is rejected
+? active-zone classification works
+? loaded/final geometry remains unchanged
+? no rotary-draw code is modified
+? no manufacturing animation is introduced yet
+
+After the diagnostics pass, the next phase is:
+
+Phase 10K
+
+Generate a manufacturing preview centerline with:
+
+straight region
+active transition region
+formed region
+
+This will be the first phase where the fixed active-zone 
+state affects visible geometry.

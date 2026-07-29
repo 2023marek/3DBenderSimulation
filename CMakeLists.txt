@@ -113,12 +113,18 @@ set(CORE_HEADERS
     Core/Forming/PassPlacement.h
     Core/Forming/PassPlacementLabels.h
     Core/Forming/PassPlacementResolver.h
+    Core/Forming/StretchBendingActiveZone.h
     Core/Forming/StretchBendingEvaluator.h
     Core/Forming/StretchBendingEvaluator.cpp
     Core/Forming/StretchBendingEvaluationResult.h
     Core/Forming/StretchBendingEvaluationStatus.h
     Core/Forming/StretchBendingEvaluationStatus.cpp
     Core/Forming/StretchBendingGeometryInput.h
+    Core/Forming/StretchBendingManufacturingStage.h
+    Core/Forming/StretchBendingManufacturingStage.cpp
+    Core/Forming/StretchBendingManufacturingState.h
+    Core/Forming/StretchBendingManufacturingStateBuilder.h
+    Core/Forming/StretchBendingManufacturingStateBuilder.cpp
     Core/Forming/StretchBendingProcessInput.h
     Core/Forming/StretchBendingPipeSection.h
     Core/Forming/StretchBendingProfileBuilder.h
