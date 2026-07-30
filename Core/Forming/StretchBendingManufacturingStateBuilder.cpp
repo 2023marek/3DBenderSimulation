@@ -44,7 +44,8 @@ StretchBendingManufacturingStateBuilder::buildReadyState(
 
     state.stage =
         StretchBendingManufacturingStage::Ready;
-
+    state.elapsedTime =
+        0.0;
     state.processProgress =
         0.0;
 
@@ -59,6 +60,26 @@ StretchBendingManufacturingStateBuilder::buildReadyState(
 
     state.unloadingFraction =
         0.0;
+    state.activeZone =
+        activeZone;
+
+    state.valid =
+        true;
+    // -------------------------------------------------
+// Final aggregate validation.
+//
+// This verifies both:
+//
+//     state values
+//     active-zone position inside the pipe
+// -------------------------------------------------
+
+    if (!state.isValidForLength(
+        totalLength
+    ))
+    {
+        state.clear();
+    }
 
     return state;
 }

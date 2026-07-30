@@ -1,6 +1,7 @@
 #include <sstream>
 #include <iostream>
 #include <vector>
+#include <cmath>
 
 #include "AppController.h"
 
@@ -26,6 +27,8 @@
 #include "Core/Forming/StretchBendingManufacturingState.h"
 #include "Core/Forming/StretchBendingManufacturingStateBuilder.h"
 #include "Core/Forming/StretchBendingManufacturingStage.h"
+#include "Core/Forming/StretchBendingManufacturingStateAdvancer.h"
+#include "Core/Forming/StretchBendingManufacturingTiming.h"
 
 
 
@@ -230,6 +233,7 @@ AppController::AppController()
     debugTestStretchBendingFeasibilityCases();
     debugTestStretchBendingProfileBuilder();
     debugTestStretchBendingGeometry();
+    debugTestStretchBendingStateProgression();
     debugTestStretchBendingSpringback();
 }
 
@@ -2531,5 +2535,142 @@ void AppController::debugTestStretchBendingSpringback() const
         << result.finalCurvatureError
         << " accepted="
         << finalCurvatureAccepted
+        << std::endl;
+}
+void AppController::debugTestStretchBendingStateProgression()
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    // =================================================
+    // PHASE 10K — STATE PROGRESSION TEST
+    //
+    // Work on a copy so the stored Ready state used by
+    // rendering remains unchanged.
+    // =================================================
+
+    StretchBendingManufacturingState testState =
+        debugStretchManufacturingState;
+
+    if (!testState.valid)
+    {
+        std::cout
+            << "[STRETCH STATE PROGRESSION]"
+            << " result=REJECTED"
+            << " reason=InitialStateInvalid"
+            << std::endl;
+
+        return;
+    }
+
+    StretchBendingManufacturingTiming timing;
+
+    timing.tensionDuration =
+        1.0;
+
+    timing.formingDuration =
+        2.0;
+
+    timing.loadedHoldDuration =
+        0.5;
+
+    timing.unloadingDuration =
+        1.0;
+
+    // A quarter-second step gives several diagnostic
+    // samples inside each manufacturing stage.
+    constexpr double TEST_DT =
+        0.25;
+
+    StretchBendingManufacturingStage previousStage =
+        testState.stage;
+
+    std::cout
+        << "[STRETCH STATE TRANSITION]"
+        << " stage="
+        << stretchBendingManufacturingStageToString(
+            testState.stage
+        )
+        << " time="
+        << testState.elapsedTime
+        << " progress="
+        << testState.processProgress
+        << std::endl;
+
+    while (testState.stage
+        != StretchBendingManufacturingStage::Complete
+        && testState.valid)
+    {
+        StretchBendingManufacturingStateAdvancer::advance(
+            testState,
+            TEST_DT,
+            timing
+        );
+
+        // Print only stage transitions. This keeps the
+        // console readable while still proving that the
+        // complete state machine was traversed.
+        if (testState.stage != previousStage)
+        {
+            std::cout
+                << "[STRETCH STATE TRANSITION]"
+                << " stage="
+                << stretchBendingManufacturingStageToString(
+                    testState.stage
+                )
+                << " time="
+                << testState.elapsedTime
+                << " progress="
+                << testState.processProgress
+                << " tensionFraction="
+                << testState.tensionFraction
+                << " bendingFraction="
+                << testState.bendingFraction
+                << " unloadingFraction="
+                << testState.unloadingFraction
+                << std::endl;
+
+            previousStage =
+                testState.stage;
+        }
+    }
+
+    const bool accepted =
+        testState.valid
+        && testState.stage
+        == StretchBendingManufacturingStage::Complete
+        && std::abs(
+            testState.processProgress - 1.0
+        ) <= 1e-12
+        && std::abs(
+            testState.tensionFraction
+        ) <= 1e-12
+        && std::abs(
+            testState.bendingFraction - 1.0
+        ) <= 1e-12
+        && std::abs(
+            testState.unloadingFraction - 1.0
+        ) <= 1e-12;
+
+    std::cout
+        << "[STRETCH STATE PROGRESSION SUMMARY]"
+        << " stage="
+        << stretchBendingManufacturingStageToString(
+            testState.stage
+        )
+        << " elapsedTime="
+        << testState.elapsedTime
+        << " totalDuration="
+        << timing.totalDuration()
+        << " progress="
+        << testState.processProgress
+        << " tensionFraction="
+        << testState.tensionFraction
+        << " bendingFraction="
+        << testState.bendingFraction
+        << " unloadingFraction="
+        << testState.unloadingFraction
+        << " accepted="
+        << accepted
         << std::endl;
 }

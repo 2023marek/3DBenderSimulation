@@ -68,7 +68,5 @@ enum class StretchBendingManufacturingStage
    
 };
 
- const char*
-    stretchBendingManufacturingStageToString(
-        StretchBendingManufacturingStage stage
-    );
+const char* stretchBendingManufacturingStageToString(
+    StretchBendingManufacturingStage stage);

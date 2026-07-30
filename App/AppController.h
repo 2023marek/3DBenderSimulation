@@ -340,5 +340,6 @@ private:
    //
    void debugTestStretchBendingGeometry();
    void debugTestStretchBendingSpringback() const;
+   void debugTestStretchBendingStateProgression();
 }; 
       

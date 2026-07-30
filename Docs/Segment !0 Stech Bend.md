@@ -2588,3 +2588,159 @@ formed region
 
 This will be the first phase where the fixed active-zone 
 state affects visible geometry.
+
+
+=======================================================
+Phase 10K — Stretch-Bending Manufacturing State Progression
+
+Phase 10J created a valid initial state:
+
+Ready
+progress = 0
+tensionFraction = 0
+bendingFraction = 0
+unloadingFraction = 0
+
+Phase 10K advances that state through the manufacturing sequence:
+
+Ready
+  ?
+ApplyingTension
+  ?
+Forming
+  ?
+LoadedHold
+  ?
+Unloading
+  ?
+Complete
+
+This phase changes only process-state data. It does not yet modify geometry or rendering.
+
+10K.1 — Timeline model
+
+We give every process stage a duration:
+
+Applying tension   1.0 s
+Forming            2.0 s
+Loaded hold        0.5 s
+Unloading          1.0 s
+                  -----
+Total              4.5 s
+
+ASCII timeline:
+
+time
+0        1.0             3.0      3.5             4.5
+?---------?---------------?--------?----------------?
+ TENSION       FORMING       HOLD       UNLOADING
+
+The fractions mean:
+
+tensionFraction
+    0.0 = no axial tension
+    1.0 = full commanded tension
+
+bendingFraction
+    0.0 = no loaded bending command
+    1.0 = full loaded bending command
+
+unloadingFraction
+    0.0 = unloading has not started
+    1.0 = unloading complete
+
+    10K.7 — Expected console output
+
+
+
+
+
+
+
+
+10K.7 — Expected console output
+
+Approximately:
+
+[STRETCH STATE TRANSITION] stage=Ready time=0 progress=0
+
+[STRETCH STATE TRANSITION]
+stage=ApplyingTension
+time=0.25
+progress=0.0555556
+tensionFraction=0.25
+bendingFraction=0
+unloadingFraction=0
+
+[STRETCH STATE TRANSITION]
+stage=Forming
+time=1
+progress=0.222222
+tensionFraction=1
+bendingFraction=0
+unloadingFraction=0
+
+[STRETCH STATE TRANSITION]
+stage=LoadedHold
+time=3
+progress=0.666667
+tensionFraction=1
+bendingFraction=1
+unloadingFraction=0
+
+[STRETCH STATE TRANSITION]
+stage=Unloading
+time=3.5
+progress=0.777778
+tensionFraction=1
+bendingFraction=1
+unloadingFraction=0
+
+[STRETCH STATE TRANSITION]
+stage=Complete
+time=4.5
+progress=1
+tensionFraction=0
+bendingFraction=1
+unloadingFraction=1
+
+[STRETCH STATE PROGRESSION SUMMARY]
+stage=Complete
+elapsedTime=4.5
+totalDuration=4.5
+progress=1
+tensionFraction=0
+bendingFraction=1
+unloadingFraction=1
+accepted=1
+
+At exactly the start of unloading, unloadingFraction=0 is correct. The process has entered the unloading stage, but no unloading time has yet elapsed.
+
+Phase 10K flow
+Ready state from Phase 10J
+            ?
+            ?
+ StateAdvancer.advance(dt)
+            ?
+            ??? elapsed time
+            ??? current stage
+            ??? tension fraction
+            ??? bending fraction
+            ??? unloading fraction
+            ?
+            ?
+ Updated manufacturing state
+
+No geometry connection yet:
+
+manufacturing state ??X??? rendered nodes
+
+That separation is intentional.
+
+The next phase remains logically:
+
+Phase 10L
+Manufacturing-state-driven loaded/final
+geometry interpolation
+
+But Phase 10K should first compile and produce accepted=1.
