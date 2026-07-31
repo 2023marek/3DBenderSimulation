@@ -22,7 +22,7 @@
 #include "Core/Forming/StretchBendingProcessInput.h"
 #include "Core/Geometry/CurvatureTorsionProfile.h"
 #include "Core/Forming/StretchBendingManufacturingState.h"
-
+struct StretchBendingEvaluationResult;
 
 class AppController
 {
@@ -341,5 +341,13 @@ private:
    void debugTestStretchBendingGeometry();
    void debugTestStretchBendingSpringback() const;
    void debugTestStretchBendingStateProgression();
+   void debugTestStretchBendingCurrentProfileParameters(
+       const StretchBendingEvaluationResult& evaluation
+   );
+
+   void debugTestStretchBendingCurrentProfileBuilder(
+       const StretchBendingEvaluationResult& evaluation
+   );
+
 }; 
       

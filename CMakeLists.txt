@@ -114,6 +114,11 @@ set(CORE_HEADERS
     Core/Forming/PassPlacementLabels.h
     Core/Forming/PassPlacementResolver.h
     Core/Forming/StretchBendingActiveZone.h
+    Core/Forming/StretchBendingCurrentProfileBuilder.h
+    Core/Forming/StretchBendingCurrentProfileBuilder.cpp
+    Core/Forming/StretchBendingCurrentProfileParameters.h
+    Core/Forming/StretchBendingCurrentProfileParameterResolver.h
+    Core/Forming/StretchBendingCurrentProfileParameterResolver.cpp
     Core/Forming/StretchBendingEvaluator.h
     Core/Forming/StretchBendingEvaluator.cpp
     Core/Forming/StretchBendingEvaluationResult.h

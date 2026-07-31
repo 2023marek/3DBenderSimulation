@@ -29,6 +29,9 @@
 #include "Core/Forming/StretchBendingManufacturingStage.h"
 #include "Core/Forming/StretchBendingManufacturingStateAdvancer.h"
 #include "Core/Forming/StretchBendingManufacturingTiming.h"
+#include "Core/Forming/StretchBendingCurrentProfileParameterResolver.h"
+#include "Core/Forming/StretchBendingCurrentProfileBuilder.h"
+
 
 
 
@@ -226,7 +229,7 @@ AppController::AppController()
     preview.setShowTransformedInsertOverlay(
         true
     );
-
+   
     debugTestSpatialCurveIntegrator();
     debugTestSpatialHelixIntegrator();
     debugTestStretchBendingEvaluation();
@@ -235,6 +238,7 @@ AppController::AppController()
     debugTestStretchBendingGeometry();
     debugTestStretchBendingStateProgression();
     debugTestStretchBendingSpringback();
+
 }
 
 
@@ -1975,7 +1979,7 @@ void AppController::debugTestStretchBendingGeometry()
         evaluator.evaluate(
             input
         );
-
+    
     if (!evaluation.valid)
     {
         // Clear every output owned by this debug scenario so
@@ -1997,6 +2001,8 @@ void AppController::debugTestStretchBendingGeometry()
 
         return;
     }
+
+    
 
     // =====================================================
     // 3. BUILD LOADED AND FINAL REFERENCE PROFILES
@@ -2076,6 +2082,14 @@ void AppController::debugTestStretchBendingGeometry()
             activeZone
         );
 
+
+    debugTestStretchBendingCurrentProfileParameters(
+        evaluation
+    );
+
+    debugTestStretchBendingCurrentProfileBuilder(
+        evaluation
+    );
     // =====================================================
     // 6. DEFINE A SEPARATE DEBUG START FRAME
     //
@@ -2673,4 +2687,200 @@ void AppController::debugTestStretchBendingStateProgression()
         << " accepted="
         << accepted
         << std::endl;
+
+    }
+
+
+    void AppController::
+debugTestStretchBendingCurrentProfileParameters(
+    const StretchBendingEvaluationResult& evaluation)
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    StretchBendingManufacturingState state =
+        debugStretchManufacturingState;
+
+    if (!state.isValid())
+    {
+        std::cout
+            << "[STRETCH CURRENT PARAMETERS]"
+            << " accepted=0"
+            << " reason=InvalidInitialState"
+            << std::endl;
+
+        return;
+    }
+
+    if (!evaluation.valid)
+    {
+        std::cout
+            << "[STRETCH CURRENT PARAMETERS]"
+            << " accepted=0"
+            << " reason=InvalidEvaluation"
+            << std::endl;
+
+        return;
+    }
+
+    auto printParameters =
+        [&](const char* testName)
+        {
+            const StretchBendingCurrentProfileParameters
+                parameters =
+                    StretchBendingCurrentProfileParameterResolver::
+                        resolve(
+                            state,
+                            evaluation
+                        );
+
+            std::cout
+                << "[STRETCH CURRENT PARAMETERS]"
+                << " test="
+                << testName
+                << " stage="
+                << stretchBendingManufacturingStageToString(
+                    state.stage
+                )
+                << " bendingFraction="
+                << state.bendingFraction
+                << " unloadingFraction="
+                << state.unloadingFraction
+                << " curvature="
+                << parameters.curvature
+                << " torsion="
+                << parameters.torsion
+                << " valid="
+                << parameters.isValid()
+                << std::endl;
+        };
+
+    state.stage =
+        StretchBendingManufacturingStage::Ready;
+
+    state.bendingFraction =
+        0.0;
+
+    state.unloadingFraction =
+        0.0;
+
+    printParameters(
+        "Ready"
+    );
+
+    state.stage =
+        StretchBendingManufacturingStage::Forming;
+
+    state.bendingFraction =
+        0.5;
+
+    state.unloadingFraction =
+        0.0;
+
+    printParameters(
+        "HalfForming"
+    );
+
+    state.stage =
+        StretchBendingManufacturingStage::LoadedHold;
+
+    state.bendingFraction =
+        1.0;
+
+    state.unloadingFraction =
+        0.0;
+
+    printParameters(
+        "LoadedHold"
+    );
+
+    state.stage =
+        StretchBendingManufacturingStage::Unloading;
+
+    state.bendingFraction =
+        1.0;
+
+    state.unloadingFraction =
+        0.5;
+
+    printParameters(
+        "HalfUnloading"
+    );
+
+    state.stage =
+        StretchBendingManufacturingStage::Complete;
+
+    state.bendingFraction =
+        1.0;
+
+    state.unloadingFraction =
+        1.0;
+
+    printParameters(
+        "Complete"
+    );
 }
+void AppController::
+debugTestStretchBendingCurrentProfileBuilder(
+    const StretchBendingEvaluationResult& evaluation)
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    StretchBendingManufacturingState state =
+        debugStretchManufacturingState;
+
+    if (!state.isValid())
+    {
+        std::cout
+            << "[STRETCH CURRENT PROFILE]"
+            << " accepted=0"
+            << " reason=InvalidInitialState"
+            << std::endl;
+
+        return;
+    }
+
+    if (!evaluation.valid)
+    {
+        std::cout
+            << "[STRETCH CURRENT PROFILE]"
+            << " accepted=0"
+            << " reason=InvalidEvaluation"
+            << std::endl;
+
+        return;
+    }
+
+    state.stage =
+        StretchBendingManufacturingStage::LoadedHold;
+
+    state.bendingFraction =
+        1.0;
+
+    state.unloadingFraction =
+        0.0;
+
+    const CurvatureTorsionProfile profile =
+        StretchBendingCurrentProfileBuilder::build(
+            state,
+            evaluation
+        );
+
+    std::cout
+        << "[STRETCH CURRENT PROFILE]"
+        << " stage=LoadedHold"
+        << " valid="
+        << profile.valid
+        << " totalLength="
+        << profile.totalArcLength
+        << " activeStart="
+        << state.activeZone.startS
+        << " activeEnd="
+        << state.activeZone.endS
+        << " loadedKappa="
+        << evaluation.loadedCurvatureCommand
+        << std::endl;
+}
+   
+   

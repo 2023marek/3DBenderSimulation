@@ -2744,3 +2744,388 @@ Manufacturing-state-driven loaded/final
 geometry interpolation
 
 But Phase 10K should first compile and produce accepted=1.
+
+
+=======================================================
+============================================================
+
+Phase 10L
+This is an excellent checkpoint. Looking at the 
+complete output, I would approve moving to Phase 10L.
+More importantly, I don't see any architectural 
+issues that should be corrected before proceeding.
+
+
+Let's review it as if this were a design review.
+
+1. Geometry integration ?
+loadedProfileValid=1
+resultValid=1
+complete=1
+nodes=801
+integratedLength=200
+
+This tells us:
+
+Profile
+      ?
+Integrator
+      ?
+SpatialCurveIntegrationResult
+
+works exactly as intended.
+
+The integrated length equals the requested length:
+
+L
+requested
+	?
+
+=L
+integrated
+	?
+
+=200
+
+which is one of the most important checks.
+
+2. Geometry accuracy ?
+
+Loaded:
+
+positionError=5.37e-06
+
+Final:
+
+positionError=4.02e-06
+
+These are essentially numerical round-off errors.
+
+For engineering software these are effectively zero.
+
+So our numerical integrator is behaving very well.
+
+3. Manufacturing state ?
+stage=Ready
+...
+valid=1
+
+Builder works.
+
+4. Active zone ?
+40 ... 160
+
+Classification:
+
+20 -> outside
+
+100 -> inside
+
+180 -> outside
+
+Exactly correct.
+
+5. Invalid zone ?
+170 ... 230
+
+Correctly rejected.
+
+That proves the validation path also works.
+
+6. State machine ?
+
+This is probably the nicest part.
+
+Ready
+?
+
+ApplyingTension
+
+?
+
+Forming
+
+?
+
+LoadedHold
+
+?
+
+Unloading
+
+?
+
+Complete
+
+Every transition occurred exactly once.
+
+No skipped stages.
+
+No repeated stages.
+
+No impossible transitions.
+
+7. Final summary ?
+accepted=1
+
+Exactly what we wanted.
+
+8. Springback ?
+target=0.002
+
+loaded=0.00222222
+
+predicted=0.002
+
+error=0
+
+Perfect.
+
+What has been built so far?
+
+If we redraw the architecture:
+
+Process Input
+      ?
+      ?
+Evaluator
+      ?
+      ?
+EvaluationResult
+      ?
+      ???????????????
+      ?             ?
+Loaded Builder   Final Builder
+      ?             ?
+      ?             ?
+Loaded ??      Final ??
+      ?             ?
+      ???????????????
+             ?
+SpatialCurveIntegrator
+             ?
+             ?
+Loaded Geometry
+
+Final Geometry
+
+Manufacturing State
+             ?
+             ?
+State Advancer
+
+Notice something important.
+
+Everything currently exists independently.
+
+Nothing is coupled incorrectly.
+
+That is exactly what we wanted from the architecture.
+
+This is the perfect moment to connect them
+
+Until now we've proven each subsystem independently.
+
+The next phase is not to create a new subsystem.
+
+It is to make these existing subsystems communicate.
+
+Phase 10L
+
+This is where the architecture becomes much more elegant.
+
+Instead of having
+
+Loaded geometry
+
+Final geometry
+
+as two completely separate objects,
+
+the renderer will ask
+
+"Given the current manufacturing state,
+what curvature profile should I use right now?"
+
+For example
+
+Ready
+
+? = 0
+
+?
+
+ApplyingTension
+
+? = 0
+
+?
+
+Forming
+
+? =
+bendingFraction × loaded?
+
+?
+
+LoadedHold
+
+? =
+loaded?
+
+?
+
+Unloading
+
+? =
+interpolate(
+loaded?,
+final?,
+unloadingFraction)
+
+?
+
+Complete
+
+? =
+final?
+
+The important architectural change is that 
+the renderer will no longer choose between
+a "loaded geometry" and a "final geometry." 
+Instead, it will integrate a single, 
+instantaneous curvature profile derived from
+the current manufacturing state. That keeps one
+integration pipeline and makes the animation
+physically meaningful.
+
+My recommendation before Phase 10L
+
+I would make one small architectural refinement
+before writing any code.
+
+Currently, the state contains:
+
+tensionFraction
+
+bendingFraction
+
+unloadingFraction
+
+These are machine state variables.
+
+Phase 10L will need material state:
+
+currentCurvature
+
+currentTorsion
+
+Those are not the same thing.
+
+For example:
+
+bendingFraction = 0.50
+
+does not automatically define:
+
+currentCurvature
+
+because later you may introduce nonlinear bending laws, 
+material hardening, or machine calibration.
+
+So instead of embedding curvature calculations
+inside StretchBendingManufacturingStateAdvancer, 
+I recommend introducing a separate class, for example:
+
+StretchBendingCurrentProfileBuilder
+
+with a responsibility like:
+
+ManufacturingState
+      +
+EvaluationResult
+      +
+LoadedProfile
+      +
+FinalProfile
+             ?
+             ?
+Current Curvature/Torsion Profile
+
+That preserves the separation we've maintained throughout 
+the project:
+==============
+Advancer ? "Where is the process in time?"
+CurrentProfileBuilder ? "Given that process state,
+what is the instantaneous ?(s), ?(s)?"
+SpatialCurveIntegrator ? "Given ?(s), ?(s),
+compute the geometry."
+================= 
+I think that separation will make future additions 
+like nonlinear springback or varying curvature 
+distributions much easier without modifying the
+state machine itself. This fits very well
+with the architecture
+
+you've been building.
+
+==========================================================
+
+Phase 10K.5 — Separate Process State from Material Curvature
+
+Before Phase 10L, add one small architectural layer:
+
+StretchBendingManufacturingState
+        ?
+        ? process fractions and current stage
+        ?
+StretchBendingCurrentProfileParameters
+        ?
+        ? current curvature/torsion commands
+        ?
+Phase 10L:
+StretchBendingCurrentProfileBuilder
+
+This refinement prevents the state advancer from becoming responsible for material mechanics.
+
+The distinction is:
+
+ManufacturingState
+    describes what the machine is doing
+
+CurrentProfileParameters
+    describes what curvature and torsion
+    the material should currently have
+
+For example:
+
+bendingFraction = 0.5
+
+is a process value.
+
+It does not itself store:
+
+currentCurvature = 0.00111111
+
+The conversion will be handled separately.
+
+10K.5.1 — Do not add curvature to the state
+
+Keep StretchBendingManufacturingState as it currently is:
+
+double tensionFraction;
+double bendingFraction;
+double unloadingFraction;
+
+Do not add:
+
+double currentCurvature;
+double currentTorsion;
+
+to the manufacturing state.
+
+That would mix two responsibilities:
+
+process timeline
++
+material geometry

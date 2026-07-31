@@ -1,5 +1,5 @@
 #include "Core/Geometry/ConstantCurvatureTorsionProfileBuilder.h"
-
+#include <iostream>
 #include <cmath>
 
 CurvatureTorsionProfile
