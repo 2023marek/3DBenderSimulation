@@ -3129,3 +3129,510 @@ That would mix two responsibilities:
 process timeline
 +
 material geometry
+
+===================================================
+
+================================
+
+Phase 10L — Duplicate-boundary sampling check
+
+Your six samples are correct. Now we must verify the
+function inside SpatialCurveIntegrator that reads ?
+and ? for a requested arc length.
+
+I could not locate that interpolation function in the 
+uploaded excerpts, so use the following check directly in 
+SpatialCurveIntegrator.cpp.
+Do not insert the profile-sampling diagnostic into:
+
+debugTestStretchBendingCurrentProfileParameters(...)
+
+That function tests only this transformation:
+
+manufacturing state
+        +
+evaluation
+        ?
+current curvature / torsion parameters
+
+It does not build a CurvatureTorsionProfile, so there is no currentProfile available to sample.
+
+Correct place
+
+Insert it inside:
+
+void AppController::
+debugTestStretchBendingCurrentProfileBuilder(
+    const StretchBendingEvaluationResult& evaluation)
+
+Place it after:
+
+const CurvatureTorsionProfile currentProfile =
+    StretchBendingCurrentProfileBuilder::build(
+        state,
+        evaluation
+    );
+
+and preferably after the six-sample acceptance check has passed.
+
+The structure should be:
+
+void AppController::
+debugTestStretchBendingCurrentProfileBuilder(
+    const StretchBendingEvaluationResult& evaluation)
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    StretchBendingManufacturingState state =
+        debugStretchManufacturingState;
+
+    if (!state.isValid())
+    {
+        return;
+    }
+
+    if (!evaluation.valid)
+    {
+        return;
+    }
+
+    // =================================================
+    // 1. CONFIGURE TEST STATE
+    // =================================================
+
+    state.stage =
+        StretchBendingManufacturingStage::LoadedHold;
+
+    state.bendingFraction =
+        1.0;
+
+    state.unloadingFraction =
+        0.0;
+
+    // =================================================
+    // 2. BUILD CURRENT SPATIAL PROFILE
+    // =================================================
+
+    const CurvatureTorsionProfile currentProfile =
+        StretchBendingCurrentProfileBuilder::build(
+            state,
+            evaluation
+        );
+
+    // =================================================
+    // 3. VERIFY PROFILE CONSTRUCTION
+    //
+    // Your existing six-sample acceptance code remains
+    // here.
+    // =================================================
+
+    // sampleCountAccepted
+    // sampleOrderAccepted
+    // sampleValuesAccepted
+    // profileAcceptance
+
+    // =================================================
+    // 4. VERIFY PROFILE SAMPLING
+    //
+    // ADD SpatialCurveIntegrator and
+    // ProfileSamplingCase HERE.
+    // =================================================
+
+    SpatialCurveIntegrator integrator;
+
+    struct ProfileSamplingCase
+    {
+        const char* name;
+
+        double arcLength;
+
+        double expectedCurvature;
+
+        double expectedTorsion;
+    };
+
+    // Sampling cases continue here...
+}
+Why this is the correct place
+
+There are three separate layers.
+
+Layer 1 — Parameter resolver
+
+Your function:
+
+debugTestStretchBendingCurrentProfileParameters(...)
+
+tests:
+
+state
+  ?
+single current ? and ? pair
+
+For example:
+
+LoadedHold
+    ?
+? = 0.00222222
+? = 0
+
+It knows nothing about spatial positions such as:
+
+s = 20
+s = 40
+s = 100
+s = 160
+s = 180
+
+Therefore, sampling a profile there would mix responsibilities.
+
+Layer 2 — Profile builder
+
+The function:
+
+debugTestStretchBendingCurrentProfileBuilder(...)
+
+tests:
+
+current ? and ?
+        +
+active zone
+        ?
+?(s), ?(s) profile
+
+It produces:
+
+const CurvatureTorsionProfile currentProfile
+
+Now we have both:
+
+profile data
+
+and:
+
+arc-length positions
+
+This is exactly what the sampling test requires.
+
+Layer 3 — Spatial integrator sampler
+
+The call:
+
+integrator.sampleProfileForDebug(
+    currentProfile,
+    testCase.arcLength,
+    actualCurvature,
+    actualTorsion
+);
+
+tests:
+
+?(s), ?(s) profile
+        +
+requested s
+        ?
+actual ? and ? at that position
+
+So the correct learning sequence is:
+
+CurrentProfileParameters test
+    asks:
+    "What ? and ? are active now?"
+
+CurrentProfileBuilder test
+    asks:
+    "Where along the pipe do they apply?"
+
+Profile-sampling test
+    asks:
+    "What values does the integrator actually read at s?"
+Exact insertion point
+
+Use this pattern:
+
+const bool profileAcceptance =
+    currentProfile.valid
+    && sampleCountAccepted
+    && sampleOrderAccepted
+    && sampleValuesAccepted;
+
+std::cout
+    << "[STRETCH CURRENT PROFILE ACCEPTANCE]"
+    // ...
+    << std::endl;
+
+// =====================================================
+// STOP IF PROFILE CONSTRUCTION FAILED
+//
+// Sampling an invalid profile would hide the real cause
+// of the failure.
+// =====================================================
+
+if (!profileAcceptance)
+{
+    std::cout
+        << "[STRETCH CURRENT PROFILE SAMPLING SUMMARY]"
+        << " accepted=0"
+        << " reason=ProfileConstructionFailed"
+        << std::endl;
+
+    return;
+}
+
+// =====================================================
+// SAMPLE THE SAME PROFILE FUNCTION USED BY INTEGRATION
+// =====================================================
+
+SpatialCurveIntegrator integrator;
+
+struct ProfileSamplingCase
+{
+    const char* name;
+
+    double arcLength;
+
+    double expectedCurvature;
+
+    double expectedTorsion;
+};
+
+// Define samplingCases...
+
+This placement is best because the test follows the real data flow:
+
+build profile
+    ?
+validate profile structure
+    ?
+sample profile values
+    ?
+later integrate geometry
+
+Do not put it in the parameter test, because that function ends one architectural layer too early.
+
+Yes. Thanks .Right you mentioned about this before. Check now end of void AppController::
+debugTestStretchBendingCurrentProfileBuilder(............... Now( before building) I have one errror :Severity	Code	Description	Project	File	Line	Suppression State	Details
+Error (active)	E0265	function "SpatialCurveIntegrator::sampleProfileForDebug" (declared at line 44 of "C:\Users\marek\source\repos\pipe_bender_repo\Core\Geometry\SpatialCurveIntegrator.h") is inaccessible	pipe_bender_repo.exe - Qt-Debug	C:\Users\marek\source\repos\pipe_bender_repo\App\AppController.cpp	3185		
+
+The error means sampleProfileForDebug() is declared in a private section of SpatialCurveIntegrator.
+
+AppController cannot call private methods.
+
+Fix
+
+Open:
+
+SpatialCurveIntegrator.h
+
+You likely have something like:
+
+class SpatialCurveIntegrator
+{
+public:
+    SpatialCurveIntegrationResult integrate(
+        const Frame& startFrame,
+        const CurvatureTorsionProfile& profile,
+        double sampleStep
+    ) const;
+
+private:
+    bool sampleProfileForDebug(
+        const CurvatureTorsionProfile& profile,
+        double arcLength,
+        double& outCurvature,
+        double& outTorsion
+    ) const;
+};
+
+Move sampleProfileForDebug() into the public: section:
+
+class SpatialCurveIntegrator
+{
+public:
+    SpatialCurveIntegrationResult integrate(
+        const Frame& startFrame,
+        const CurvatureTorsionProfile& profile,
+        double sampleStep
+    ) const;
+
+    // Debug/test access to the same profile sampling logic
+    // used internally by integrate().
+    bool sampleProfileForDebug(
+        const CurvatureTorsionProfile& profile,
+        double arcLength,
+        double& outCurvature,
+        double& outTorsion
+    ) const;
+
+private:
+    bool sampleProfileAtArcLength(
+        const CurvatureTorsionProfile& profile,
+        double arcLength,
+        double& outCurvature,
+        double& outTorsion
+    ) const;
+};
+
+Then in SpatialCurveIntegrator.cpp:
+
+bool SpatialCurveIntegrator::sampleProfileForDebug(
+    const CurvatureTorsionProfile& profile,
+    double arcLength,
+    double& outCurvature,
+    double& outTorsion) const
+{
+    return sampleProfileAtArcLength(
+        profile,
+        arcLength,
+        outCurvature,
+        outTorsion
+    );
+}
+Why this arrangement is correct
+
+Keep the real worker private:
+
+sampleProfileAtArcLength(...)
+
+Expose only a thin public test wrapper:
+
+sampleProfileForDebug(...)
+
+So production integration still owns the real sampling logic, while diagnostics can verify the exact same implementation.
+
+Do not make both functions public.
+
+building complete.Analize console output:InsideRange=1 recommendedTension=244102 kappa=0.002 bending=0.02 axial=0.03 inner=0.01 outer=0.05 feasible=1 aboveYield=1
+[STRETCH CASE] name=InnerCompression expected=InnerWallCompressionRisk actual=InnerWallCompressionRisk pass=1 minAxial=0.02 recommendedAxial=0.04 maxAxial=0.06 commandedInsideRange=0 recommendedTension=244102 kappa=0.002 bending=0.02 axial=0.01 inner=-0.01 outer=0.03 feasible=1 aboveYield=1
+[STRETCH CASE] name=OuterLimit expected=OuterWallStrainExceeded actual=OuterWallStrainExceeded pass=1 minAxial=0.02 recommendedAxial=0.04 maxAxial=0.06 commandedInsideRange=0 recommendedTension=244102 kappa=0.002 bending=0.02 axial=0.07 inner=0.05 outer=0.09 feasible=1 aboveYield=1
+[STRETCH CASE] name=BelowYield expected=BelowYield actual=BelowYield pass=1 minAxial=0.001 recommendedAxial=0.04 maxAxial=0.079 commandedInsideRange=1 recommendedTension=244102 kappa=0.0001 bending=0.001 axial=0.001 inner=0 outer=0.002 feasible=1 aboveYield=0
+[STRETCH CASE SUMMARY] passed=4/4 result=PASS
+[STRETCH PROFILE] evaluationStatus=Valid valid=1 samples=2 totalLength=200
+[STRETCH PROFILE VALUES] firstS=0 firstKappa=0.00222222 firstTau=0 lastS=200 lastKappa=0.00222222 lastTau=0
+[STRETCH PROFILE REJECTION] evaluationStatus=GeometryNotFeasible profileValid=0 samples=0
+[STRETCH CURRENT PARAMETERS] test=Ready stage=Ready bendingFraction=0 unloadingFraction=0 curvature=0 torsion=0 valid=1
+[STRETCH CURRENT PARAMETERS] test=HalfForming stage=Forming bendingFraction=0.5 unloadingFraction=0 curvature=0.00111111 torsion=0 valid=1
+[STRETCH CURRENT PARAMETERS] test=LoadedHold stage=LoadedHold bendingFraction=1 unloadingFraction=0 curvature=0.00222222 torsion=0 valid=1
+[STRETCH CURRENT PARAMETERS] test=HalfUnloading stage=Unloading bendingFraction=1 unloadingFraction=0.5 curvature=0.00211111 torsion=0 valid=1
+[STRETCH CURRENT PARAMETERS] test=Complete stage=Complete bendingFraction=1 unloadingFraction=1 curvature=0.002 torsion=0 valid=1
+[STRETCH CURRENT PROFILE BUILDER SUCCESS] samples=6 totalArcLength=200 valid=1
+[STRETCH CURRENT PROFILE SAMPLE] index=0 s=0 curvature=0 torsion=0
+[STRETCH CURRENT PROFILE SAMPLE] index=1 s=40 curvature=0 torsion=0
+[STRETCH CURRENT PROFILE SAMPLE] index=2 s=40 curvature=0.00222222 torsion=0
+[STRETCH CURRENT PROFILE SAMPLE] index=3 s=160 curvature=0.00222222 torsion=0
+[STRETCH CURRENT PROFILE SAMPLE] index=4 s=160 curvature=0 torsion=0
+[STRETCH CURRENT PROFILE SAMPLE] index=5 s=200 curvature=0 torsion=0
+[STRETCH CURRENT PROFILE ACCEPTANCE] profileValid=1 sampleCount=6 sampleCountAccepted=1 sampleOrderAccepted=1 sampleValuesAccepted=1 accepted=1
+[STRETCH CURRENT PROFILE TEST SUMMARY] samples=6 totalArcLength=200 valid=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=BeforeStart s=20 sampled=1 curvature=0 expectedCurvature=0 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=StartLeft s=40 sampled=1 curvature=0 expectedCurvature=0 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=StartExact s=40 sampled=1 curvature=0.00222222 expectedCurvature=0.00222222 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=StartRight s=40 sampled=1 curvature=0.00222222 expectedCurvature=0.00222222 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=Inside s=100 sampled=1 curvature=0.00222222 expectedCurvature=0.00222222 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=EndLeft s=160 sampled=1 curvature=0.00222222 expectedCurvature=0.00222222 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=EndExact s=160 sampled=1 curvature=0 expectedCurvature=0 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=EndRight s=160 sampled=1 curvature=0 expectedCurvature=0 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING] case=AfterEnd s=180 sampled=1 curvature=0 expectedCurvature=0 torsion=0 expectedTorsion=0 finite=1 accepted=1
+[STRETCH CURRENT PROFILE SAMPLING SUMMARY] passed=9/9 accepted=1
+[STRETCH SHAPE COMPARISON] loadedValid=1 loadedComplete=1 finalValid=1 finalComplete=1 loadedKappa=0.00222222 finalKappa=0.002 targetKappa=0.002
+[STRETCH SPRINGBACK DISPLACEMENT] loadedEnd=(193.48, -176.282, 0) finalEnd=(194.709, -180.53, 0) endpointRecoveryLength=4.4223
+[STRETCH GEOMETRY] evaluationStatus=Valid loadedProfileValid=1 resultValid=1 complete=1 nodes=801 requestedLength=200 integratedLength=200 loadedCurvature=0.00222222 torsion=0
+[STRETCH GEOMETRY ENDPOINT] firstP=(0, -220, 0) lastP=(193.48, -176.282, 0)
+[STRETCH LOADED GEOMETRY ACCURACY] loadedKappa=0.00222222 expectedEnd=(193.48, -176.282, 0) positionError=5.37282e-06
+[STRETCH FINAL GEOMETRY ACCURACY] finalKappa=0.002 expectedEnd=(194.709, -180.53, 0) positionError=4.0238e-06
+[STRETCH MANUFACTURING STATE] stage=Ready progress=0 tensionFraction=0 bendingFraction=0 unloadingFraction=0 valid=1
+[STRETCH ACTIVE ZONE] startS=40 endS=160 length=120 totalLength=200 valid=1
+[STRETCH ACTIVE ZONE CLASSIFICATION] beforeS=20 beforeActive=0 insideS=100 insideActive=1 afterS=180 afterActive=0
+[STRETCH ACTIVE ZONE REJECTION] zoneStart=170 zoneEnd=230 pipeLength=200 stateStage=Invalid stateValid=0
+[STRETCH STATE TRANSITION] stage=Ready time=0 progress=0
+[STRETCH STATE TRANSITION] stage=ApplyingTension time=0.25 progress=0.0555556 tensionFraction=0.25 bendingFraction=0 unloadingFraction=0
+[STRETCH STATE TRANSITION] stage=Forming time=1 progress=0.222222 tensionFraction=1 bendingFraction=0 unloadingFraction=0
+[STRETCH STATE TRANSITION] stage=LoadedHold time=3 progress=0.666667 tensionFraction=1 bendingFraction=1 unloadingFraction=0
+[STRETCH STATE TRANSITION] stage=Unloading time=3.5 progress=0.777778 tensionFraction=1 bendingFraction=1 unloadingFraction=0
+[STRETCH STATE TRANSITION] stage=Complete time=4.5 progress=1 tensionFraction=0 bendingFraction=1 unloadingFraction=1
+[STRETCH STATE PROGRESSION SUMMARY] stage=Complete elapsedTime=4.5 totalDuration=4.5 progress=1 tensionFraction=0 bendingFraction=1 unloadingFraction=1 accepted=1
+
+This output confirms the remaining Phase 10L technical check passes.
+
+Key result
+[STRETCH CURRENT PROFILE SAMPLING SUMMARY]
+passed=9/9
+accepted=1
+
+The sampler correctly handles all relevant regions and 
+both duplicate boundaries.
+
+Start boundary
+StartLeft   ? ?=0
+StartExact  ? ?=0.00222222
+StartRight  ? ?=0.00222222
+
+So the active curvature begins exactly at:
+
+s=40
+End boundary
+EndLeft   ? ?=0.00222222
+EndExact  ? ?=0
+EndRight  ? ?=0
+
+So the active curvature ends exactly at:
+
+s=160
+
+This matches the intended right-continuous rule:
+
+?(s)=
+?
+?
+?
+	?
+
+0,
+0.00222222,
+0,
+	?
+
+0?s<40
+40?s<160
+160?s?200
+	?
+
+Important numerical confirmation
+
+Every sampling case reports:
+
+sampled=1
+finite=1
+accepted=1
+
+Therefore:
+
+no division by zero occurred,
+no NaN or infinity appeared,
+duplicate arc lengths were handled safely,
+exact-boundary selection is correct,
+no unintended interpolation ramp exists.
+Phase 10L status
+Current parameter resolution      PASS
+Active-zone profile construction  PASS
+Six-sample layout                 PASS
+Sample ordering                   PASS
+Sample values                     PASS
+Duplicate-boundary sampling       PASS
+Finite numerical output           PASS
+Boundary semantics                PASS
+
+Phase 10L is now complete.
+
+The next logical phase is:
+=============================================================
+
+===============================================================
+
+Phase 10M — Integrate and store state-driven active-zone geometry
+
+That phase should use the newly verified currentProfile
+to generate a straight–arc–straight centerline and compare
+its geometry against the 
+expected active-zone shape.

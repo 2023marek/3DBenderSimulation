@@ -2861,25 +2861,396 @@ debugTestStretchBendingCurrentProfileBuilder(
     state.unloadingFraction =
         0.0;
 
-    const CurvatureTorsionProfile profile =
+    const CurvatureTorsionProfile currentProfile =
         StretchBendingCurrentProfileBuilder::build(
             state,
             evaluation
         );
 
+    // =====================================================
+// PHASE 10L — CURRENT PROFILE SAMPLE ACCEPTANCE
+//
+// Expected profile:
+//
+//     s=0       s=40             s=160       s=200
+//      |----------|================|------------|
+//          k=0        k=current        k=0
+//
+// Six samples are expected because each active-zone
+// boundary contains two values:
+//
+//     outside value
+//     inside value
+//
+// This diagnostic verifies profile construction only.
+// It does not yet verify how SpatialCurveIntegrator
+// resolves duplicate arc-length samples.
+// =====================================================
+
+    const double tolerance =
+        1e-12;
+
+    bool sampleCountAccepted =
+        currentProfile.samples.size()
+        == 6;
+
+    bool sampleValuesAccepted =
+        false;
+
+    bool sampleOrderAccepted =
+        false;
+
+    if (sampleCountAccepted)
+    {
+        const CurvatureTorsionSample& sample0 =
+            currentProfile.samples[0];
+
+        const CurvatureTorsionSample& sample1 =
+            currentProfile.samples[1];
+
+        const CurvatureTorsionSample& sample2 =
+            currentProfile.samples[2];
+
+        const CurvatureTorsionSample& sample3 =
+            currentProfile.samples[3];
+
+        const CurvatureTorsionSample& sample4 =
+            currentProfile.samples[4];
+
+        const CurvatureTorsionSample& sample5 =
+            currentProfile.samples[5];
+
+        // =================================================
+        // PRINT EVERY GENERATED SAMPLE
+        // =================================================
+
+        for (std::size_t index = 0;
+            index < currentProfile.samples.size();
+            ++index)
+        {
+            const CurvatureTorsionSample& sample =
+                currentProfile.samples[index];
+
+            std::cout
+                << "[STRETCH CURRENT PROFILE SAMPLE]"
+                << " index="
+                << index
+                << " s="
+                << sample.arcLength
+                << " curvature="
+                << sample.curvature
+                << " torsion="
+                << sample.torsion
+                << std::endl;
+        }
+
+        // =================================================
+        // VERIFY ARC-LENGTH ORDER
+        //
+        // Non-decreasing order is required rather than
+        // strictly increasing order because duplicate
+        // positions are intentional at s=40 and s=160.
+        // =================================================
+
+        sampleOrderAccepted =
+            sample0.arcLength <= sample1.arcLength
+            && sample1.arcLength <= sample2.arcLength
+            && sample2.arcLength <= sample3.arcLength
+            && sample3.arcLength <= sample4.arcLength
+            && sample4.arcLength <= sample5.arcLength;
+
+        // =================================================
+        // VERIFY EXACT EXPECTED SAMPLE VALUES
+        // =================================================
+
+        const bool sample0Accepted =
+            std::abs(
+                sample0.arcLength - 0.0
+            ) <= tolerance
+            && std::abs(
+                sample0.curvature - 0.0
+            ) <= tolerance
+            && std::abs(
+                sample0.torsion - 0.0
+            ) <= tolerance;
+
+        const bool sample1Accepted =
+            std::abs(
+                sample1.arcLength
+                - state.activeZone.startS
+            ) <= tolerance
+            && std::abs(
+                sample1.curvature - 0.0
+            ) <= tolerance
+            && std::abs(
+                sample1.torsion - 0.0
+            ) <= tolerance;
+
+        const bool sample2Accepted =
+            std::abs(
+                sample2.arcLength
+                - state.activeZone.startS
+            ) <= tolerance
+            && std::abs(
+                sample2.curvature
+                - evaluation.loadedCurvatureCommand
+            ) <= tolerance
+            && std::abs(
+                sample2.torsion
+                - evaluation.targetTorsion
+            ) <= tolerance;
+
+        const bool sample3Accepted =
+            std::abs(
+                sample3.arcLength
+                - state.activeZone.endS
+            ) <= tolerance
+            && std::abs(
+                sample3.curvature
+                - evaluation.loadedCurvatureCommand
+            ) <= tolerance
+            && std::abs(
+                sample3.torsion
+                - evaluation.targetTorsion
+            ) <= tolerance;
+
+        const bool sample4Accepted =
+            std::abs(
+                sample4.arcLength
+                - state.activeZone.endS
+            ) <= tolerance
+            && std::abs(
+                sample4.curvature - 0.0
+            ) <= tolerance
+            && std::abs(
+                sample4.torsion - 0.0
+            ) <= tolerance;
+
+        const bool sample5Accepted =
+            std::abs(
+                sample5.arcLength
+                - evaluation.targetArcLength
+            ) <= tolerance
+            && std::abs(
+                sample5.curvature - 0.0
+            ) <= tolerance
+            && std::abs(
+                sample5.torsion - 0.0
+            ) <= tolerance;
+
+        sampleValuesAccepted =
+            sample0Accepted
+            && sample1Accepted
+            && sample2Accepted
+            && sample3Accepted
+            && sample4Accepted
+            && sample5Accepted;
+    }
+
+    const bool profileAcceptance =
+        currentProfile.valid
+        && sampleCountAccepted
+        && sampleOrderAccepted
+        && sampleValuesAccepted;
+
     std::cout
-        << "[STRETCH CURRENT PROFILE]"
-        << " stage=LoadedHold"
+        << "[STRETCH CURRENT PROFILE ACCEPTANCE]"
+        << " profileValid="
+        << currentProfile.valid
+        << " sampleCount="
+        << currentProfile.samples.size()
+        << " sampleCountAccepted="
+        << sampleCountAccepted
+        << " sampleOrderAccepted="
+        << sampleOrderAccepted
+        << " sampleValuesAccepted="
+        << sampleValuesAccepted
+        << " accepted="
+        << profileAcceptance
+        << std::endl;
+
+    if (!profileAcceptance)
+    {
+        std::cout
+            << "[STRETCH CURRENT PROFILE SAMPLING SUMMARY]"
+            << " accepted=0"
+            << " reason=ProfileConstructionFailed"
+            << std::endl;
+
+        return;
+    }
+   
+
+    std::cout
+        << "[STRETCH CURRENT PROFILE TEST SUMMARY]"
+        << " samples="
+        << currentProfile.samples.size()
+        << " totalArcLength="
+        << currentProfile.totalArcLength
         << " valid="
-        << profile.valid
-        << " totalLength="
-        << profile.totalArcLength
-        << " activeStart="
-        << state.activeZone.startS
-        << " activeEnd="
-        << state.activeZone.endS
-        << " loadedKappa="
-        << evaluation.loadedCurvatureCommand
+        << currentProfile.valid
+        << " accepted="
+        << profileAcceptance
+        << std::endl;
+
+    SpatialCurveIntegrator integrator;
+
+    struct ProfileSamplingCase
+    {
+        const char* name;
+        double arcLength;
+        double expectedCurvature;
+        double expectedTorsion;
+    };
+
+    const double boundaryOffset =
+        1e-6;
+
+    const std::vector<ProfileSamplingCase> samplingCases =
+    {
+        {
+            "BeforeStart",
+            20.0,
+            0.0,
+            0.0
+        },
+        {
+            "StartLeft",
+            state.activeZone.startS
+                - boundaryOffset,
+            0.0,
+            0.0
+        },
+        {
+            "StartExact",
+            state.activeZone.startS,
+            evaluation.loadedCurvatureCommand,
+            evaluation.targetTorsion
+        },
+        {
+            "StartRight",
+            state.activeZone.startS
+                + boundaryOffset,
+            evaluation.loadedCurvatureCommand,
+            evaluation.targetTorsion
+        },
+        {
+            "Inside",
+            100.0,
+            evaluation.loadedCurvatureCommand,
+            evaluation.targetTorsion
+        },
+        {
+            "EndLeft",
+            state.activeZone.endS
+                - boundaryOffset,
+            evaluation.loadedCurvatureCommand,
+            evaluation.targetTorsion
+        },
+        {
+            "EndExact",
+            state.activeZone.endS,
+            0.0,
+            0.0
+        },
+        {
+            "EndRight",
+            state.activeZone.endS
+                + boundaryOffset,
+            0.0,
+            0.0
+        },
+        {
+            "AfterEnd",
+            180.0,
+            0.0,
+            0.0
+        }
+    };
+
+
+    std::size_t passedSamplingCases =
+        0;
+
+    for (const ProfileSamplingCase& testCase
+        : samplingCases)
+    {
+        double actualCurvature =
+            0.0;
+
+        double actualTorsion =
+            0.0;
+
+        const bool sampled =
+            integrator.sampleProfileForDebug(
+                currentProfile,
+                testCase.arcLength,
+                actualCurvature,
+                actualTorsion
+            );
+
+        const bool finite =
+            std::isfinite(actualCurvature)
+            && std::isfinite(actualTorsion);
+
+        const bool curvatureAccepted =
+            std::abs(
+                actualCurvature
+                - testCase.expectedCurvature
+            ) <= 1e-10;
+
+        const bool torsionAccepted =
+            std::abs(
+                actualTorsion
+                - testCase.expectedTorsion
+            ) <= 1e-10;
+
+        const bool accepted =
+            sampled
+            && finite
+            && curvatureAccepted
+            && torsionAccepted;
+
+        if (accepted)
+        {
+            ++passedSamplingCases;
+        }
+
+        std::cout
+            << "[STRETCH CURRENT PROFILE SAMPLING]"
+            << " case="
+            << testCase.name
+            << " s="
+            << testCase.arcLength
+            << " sampled="
+            << sampled
+            << " curvature="
+            << actualCurvature
+            << " expectedCurvature="
+            << testCase.expectedCurvature
+            << " torsion="
+            << actualTorsion
+            << " expectedTorsion="
+            << testCase.expectedTorsion
+            << " finite="
+            << finite
+            << " accepted="
+            << accepted
+            << std::endl;
+    }
+
+    const bool samplingAccepted =
+        passedSamplingCases
+        == samplingCases.size();
+
+    std::cout
+        << "[STRETCH CURRENT PROFILE SAMPLING SUMMARY]"
+        << " passed="
+        << passedSamplingCases
+        << "/"
+        << samplingCases.size()
+        << " accepted="
+        << samplingAccepted
         << std::endl;
 }
    

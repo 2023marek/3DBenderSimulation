@@ -37,7 +37,7 @@ struct CurvatureTorsionProfile
     {
         samples.clear();
 
-        totalArcLength =
+        totalArcLength   =
             0.0;
 
         valid =

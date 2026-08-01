@@ -1,6 +1,10 @@
 #include "Core/Geometry/SpatialCurveIntegrator.h"
 #include <algorithm>
 #include <cmath>
+#include <cstddef>
+
+
+
 SpatialCurveIntegrationResult
 SpatialCurveIntegrator::integrate(
     const Frame& startFrame,
@@ -425,16 +429,21 @@ bool SpatialCurveIntegrator::sampleProfileAtArcLength(
     const CurvatureTorsionProfile& profile,
     double arcLength,
     double& outCurvature,
-    double& outTorsion
-) const
+    double& outTorsion) const
 {
+    if (!profile.valid)
+        return false;
+
     if (profile.samples.empty())
+        return false;
+
+    if (!std::isfinite(arcLength))
         return false;
 
     const auto& samples =
         profile.samples;
 
-    if (arcLength <= samples.front().arcLength)
+    if (arcLength < samples.front().arcLength)
     {
         outCurvature =
             samples.front().curvature;
@@ -456,68 +465,98 @@ bool SpatialCurveIntegrator::sampleProfileAtArcLength(
         return true;
     }
 
-    for (size_t i = 1;
+    // Find the rightmost sample whose arc length is <=
+    // the requested position.
+    //
+    // With duplicate boundaries:
+    //
+    //     s=40, ?=0
+    //     s=40, ?=active
+    //
+    // arcLength=40 selects the second value.
+    std::size_t leftIndex =
+        0;
+
+    for (std::size_t i = 0;
         i < samples.size();
         ++i)
     {
-        const CurvatureTorsionSample& previous =
-            samples[i - 1];
-
-        const CurvatureTorsionSample& current =
-            samples[i];
-
-        if (arcLength > current.arcLength)
-            continue;
-
-        double interval =
-            current.arcLength
-            - previous.arcLength;
-
-        if (interval <= 1e-12)
+        if (samples[i].arcLength <= arcLength)
         {
-            outCurvature =
-                current.curvature;
-
-            outTorsion =
-                current.torsion;
-
-            return true;
+            leftIndex =
+                i;
         }
+        else
+        {
+            break;
+        }
+    }
 
-        double interpolation =
-            (
-                arcLength
-                - previous.arcLength
-                )
-            / interval;
+    const CurvatureTorsionSample& left =
+        samples[leftIndex];
 
-        interpolation =
-            std::clamp(
-                interpolation,
-                0.0,
-                1.0
-            );
-
+    if (leftIndex + 1 >= samples.size())
+    {
         outCurvature =
-            previous.curvature
-            + interpolation
-            * (
-                current.curvature
-                - previous.curvature
-                );
+            left.curvature;
 
         outTorsion =
-            previous.torsion
-            + interpolation
-            * (
-                current.torsion
-                - previous.torsion
-                );
+            left.torsion;
 
         return true;
     }
 
-    return false;
+    const CurvatureTorsionSample& right =
+        samples[leftIndex + 1];
+
+    const double interval =
+        right.arcLength
+        - left.arcLength;
+
+    if (interval <= 1e-12)
+    {
+        outCurvature =
+            right.curvature;
+
+        outTorsion =
+            right.torsion;
+
+        return true;
+    }
+
+    double interpolation =
+        (
+            arcLength
+            - left.arcLength
+            )
+        / interval;
+
+    interpolation =
+        std::clamp(
+            interpolation,
+            0.0,
+            1.0
+        );
+
+    outCurvature =
+        left.curvature
+        + interpolation
+        * (
+            right.curvature
+            - left.curvature
+            );
+
+    outTorsion =
+        left.torsion
+        + interpolation
+        * (
+            right.torsion
+            - left.torsion
+            );
+
+    return
+        std::isfinite(outCurvature)
+        && std::isfinite(outTorsion);
 }
 
 bool SpatialCurveIntegrator::isFiniteFrame(
@@ -539,5 +578,19 @@ bool SpatialCurveIntegrator::isFiniteFrame(
         && std::isfinite(frame.B.x)
         && std::isfinite(frame.B.y)
         && std::isfinite(frame.B.z);
+}
+
+bool SpatialCurveIntegrator::sampleProfileForDebug(
+    const CurvatureTorsionProfile& profile,
+    double arcLength,
+    double& outCurvature,
+    double& outTorsion) const
+{
+    return sampleProfileAtArcLength(
+        profile,
+        arcLength,
+        outCurvature,
+        outTorsion
+    );
 }
 

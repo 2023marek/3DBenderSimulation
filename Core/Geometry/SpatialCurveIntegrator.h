@@ -12,7 +12,12 @@ public:
         const CurvatureTorsionProfile& profile,
         double sampleStep
     ) const;
-
+bool sampleProfileForDebug(
+        const CurvatureTorsionProfile& profile,
+        double arcLength,
+        double& outCurvature,
+        double& outTorsion
+    ) const;
 private:
     bool isValidFrame(
         const Frame& frame
@@ -40,4 +45,8 @@ private:
     bool isFiniteFrame(
         const Frame& frame
     ) const;
+
+    
+
+
 };
