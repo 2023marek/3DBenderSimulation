@@ -3636,3 +3636,630 @@ That phase should use the newly verified currentProfile
 to generate a straight–arc–straight centerline and compare
 its geometry against the 
 expected active-zone shape.
+
+Phase 10M — Integrate and Store State-Driven Active-Zone Geometry
+
+Phase 10L proved that the current profile is:
+
+s=0          s=40                 s=160         s=200
+ |-------------|=====================|-------------|
+   straight          active bend          straight
+
+Phase 10M converts that profile into centerline nodes using the shared SpatialCurveIntegrator.
+
+This geometry must remain separate from:
+
+debugStretchLoadedIntegrationResult
+debugStretchFinalIntegrationResult
+normal manufacturing geometry
+rotary-draw geometry
+10M.1 — Add a separate st
+
+10M.1 — Add a separate stored result
+
+In AppController.h, near your other debug integration results, add:
+
+// State-driven active-zone geometry.
+//
+// This result represents the instantaneous geometry
+// generated from:
+//
+//     manufacturing state
+//     +
+//     current active-zone profile
+//
+// It is separate from the full-length loaded and final
+// reference geometries.
+SpatialCurveIntegrationResult
+    debugStretchCurrentIntegrationResult;
+
+Do not reuse:
+
+debugStretchLoadedIntegrationResult
+
+because that result represents constant loaded curvature over the entire 200 mm pipe.
+
+The new result represents:
+
+40 mm straight
+120 mm bent
+40 mm straight
+
+10M.2 — Add a dedicated diagnostic function
+
+In AppController.h add:
+
+void debugTestStretchBendingCurrentGeometry(
+    const StretchBendingEvaluationResult& evaluation
+);
+
+The parameter is required because evaluation is local to:
+
+debugTestStretchBendingGeometry()
+10M.3 — Call it from the correct place
+
+Inside:
+
+void AppController::debugTestStretchBendingGeometry()
+
+you already have:
+
+debugTestStretchBendingCurrentProfileParameters(
+    evaluation
+);
+
+debugTestStretchBendingCurrentProfileBuilder(
+    evaluation
+);
+
+Add:
+
+debugTestStretchBendingCurrentGeometry(
+    evaluation
+);
+
+The order becomes:
+
+debugTestStretchBendingCurrentProfileParameters(
+    evaluation
+);
+
+debugTestStretchBendingCurrentProfileBuilder(
+    evaluation
+);
+
+debugTestStretchBendingCurrentGeometry(
+    evaluation
+);
+
+This placement is correct because both required inputs already exist:
+
+evaluation
+debugStretchManufacturingState
+
+
+10M.4 — Implement the geometry test
+
+Add to AppController.cpp:
+
+void AppController::
+debugTestStretchBendingCurrentGeometry(
+    const StretchBendingEvaluationResult& evaluation)
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    // =================================================
+    // 1. COPY THE STORED READY STATE
+    //
+    // Work on a copy so this diagnostic does not change
+    // the manufacturing state us..................
+    ............................
+    10M.5 — Expected geometry
+
+For your current values:
+
+total length     = 200
+active start     = 40
+active end       = 160
+active length    = 120
+after length     = 40
+loaded curvature = 0.00222222
+torsion          = 0
+
+the bend angle inside the active zone is:
+
+?=?L
+active
+	?
+
+?=0.00222222×120
+??0.2666664 rad
+
+approximately:
+
+15.28
+?
+
+The generated centerline should therefore look like:
+
+start
+  ????????????????????
+      40 mm straight   \
+                        \
+                         ) 120 mm shallow arc
+                          \
+                           \????????????????? end
+                               40 mm straight
+
+The final straight section must follow the tangent
+created by the active bend. It must not return to 
+the original +X direction.
+
+10M.6 — Expected basic console output
+
+Approximately:
+
+[STRETCH CURRENT GEOMETRY]
+stage=LoadedHold
+profileValid=1
+resultValid=1
+complete=1
+samples=6
+nodes=801
+requestedLength=200
+integratedLength=200
+activeStart=40
+activeEnd=160
+curvature=0.00222222
+torsion=0
+
+And finally:
+
+[STRETCH CURRENT GEOMETRY ACCEPTANCE] PASS
+
+Because:
+
+200 / 0.25 = 800 integration steps
+
+the expected node count is:
+
+801 nodes
+
+including the initial node.
+
+Phase 10M data flow
+LoadedHold manufacturing state
+             ?
+             ?
+CurrentProfileParameterResolver
+             ?
+             ?
+?current = 0.00222222
+?current = 0
+             ?
+             ?
+CurrentProfileBuilder
+             ?
+             ?
+straight / active / straight profile
+             ?
+             ?
+SpatialCurveIntegrator
+             ?
+             ?
+debugStretchCurrentIntegrationResult
+             ?
+             ?
+straight–arc–straight centerline nodes
+
+Phase 10M is accepted when the stored result is complete, contains 801 nodes, reaches exactly 200 mm, and the analytical
+position/tangent checks pass.
+
+============================================================
+
+
+
+
+
+
+Phase 10O — Drive Current Geometry Through 
+Manufacturing-State Progression
+
+The goal now is to stop showing only a fixed LoadedHold shape.
+
+Instead, the orange geometry should follow:
+
+Ready
+ApplyingTension
+Forming
+LoadedHold
+Unloading
+Complete
+
+The pipeline becomes:
+
+elapsed time
+    ?
+StretchBendingManufacturingStateAdvancer
+    ?
+updated manufacturing state
+    ?
+StretchBendingCurrentProfileBuilder
+    ?
+current ?(s), ?(s)
+    ?
+SpatialCurveIntegrator
+    ?
+debugStretchCurrentIntegrationResult
+    ?
+orange preview
+10O.1 Store the evaluation and start frame
+
+The update function will need data that currently
+exists only locally inside:
+
+debugTestStretchBendingGeometry()
+
+Add these members to AppController.h:
+
+StretchBendingEvaluationResult
+    debugStretchEvaluationResult;
+
+Frame
+    debugStretchCurrentStartFrame;
+
+double debugStretchCurrentSampleStep =
+    0.25;
+
+bool debugStretchPlaybackPrepared =
+    false;
+
+These members allow later state updates without 
+rerunning the initial
+feasibility setup.
+
+10O.2 Store the valid evaluation
+
+Inside:
+
+debugTestStretchBendingGeometry()
+
+after:
+
+if (!evaluation.valid)
+{
+    // ...
+    return;
+}
+
+store it:
+
+debugStretchEvaluationResult =
+    evaluation;
+
+
+10O.3 Store the current-preview start frame
+
+In:
+
+debugTestStretchBendingCurrentGeometry(...)
+
+you currently create:
+
+Frame startFrame;
+
+After configuring it, store it:
+
+debugStretchCurrentStartFrame =
+    startFrame;
+
+debugStretchCurrentSampleStep =
+    CURRENT_GEOMETRY_SAMPLE_STEP;
+
+Then, after successful integration:
+
+debugStretchPlaybackPrepared =
+    result.valid
+    && result.isComplete();
+
+On rejection, reset it:
+
+debugStretchPlaybackPrepared =
+    false;
+
+
+
+
+
+    10O.4 Add a geometry rebuild function
+
+In AppController.h:
+
+bool rebuildDebugStretchCurrentGeometry();
+
+In AppController.cpp:
+
+bool AppController::
+rebuildDebugStretchCurrentGeometry()
+{
+    if (!debugStretchPlaybackPrepared)
+    {
+        debugStretchCurrentIntegrationResult.clear();
+        return false;
+    }
+
+    if (!debugStretchManufacturingState.isValid())
+    {
+        debugStretchCurrentIntegrationResult.clear();
+        return false;
+    }
+
+    if (!debugStretchEvaluationResult.valid)
+    {
+        debugStretchCurrentIntegrationResult.clear();
+        return false;
+    }
+
+    const CurvatureTorsionProfile currentProfile =
+        StretchBendingCurrentProfileBuilder::build(
+            debugStretchManufacturingState,
+            debugStretchEvaluationResult
+        );
+
+    if (!currentProfile.valid)
+    {
+        debugStretchCurrentIntegrationResult.clear();
+        return false;
+    }
+
+    SpatialCurveIntegrator integrator;
+
+    debugStretchCurrentIntegrationResult =
+        integrator.integrate(
+            debugStretchCurrentStartFrame,
+            currentProfile,
+            debugStretchCurrentSampleStep
+        );
+
+    return
+        debugStretchCurrentIntegrationResult.valid
+        && debugStretchCurrentIntegrationResult.isComplete();
+}
+
+This function owns:
+
+state
+    ?
+profile
+    ?
+geometry
+
+It should not advance time.
+It only rebuilds geometry from the current state.
+
+
+10O.5 Add a state-advance function
+
+In AppController.h:
+
+void advanceDebugStretchBendingPlayback(
+    double deltaTime
+);
+
+Implementation:
+
+void AppController::
+advanceDebugStretchBendingPlayback(
+    double deltaTime)
+{
+    if (!debugStretchPlaybackPrepared)
+        return;
+
+    if (!std::isfinite(deltaTime))
+        return;
+
+    if (deltaTime <= 0.0)
+        return;
+
+    StretchBendingManufacturingStateAdvancer advancer;
+
+    advancer.advance(
+        debugStretchManufacturingState,
+        deltaTime
+    );
+
+    rebuildDebugStretchCurrentGeometry();
+}
+
+Adapt the advance() arguments to your actual advancer API.
+It may require:
+
+state
+timing
+deltaTime
+
+For example:
+
+debugStretchManufacturingState =
+    StretchBendingManufacturingStateAdvancer::advance(
+        debugStretchManufacturingState,
+        debugStretchTiming,
+        deltaTime
+    );
+
+Use the exact pattern already used in your state-progression test.
+
+
+
+
+10O.6 Important architectural rule
+
+Do not advance or integrate inside:
+
+GLView::paintGL()
+
+paintGL() should only read and draw:
+
+AppController updates state and geometry
+GLView renders stored geometry
+
+Do not do:
+
+advanceDebugStretchBendingPlayback(...)
+
+inside:
+
+drawStretchCurrentGeometryDebugPreview()
+
+because rendering frequency is not a reliable simulation clock.
+
+
+10O.7 Add a temporary manual step command
+
+For the first test, use a key press instead of continuous animation.
+
+For example, in your key handling:
+
+case Qt::Key_BracketRight:
+{
+    if (app)
+    {
+        app->advanceDebugStretchBendingPlayback(
+            0.25
+        );
+
+        update();
+    }
+
+    break;
+}
+
+Each key press advances the process by:
+
+0.25 seconds
+
+This gives predictable debugging.
+
+Suggested keys:
+
+] = advance stretch playback
+[ = reset stretch playback
+
+
+
+
+10O.8 Add reset support
+
+In AppController.h:
+
+void resetDebugStretchBendingPlayback();
+
+Implementation:
+
+void AppController::
+resetDebugStretchBendingPlayback()
+{
+    if (!debugStretchEvaluationResult.valid)
+        return;
+
+    StretchBendingProcessInput input =
+        buildTestStretchBendingProcessInput();
+
+    input.geometry.targetCurvature =
+        0.002;
+
+    input.geometry.targetTorsion =
+        0.0;
+
+    input.geometry.targetArcLength =
+        200.0;
+
+    input.axialStretchStrain =
+        0.03;
+
+    input.sampleStep =
+        debugStretchCurrentSampleStep;
+
+    StretchBendingActiveZone activeZone;
+
+    activeZone.startS =
+        40.0;
+
+    activeZone.endS =
+        160.0;
+
+    debugStretchManufacturingState =
+        StretchBendingManufacturingStateBuilder::
+            buildReadyState(
+                input,
+                debugStretchEvaluationResult,
+                activeZone
+            );
+
+    rebuildDebugStretchCurrentGeometry();
+
+    std::cout
+        << "[STRETCH PLAYBACK RESET]"
+        << " stage="
+        << stretchBendingManufacturingStageToString(
+            debugStretchManufacturingState.stage
+        )
+        << " time="
+        << debugStretchManufacturingState.elapsedTime
+        << std::endl;
+}
+
+A cleaner future improvement would store the accepted input too,
+but this is sufficient for the current debug phase.
+
+
+
+
+10O.9 Add one update diagnostic
+
+After advancing and rebuilding:
+
+std::cout
+    << "[STRETCH PLAYBACK STEP]"
+    << " stage="
+    << stretchBendingManufacturingStageToString(
+        debugStretchManufacturingState.stage
+    )
+    << " time="
+    << debugStretchManufacturingState.elapsedTime
+    << " progress="
+    << debugStretchManufacturingState.progress
+    << " tensionFraction="
+    << debugStretchManufacturingState.tensionFraction
+    << " bendingFraction="
+    << debugStretchManufacturingState.bendingFraction
+    << " unloadingFraction="
+    << debugStretchManufacturingState.unloadingFraction
+    << " geometryValid="
+    << debugStretchCurrentIntegrationResult.valid
+    << " nodes="
+    << debugStretchCurrentIntegrationResult.nodes.size()
+    << std::endl;
+
+Expected progression:
+
+Ready:
+    orange shape straight
+
+ApplyingTension:
+    still straight
+
+Forming:
+    orange active zone gradually bends
+
+LoadedHold:
+    maximum loaded bend
+
+Unloading:
+    orange bend opens slightly
+
+Complete:
+    final unloaded curvature remains
+
+

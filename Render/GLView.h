@@ -51,6 +51,8 @@ private:
         const Frame& frame,
         double size);
 
+    bool showStretchCurrentGeometryPreview =
+        true;
     // =========================
     // DATA SOURCE
     // =========================
@@ -130,7 +132,7 @@ public:
 private:
     PipeRenderer pipeRenderer;
     PipeRenderer spatialDebugRenderer;
-
+    PipeRenderer stretchCurrentDebugRenderer;
     TubeMesh tubeMesh;
     void drawManufacturingMeshZones(
         const ManufacturingRenderData& data
@@ -182,4 +184,15 @@ private:
         double radius,
         int radialSegments
     );
+    void drawStretchCurrentGeometryDebugPreview();
+
+    //helper
+    void drawStretchCurrentGeometryLine(
+        const std::vector<PipeNode>& nodes
+    );
+
+    void drawStretchCurrentGeometryTube(
+        const std::vector<PipeNode>& nodes
+    );
+
 };

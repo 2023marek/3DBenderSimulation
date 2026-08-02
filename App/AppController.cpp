@@ -2090,6 +2090,10 @@ void AppController::debugTestStretchBendingGeometry()
     debugTestStretchBendingCurrentProfileBuilder(
         evaluation
     );
+
+    debugTestStretchBendingCurrentGeometry(
+        evaluation
+    );
     // =====================================================
     // 6. DEFINE A SEPARATE DEBUG START FRAME
     //
@@ -3253,5 +3257,452 @@ debugTestStretchBendingCurrentProfileBuilder(
         << samplingAccepted
         << std::endl;
 }
+
+void AppController::
+debugTestStretchBendingCurrentGeometry(
+    const StretchBendingEvaluationResult& evaluation)
+{
+    if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
+        return;
+
+    // =================================================
+    // 1. COPY THE STORED READY STATE
+    //
+    // Work on a copy so this diagnostic does not change
+    // the manufacturing state used by other tests.
+    // =================================================
+
+    StretchBendingManufacturingState state =
+        debugStretchManufacturingState;
+
+    if (!state.isValid())
+    {
+        debugStretchCurrentIntegrationResult.clear();
+
+        std::cout
+            << "[STRETCH CURRENT GEOMETRY]"
+            << " accepted=0"
+            << " reason=InvalidManufacturingState"
+            << std::endl;
+
+        return;
+    }
+
+    if (!evaluation.valid)
+    {
+        debugStretchCurrentIntegrationResult.clear();
+
+        std::cout
+            << "[STRETCH CURRENT GEOMETRY]"
+            << " accepted=0"
+            << " reason=InvalidEvaluation"
+            << std::endl;
+
+        return;
+    }
+
+    // =================================================
+    // 2. CONFIGURE A KNOWN LOADED-HOLD STATE
+    //
+    // LoadedHold gives:
+    //
+    //     current curvature =
+    //         loadedCurvatureCommand
+    //
+    //     current torsion =
+    //         targetTorsion
+    // =================================================
+
+    state.stage =
+        StretchBendingManufacturingStage::LoadedHold;
+
+    state.bendingFraction =
+        1.0;
+
+    state.unloadingFraction =
+        0.0;
+
+    state.tensionFraction =
+        1.0;
+
+    // =================================================
+    // 3. BUILD THE STATE-DRIVEN ACTIVE-ZONE PROFILE
+    // =================================================
+
+    const CurvatureTorsionProfile currentProfile =
+        StretchBendingCurrentProfileBuilder::build(
+            state,
+            evaluation
+        );
+
+    if (!currentProfile.valid)
+    {
+        debugStretchCurrentIntegrationResult.clear();
+
+        std::cout
+            << "[STRETCH CURRENT GEOMETRY]"
+            << " accepted=0"
+            << " reason=InvalidCurrentProfile"
+            << std::endl;
+
+        return;
+    }
+
+    // =================================================
+    // 4. DEFINE A SEPARATE DEBUG START FRAME
+    //
+    // Keep this geometry away from the existing:
+    //
+    //     planar integrator result
+    //     helix result
+    //     loaded stretch result
+    //     unloaded stretch result
+    //
+    // Initial direction:
+    //     T = +X
+    //
+    // Bending direction:
+    //     N = +Y
+    // =================================================
+
+    Frame startFrame;
+
+    startFrame.P =
+        Vec3D{
+            0.0,
+            -320.0,
+            0.0
+    };
+
+    startFrame.T =
+        Vec3D{
+            1.0,
+            0.0,
+            0.0
+    };
+
+    startFrame.N =
+        Vec3D{
+            0.0,
+            1.0,
+            0.0
+    };
+
+    startFrame.B =
+        Vec3D{
+            0.0,
+            0.0,
+            1.0
+    };
+
+    // =================================================
+    // 5. INTEGRATE AND STORE CURRENT GEOMETRY
+    //
+    // Use the same shared integrator as the planar,
+    // helix, loaded and final geometry tests.
+    // =================================================
+
+    SpatialCurveIntegrator integrator;
+
+    constexpr double CURRENT_GEOMETRY_SAMPLE_STEP =
+        0.25;
+
+    debugStretchCurrentIntegrationResult =
+        integrator.integrate(
+            startFrame,
+            currentProfile,
+            CURRENT_GEOMETRY_SAMPLE_STEP
+        );
+
+    const SpatialCurveIntegrationResult& result =
+        debugStretchCurrentIntegrationResult;
+
+    // =================================================
+    // 6. BASIC RESULT DIAGNOSTIC
+    // =================================================
+
+    std::cout
+        << "[STRETCH CURRENT GEOMETRY]"
+        << " stage="
+        << stretchBendingManufacturingStageToString(
+            state.stage
+        )
+        << " profileValid="
+        << currentProfile.valid
+        << " resultValid="
+        << result.valid
+        << " complete="
+        << result.isComplete()
+        << " samples="
+        << currentProfile.samples.size()
+        << " nodes="
+        << result.nodes.size()
+        << " requestedLength="
+        << result.requestedArcLength
+        << " integratedLength="
+        << result.integratedArcLength
+        << " activeStart="
+        << state.activeZone.startS
+        << " activeEnd="
+        << state.activeZone.endS
+        << " curvature="
+        << evaluation.loadedCurvatureCommand
+        << " torsion="
+        << evaluation.targetTorsion
+        << std::endl;
+
+    if (!result.isComplete()
+        || result.nodes.empty())
+    {
+        std::cout
+            << "[STRETCH CURRENT GEOMETRY ACCEPTANCE]"
+            << " accepted=0"
+            << " reason=IntegrationIncomplete"
+            << std::endl;
+
+        return;
+    }
+
+    // =================================================
+    // 7. ANALYTICAL STRAIGHT–ARC–STRAIGHT SOLUTION
+    //
+    // Segment 1:
+    //
+    //     straight length = activeStart
+    //
+    // Segment 2:
+    //
+    //     circular arc length =
+    //         activeEnd - activeStart
+    //
+    // Segment 3:
+    //
+    //     straight length =
+    //         totalLength - activeEnd
+    // =================================================
+
+    const double totalLength =
+        evaluation.targetArcLength;
+
+    const double beforeLength =
+        state.activeZone.startS;
+
+    const double activeLength =
+        state.activeZone.endS
+        - state.activeZone.startS;
+
+    const double afterLength =
+        totalLength
+        - state.activeZone.endS;
+
+    const double curvature =
+        evaluation.loadedCurvatureCommand;
+
+    const double bendAngle =
+        curvature
+        * activeLength;
+
+    // End of the first straight region.
+    const Vec3D beforeEnd =
+        startFrame.P
+        + startFrame.T
+        * beforeLength;
+
+    Vec3D expectedActiveEnd;
+
+    Vec3D expectedFinalTangent;
+
+    if (std::abs(curvature) > 1e-12)
+    {
+        const double radius =
+            1.0
+            / curvature;
+
+        // Circular arc displacement expressed in the
+        // original T/N frame:
+        //
+        //     ?P =
+        //         T R sin(theta)
+        //         +
+        //         N R(1-cos(theta))
+        expectedActiveEnd =
+            beforeEnd
+            + startFrame.T
+            * (
+                radius
+                * std::sin(
+                    bendAngle
+                )
+                )
+            + startFrame.N
+            * (
+                radius
+                * (
+                    1.0
+                    - std::cos(
+                        bendAngle
+                    )
+                    )
+                );
+
+        expectedFinalTangent =
+            startFrame.T
+            * std::cos(
+                bendAngle
+            )
+            + startFrame.N
+            * std::sin(
+                bendAngle
+            );
+    }
+    else
+    {
+        expectedActiveEnd =
+            beforeEnd
+            + startFrame.T
+            * activeLength;
+
+        expectedFinalTangent =
+            startFrame.T;
+    }
+
+    // Final straight region follows the tangent produced
+    // at the end of the active-zone circular arc.
+    const Vec3D expectedEnd =
+        expectedActiveEnd
+        + expectedFinalTangent
+        * afterLength;
+
+    const PipeNode& generatedEnd =
+        result.nodes.back();
+
+    const Vec3D endpointDifference =
+        generatedEnd.pos
+        - expectedEnd;
+
+    const double positionError =
+        endpointDifference.length();
+
+    const Vec3D tangentDifference =
+        generatedEnd.T
+        - expectedFinalTangent;
+
+    const double tangentError =
+        tangentDifference.length();
+
+    const double lengthError =
+        std::abs(
+            result.integratedArcLength
+            - totalLength
+        );
+
+    // =================================================
+    // 8. ACCEPTANCE THRESHOLDS
+    //
+    // The boundaries align exactly with ds=0.25:
+    //
+    //     40 / 0.25  = 160 steps
+    //     160 / 0.25 = 640 steps
+    //
+    // Therefore only normal integration error should
+    // remain.
+    // =================================================
+
+    constexpr double MAX_POSITION_ERROR =
+        0.02;
+
+    constexpr double MAX_TANGENT_ERROR =
+        1e-3;
+
+    constexpr double MAX_LENGTH_ERROR =
+        1e-6;
+
+    const bool positionAccepted =
+        positionError
+        <= MAX_POSITION_ERROR;
+
+    const bool tangentAccepted =
+        tangentError
+        <= MAX_TANGENT_ERROR;
+
+    const bool lengthAccepted =
+        lengthError
+        <= MAX_LENGTH_ERROR;
+
+    const bool finiteAccepted =
+        std::isfinite(
+            positionError
+        )
+        && std::isfinite(
+            tangentError
+        )
+        && std::isfinite(
+            lengthError
+        );
+
+    const bool accepted =
+        result.valid
+        && result.isComplete()
+        && finiteAccepted
+        && positionAccepted
+        && tangentAccepted
+        && lengthAccepted;
+
+    // =================================================
+    // 9. FINAL DIAGNOSTICS
+    // =================================================
+
+    std::cout
+        << "[STRETCH CURRENT GEOMETRY ENDPOINT]"
+        << " generated=("
+        << generatedEnd.pos.x << ", "
+        << generatedEnd.pos.y << ", "
+        << generatedEnd.pos.z << ")"
+        << " expected=("
+        << expectedEnd.x << ", "
+        << expectedEnd.y << ", "
+        << expectedEnd.z << ")"
+        << std::endl;
+
+    std::cout
+        << "[STRETCH CURRENT GEOMETRY ACCURACY]"
+        << " beforeLength="
+        << beforeLength
+        << " activeLength="
+        << activeLength
+        << " afterLength="
+        << afterLength
+        << " bendAngle="
+        << bendAngle
+        << " positionError="
+        << positionError
+        << " tangentError="
+        << tangentError
+        << " lengthError="
+        << lengthError
+        << " positionAccepted="
+        << positionAccepted
+        << " tangentAccepted="
+        << tangentAccepted
+        << " lengthAccepted="
+        << lengthAccepted
+        << " finiteAccepted="
+        << finiteAccepted
+        << std::endl;
+
+    std::cout
+        << "[STRETCH CURRENT GEOMETRY ACCEPTANCE] "
+        << (
+            accepted
+            ? "PASS"
+            : "FAIL"
+            )
+        << std::endl;
+}
    
-   
+const SpatialCurveIntegrationResult&
+AppController::
+getDebugStretchCurrentIntegrationResult() const
+{
+    return debugStretchCurrentIntegrationResult;
+}

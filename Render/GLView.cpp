@@ -527,6 +527,7 @@ void GLView::initializeGL()
 
     pipeRenderer.init();
     spatialDebugRenderer.init();
+	stretchCurrentDebugRenderer.init();
     machineRenderer.init();
     // =========================
     // CREATE SHADER (YOUR CLASS)
@@ -879,8 +880,21 @@ void GLView::paintGL()
     // They are drawn after the active simulation so they
     // never modify manufacturing rendering.
     // =====================================================
-
+    // =====================================================
+// STANDALONE STRETCH-BENDING DEBUG PREVIEW
+//
+// Rendered after the normal pipe path so it does not
+// replace CAD or manufacturing geometry.
+//
+// The result is already calculated and stored by
+// AppController. Drawing does not rerun evaluation,
+// profile construction or integration.
+// =====================================================
     drawSpatialIntegratorDebugPreviews();
+    drawStretchCurrentGeometryDebugPreview();
+   
+
+
 
     // =====================================================
     // MACHINE REFERENCE
@@ -1629,6 +1643,180 @@ void GLView::drawSpatialDebugTube(
     );
 
     spatialDebugRenderer.draw();
+}
+
+void GLView::drawStretchCurrentGeometryDebugPreview()
+{
+    if (!showStretchCurrentGeometryPreview)
+        return;
+
+    if (!app)
+        return;
+
+    const SpatialCurveIntegrationResult& result =
+        app->getDebugStretchCurrentIntegrationResult();
+
+    if (!result.valid)
+        return;
+
+    if (!result.isComplete())
+        return;
+
+    if (result.nodes.size() < 2)
+        return;
+
+    // =====================================================
+    // ONE-TIME RENDERING DIAGNOSTIC
+    //
+    // Place it here because all validation has succeeded.
+    // Therefore the message means:
+    //
+    //     the preview is enabled,
+    //     geometry exists,
+    //     integration is complete,
+    //     rendering is about to occur.
+    // =====================================================
+
+    static bool printedLineOnce =
+        false;
+
+    static bool printedMeshOnce =
+        false;
+
+    bool& printedForCurrentMode =
+        (
+            renderMode == RenderMode::LINE
+            ? printedLineOnce
+            : printedMeshOnce
+            );
+
+
+    if (!printedForCurrentMode)
+    {
+        std::cout
+            << "[STRETCH CURRENT PREVIEW]"
+            << " mode="
+            << (
+                renderMode == RenderMode::LINE
+                ? "LINE"
+                : "MESH"
+                )
+            << " visible="
+            << showStretchCurrentGeometryPreview
+            << " valid="
+            << result.valid
+            << " complete="
+            << result.isComplete()
+            << " nodes="
+            << result.nodes.size()
+            << std::endl;
+
+        printedForCurrentMode =
+            true;
+    }
+
+
+
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(
+            0.0f,
+            0.55f,
+            0.10f
+        )
+    );
+
+
+    if (renderMode == RenderMode::LINE)
+    {
+        drawStretchCurrentGeometryLine(
+            result.nodes
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawStretchCurrentGeometryTube(
+            result.nodes
+        );
+    }
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
+
+void GLView::drawStretchCurrentGeometryLine(
+    const std::vector<PipeNode>& nodes)
+{
+    if (nodes.size() < 2)
+        return;
+
+    stretchCurrentDebugRenderer.setMode(
+        RenderMode::LINE
+    );
+
+    stretchCurrentDebugRenderer.uploadLine(
+        nodesToFloatLine(
+            nodes
+        )
+    );
+
+    glLineWidth(
+        3.0f
+    );
+
+    stretchCurrentDebugRenderer.draw();
+
+    glLineWidth(
+        MANUFACTURING_LINE_WIDTH
+    );
+
+    stretchCurrentDebugRenderer.setMode(
+        renderMode
+    );
+}
+
+void GLView::drawStretchCurrentGeometryTube(
+    const std::vector<PipeNode>& nodes)
+{
+    if (nodes.size() < 2)
+        return;
+
+    std::vector<Vec3D> centers;
+    std::vector<Vec3D> tangents;
+
+    nodesToCenterlineAndTangents(
+        nodes,
+        centers,
+        tangents
+    );
+
+    constexpr double DEBUG_TUBE_RADIUS =
+        4.0;
+
+    constexpr int DEBUG_RADIAL_SEGMENTS =
+        16;
+
+    tubeMesh.generate(
+        centers,
+        tangents,
+        DEBUG_TUBE_RADIUS,
+        DEBUG_RADIAL_SEGMENTS
+    );
+
+    stretchCurrentDebugRenderer.uploadMesh(
+        tubeMesh.getVertices(),
+        tubeMesh.getIndices()
+    );
+
+    // Critical:
+   // select mesh buffers and mesh drawing path.
+    stretchCurrentDebugRenderer.setMode(
+        RenderMode::MESH
+    );
+
+    stretchCurrentDebugRenderer.draw();
 }
 
 

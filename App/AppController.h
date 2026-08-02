@@ -263,6 +263,9 @@ public:
          return debugStretchManufacturingState;
      }
 
+     const SpatialCurveIntegrationResult&
+         getDebugStretchCurrentIntegrationResult() const;
+
 private:
     
 
@@ -334,6 +337,19 @@ private:
        debugStretchLoadedIntegrationResult;
    SpatialCurveIntegrationResult
        debugStretchFinalIntegrationResult;
+   // State-driven active-zone geometry.
+//
+// This result represents the instantaneous geometry
+// generated from:
+//
+//     manufacturing state
+//     +
+//     current active-zone profile
+//
+// It is separate from the full-length loaded and final
+// reference geometries.
+   SpatialCurveIntegrationResult
+       debugStretchCurrentIntegrationResult;
 
    StretchBendingManufacturingState
        debugStretchManufacturingState;
@@ -348,6 +364,8 @@ private:
    void debugTestStretchBendingCurrentProfileBuilder(
        const StretchBendingEvaluationResult& evaluation
    );
-
+   void debugTestStretchBendingCurrentGeometry(
+       const StretchBendingEvaluationResult& evaluation
+   );
 }; 
       
