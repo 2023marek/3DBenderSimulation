@@ -2002,7 +2002,8 @@ void AppController::debugTestStretchBendingGeometry()
         return;
     }
 
-    
+    debugStretchEvaluationResult =
+        evaluation;
 
     // =====================================================
     // 3. BUILD LOADED AND FINAL REFERENCE PROFILES
@@ -3395,6 +3396,12 @@ debugTestStretchBendingCurrentGeometry(
             1.0
     };
 
+
+    debugStretchCurrentStartFrame =
+        startFrame;
+
+   
+
     // =================================================
     // 5. INTEGRATE AND STORE CURRENT GEOMETRY
     //
@@ -3407,6 +3414,9 @@ debugTestStretchBendingCurrentGeometry(
     constexpr double CURRENT_GEOMETRY_SAMPLE_STEP =
         0.25;
 
+    debugStretchCurrentSampleStep =
+        CURRENT_GEOMETRY_SAMPLE_STEP;
+
     debugStretchCurrentIntegrationResult =
         integrator.integrate(
             startFrame,
@@ -3417,6 +3427,12 @@ debugTestStretchBendingCurrentGeometry(
     const SpatialCurveIntegrationResult& result =
         debugStretchCurrentIntegrationResult;
 
+
+    debugStretchPlaybackPrepared =
+        result.valid
+        && result.isComplete()
+        && !result.nodes.empty();
+   
     // =================================================
     // 6. BASIC RESULT DIAGNOSTIC
     // =================================================
@@ -3451,13 +3467,17 @@ debugTestStretchBendingCurrentGeometry(
         << evaluation.targetTorsion
         << std::endl;
 
-    if (!result.isComplete()
+    if (!result.valid
+        || !result.isComplete()
         || result.nodes.empty())
     {
+        debugStretchPlaybackPrepared =
+            false;
+
         std::cout
             << "[STRETCH CURRENT GEOMETRY ACCEPTANCE]"
             << " accepted=0"
-            << " reason=IntegrationIncomplete"
+            << " reason=IntegrationInvalidOrIncomplete"
             << std::endl;
 
         return;
@@ -3699,10 +3719,82 @@ debugTestStretchBendingCurrentGeometry(
             )
         << std::endl;
 }
-   
+ //getter  
 const SpatialCurveIntegrationResult&
 AppController::
 getDebugStretchCurrentIntegrationResult() const
 {
     return debugStretchCurrentIntegrationResult;
+}
+
+
+
+
+bool AppController::
+rebuildDebugStretchCurrentGeometry()
+{
+    if (!debugStretchPlaybackPrepared)
+    {
+        debugStretchCurrentIntegrationResult.clear();
+        return false;
+    }
+
+    if (!debugStretchManufacturingState.isValid())
+    {
+        debugStretchCurrentIntegrationResult.clear();
+        return false;
+    }
+
+    if (!debugStretchEvaluationResult.valid)
+    {
+        debugStretchCurrentIntegrationResult.clear();
+        return false;
+    }
+
+    const CurvatureTorsionProfile currentProfile =
+        StretchBendingCurrentProfileBuilder::build(
+            debugStretchManufacturingState,
+            debugStretchEvaluationResult
+        );
+
+    if (!currentProfile.valid)
+    {
+        debugStretchCurrentIntegrationResult.clear();
+        return false;
+    }
+
+    SpatialCurveIntegrator integrator;
+
+    debugStretchCurrentIntegrationResult =
+        integrator.integrate(
+            debugStretchCurrentStartFrame,
+            currentProfile,
+            debugStretchCurrentSampleStep
+        );
+
+    return
+        debugStretchCurrentIntegrationResult.valid
+        && debugStretchCurrentIntegrationResult.isComplete();
+}
+
+void AppController::
+advanceDebugStretchBendingPlayback(
+    double deltaTime)
+{
+    if (!debugStretchPlaybackPrepared)
+        return;
+
+    if (!std::isfinite(deltaTime))
+        return;
+
+    if (deltaTime <= 0.0)
+        return;
+
+    StretchBendingManufacturingStateAdvancer::advance(
+        debugStretchManufacturingState,
+        deltaTime,
+        debugStretchManufacturingTiming
+    );
+
+    rebuildDebugStretchCurrentGeometry();
 }

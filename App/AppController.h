@@ -2,6 +2,8 @@
 
 #include <iostream>
 #include <vector>
+#include "Core/Forming/StretchBendingEvaluationResult.h"
+#include "Core/Forming/StretchBendingManufacturingTiming.h"
 #include "Common/UserAction.h"
 #include "Render/RenderMode.h"
 #include "Core/SimulationController.h"
@@ -22,6 +24,7 @@
 #include "Core/Forming/StretchBendingProcessInput.h"
 #include "Core/Geometry/CurvatureTorsionProfile.h"
 #include "Core/Forming/StretchBendingManufacturingState.h"
+
 struct StretchBendingEvaluationResult;
 
 class AppController
@@ -367,5 +370,28 @@ private:
    void debugTestStretchBendingCurrentGeometry(
        const StretchBendingEvaluationResult& evaluation
    );
+//Drive current geometry through manufacturing-state
+
+
+   StretchBendingEvaluationResult
+       debugStretchEvaluationResult;
+
+   Frame
+       debugStretchCurrentStartFrame;
+
+   double debugStretchCurrentSampleStep =
+       0.25;
+
+   bool debugStretchPlaybackPrepared =
+       false;
+
+   bool rebuildDebugStretchCurrentGeometry();
+
+   void advanceDebugStretchBendingPlayback(
+       double deltaTime
+   );
+
+   StretchBendingManufacturingTiming
+       debugStretchManufacturingTiming;
 }; 
       
