@@ -291,15 +291,15 @@ StretchBendingCurrentProfileBuilder::build(
     profile.valid =
         true;
 
-    std::cout
-        << "[STRETCH CURRENT PROFILE BUILDER SUCCESS]"
-        << " samples="
-        << profile.samples.size()
-        << " totalArcLength="
-        << profile.totalArcLength
-        << " valid="
-        << profile.valid
-        << std::endl;
+    //std::cout
+    //    << "[STRETCH CURRENT PROFILE BUILDER SUCCESS]"
+    //    << " samples="
+    //    << profile.samples.size()
+    //    << " totalArcLength="
+    //    << profile.totalArcLength
+   //     << " valid="
+    //    << profile.valid
+     //   << std::endl;
 
     return profile;
 }

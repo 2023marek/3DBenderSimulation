@@ -81,6 +81,11 @@ namespace
         true;
     constexpr bool DEBUG_TEST_SPATIAL_CURVE_INTEGRATOR =
         true;
+    constexpr bool DEBUG_STRETCH_PLAYBACK_EVERY_STEP =
+        true;
+    // helix spatial test
+    constexpr bool DEBUG_TEST_SPATIAL_HELIX_INTEGRATOR =
+        true;
 
     constexpr double TEST_INTEGRATOR_ARC_LENGTH =
         100.0;
@@ -105,9 +110,7 @@ namespace
 
     constexpr double TEST_MAX_RELATIVE_POSITION_ERROR =
         1e-3;
-    // helix spatial test
-    constexpr bool DEBUG_TEST_SPATIAL_HELIX_INTEGRATOR =
-        true;
+   
 
     // Target circular helix dimensions.
     constexpr double TEST_SPATIAL_HELIX_RADIUS =
@@ -164,6 +167,7 @@ namespace
 
     constexpr double TEST_STRETCH_SPRINGBACK_RATIO =
         0.10;
+   
 
     struct StretchEvaluationTestCase
     {
@@ -3781,6 +3785,19 @@ void AppController::
 advanceDebugStretchBendingPlayback(
     double deltaTime)
 {
+    if (
+        debugStretchManufacturingState.stage
+        == StretchBendingManufacturingStage::Complete
+        )
+    {
+        std::cout
+            << "[STRETCH PLAYBACK STEP]"
+            << " ignored=1"
+            << " reason=AlreadyComplete"
+            << std::endl;
+
+        return;
+    }
     if (!debugStretchPlaybackPrepared)
         return;
 
@@ -3789,6 +3806,8 @@ advanceDebugStretchBendingPlayback(
 
     if (deltaTime <= 0.0)
         return;
+    const StretchBendingManufacturingStage previousStage =
+        debugStretchManufacturingState.stage;
 
     StretchBendingManufacturingStateAdvancer::advance(
         debugStretchManufacturingState,
@@ -3796,5 +3815,121 @@ advanceDebugStretchBendingPlayback(
         debugStretchManufacturingTiming
     );
 
+    const bool geometryRebuilt =
+        rebuildDebugStretchCurrentGeometry();
+
+    if (
+        debugStretchManufacturingState.stage
+        != previousStage
+        )
+    {
+        std::cout
+            << "[STRETCH PLAYBACK TRANSITION]"
+            << " from="
+            << stretchBendingManufacturingStageToString(
+                previousStage
+            )
+            << " to="
+            << stretchBendingManufacturingStageToString(
+                debugStretchManufacturingState.stage
+            )
+            << " time="
+            << debugStretchManufacturingState.elapsedTime
+            << " geometryValid="
+            << geometryRebuilt
+            << std::endl;
+    }
+
+    if (DEBUG_STRETCH_PLAYBACK_EVERY_STEP)
+    {
+        std::cout
+            << "[STRETCH PLAYBACK STEP]"
+            << " stage="
+            << stretchBendingManufacturingStageToString(
+                debugStretchManufacturingState.stage
+            )
+            << " time="
+            << debugStretchManufacturingState.elapsedTime
+            << " progress="
+            << debugStretchManufacturingState.processProgress
+            << " tensionFraction="
+            << debugStretchManufacturingState.tensionFraction
+            << " bendingFraction="
+            << debugStretchManufacturingState.bendingFraction
+            << " unloadingFraction="
+            << debugStretchManufacturingState.unloadingFraction
+            << " geometryValid="
+            << debugStretchCurrentIntegrationResult.valid
+            << " nodes="
+            << debugStretchCurrentIntegrationResult.nodes.size()
+            << std::endl;
+
+    }
+
+
+}
+
+
+void AppController::
+resetDebugStretchBendingPlayback()
+{
+    if (!debugStretchEvaluationResult.valid)
+        return;
+
+    StretchBendingProcessInput input =
+        buildTestStretchBendingProcessInput();
+
+    input.geometry.targetCurvature =
+        0.002;
+
+    input.geometry.targetTorsion =
+        0.0;
+
+    input.geometry.targetArcLength =
+        200.0;
+
+    input.axialStretchStrain =
+        0.03;
+
+    input.sampleStep =
+        debugStretchCurrentSampleStep;
+
+    StretchBendingActiveZone activeZone;
+
+    activeZone.startS =
+        40.0;
+
+    activeZone.endS =
+        160.0;
+
+    debugStretchManufacturingState =
+        StretchBendingManufacturingStateBuilder::
+        buildReadyState(
+            input,
+            debugStretchEvaluationResult,
+            activeZone
+        );
+
     rebuildDebugStretchCurrentGeometry();
+
+    std::cout
+        << "[STRETCH PLAYBACK RESET]"
+        << " stage="
+        << stretchBendingManufacturingStageToString(
+            debugStretchManufacturingState.stage
+        )
+        << " time="
+        << debugStretchManufacturingState.elapsedTime
+        << std::endl;
+
+
+   
+}
+
+bool AppController::
+isDebugStretchBendingPlaybackComplete() const
+{
+    return
+        debugStretchManufacturingState.stage
+        == StretchBendingManufacturingStage::Complete;
 }

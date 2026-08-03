@@ -1,6 +1,9 @@
 #pragma once
-#include <QMainWindow>
+#include <cmath>
+#include <algorithm>
+#include <QElapsedTimer>
 #include <QTimer>
+#include <QMainWindow>
 #include "Common/UserAction.h"
 #include "AppController.h"
 #include "Render/GLView.h"
@@ -23,5 +26,38 @@ private:
     HUDPanel* hud;
     GLView* view;
     QTimer timer;
+private:
+    // Periodically requests automatic stretch-playback
+    // advancement.
+    QTimer stretchPlaybackTimer;
+
+    // Measures real elapsed time between timer callbacks.
+    //
+    // QTimer intervals are not guaranteed to be exact,
+    // so elapsed time should be measured rather than
+    // assuming every callback is exactly 16 ms.
+    QElapsedTimer stretchPlaybackClock;
+
+    bool stretchPlaybackRunning =
+        false;
+
+    // 1.0 = normal process time
+    // 0.5 = half speed
+    // 2.0 = double speed
+    double stretchPlaybackSpeed =
+        1.0;
+
+private:
+    void toggleStretchPlayback();
+
+    void startStretchPlayback();
+
+    void pauseStretchPlayback();
+
+    void updateStretchPlayback();
+
+    void increaseStretchPlaybackSpeed();
+
+    void decreaseStretchPlaybackSpeed();
 };
   

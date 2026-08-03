@@ -4263,3 +4263,112 @@ Complete:
     final unloaded curvature remains
 
 
+Why store the timing?
+
+Think of it exactly like the other stored data.
+
+evaluation
+        ?
+        ??? tells HOW MUCH to bend
+        ?
+timing
+        ?
+        ??? tells HOW FAST to bend
+        ?
+state
+        ?
+        ??? tells WHERE WE ARE NOW
+        ?
+current profile
+        ?
+geometry
+        ?
+renderer
+
+Each object has a single responsibility:
+
+Evaluation ? process physics.
+Timing ? process schedule.
+State ? current manufacturing moment.
+Profile Builder ? current ?(s), ?(s).
+Integrator ? current geometry.
+Renderer ? display.
+
+This separation is a clean architecture
+because changing the timing (for example,
+making unloading twice as slow) won't require 
+touching the physics or the geometry builder. 
+Only the timing object changes.
+
+===============================================
+===============================================
+Phase 10P — Automatic Timed Playback, Pause/Resume, and Speed Control
+==============================================================
+=============================================================
+Phase 10O already established the correct update function:
+
+controller.advanceDebugStretchBendingPlayback(
+    deltaTime
+);
+
+Phase 10P must call that same function automatically from a Qt timer.
+
+The ownership remains:
+
+MainWindow / UI timer
+        ? supplies elapsed time
+        ?
+AppController::advanceDebugStretchBendingPlayback()
+        ? advances state and rebuilds geometry
+        ?
+GLView::paintGL()
+        ? only renders stored geometry
+        ?
+orange preview
+
+Do not advance state inside paintGL().
+
+10P.1 — Add timer state to MainWindow
+
+In MainWindow.h, add:
+
+#include <QElapsedTimer>
+#include <QTimer>
+
+Inside the MainWindow class, add private members:
+
+private:
+    // Periodically requests automatic stretch-playback
+    // advancement.
+    QTimer stretchPlaybackTimer;
+
+    // Measures real elapsed time between timer callbacks.
+    //
+    // QTimer intervals are not guaranteed to be exact,
+    // so elapsed time should be measured rather than
+    // assuming every callback is exactly 16 ms.
+    QElapsedTimer stretchPlaybackClock;
+
+    bool stretchPlaybackRunning =
+        false;
+
+    // 1.0 = normal process time
+    // 0.5 = half speed
+    // 2.0 = double speed
+    double stretchPlaybackSpeed =
+        1.0;
+
+Add private helper declarations:
+
+private:
+    void toggleStretchPlayback();
+
+    void startStretchPlayback();
+
+    void pauseStretchPlayback();
+
+    void updateStretchPlayback();
+
+    void increaseStretchPlaybackSpeed();
+
+    void decreaseStretchPlaybackSpeed();

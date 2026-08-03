@@ -268,6 +268,12 @@ public:
 
      const SpatialCurveIntegrationResult&
          getDebugStretchCurrentIntegrationResult() const;
+     void advanceDebugStretchBendingPlayback(
+         double deltaTime
+     );
+     void resetDebugStretchBendingPlayback();
+
+     bool isDebugStretchBendingPlaybackComplete() const;
 
 private:
     
@@ -387,11 +393,11 @@ private:
 
    bool rebuildDebugStretchCurrentGeometry();
 
-   void advanceDebugStretchBendingPlayback(
-       double deltaTime
-   );
+ 
 
    StretchBendingManufacturingTiming
        debugStretchManufacturingTiming;
+
+      
 }; 
       

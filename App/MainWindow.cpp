@@ -16,7 +16,21 @@ MainWindow::MainWindow()
     view->setFocus();
     view->setAppController(&controller);
     view->setFocus(); // important for keyboard
+    // =====================================================
+// STRETCH-BENDING AUTOMATIC PLAYBACK TIMER
+//
+// The timer only schedules updates.
+//
+// Actual process advancement remains owned by:
+//     AppController::advanceDebugStretchBendingPlayback()
+//
+// Geometry rendering remains owned by:
+//     GLView::paintGL()
+// =====================================================
 
+    stretchPlaybackTimer.setInterval(
+        16
+    );
     // =========================
     // BUTTONS
     // =========================
@@ -46,6 +60,12 @@ MainWindow::MainWindow()
     connect(btnReset, &QPushButton::clicked, this, [&]() {
         controller.handleAction(UserAction::Reset);
         });
+    connect(
+        &stretchPlaybackTimer,
+        &QTimer::timeout,
+        this,
+        &MainWindow::updateStretchPlayback
+    );
 
     // =========================
     // TIMER
@@ -151,6 +171,70 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         );
         break;
 
+    case Qt::Key_BracketRight:
+    {
+        std::cout
+            << "[KEY] ] - ADVANCE STRETCH PLAYBACK\n";
+
+        pauseStretchPlayback();
+
+        controller.advanceDebugStretchBendingPlayback(
+            0.25
+        );
+
+        break;
+    }
+
+
+    case Qt::Key_BracketLeft:
+    {
+        std::cout
+            << "[KEY] [ - RESET STRETCH PLAYBACK\n";
+
+        pauseStretchPlayback();
+
+        controller.resetDebugStretchBendingPlayback();
+
+        break;
+    }
+
+    case Qt::Key_B:
+    {
+        std::cout
+            << "[KEY] SPACE - TOGGLE STRETCH PLAYBACK\n";
+
+        toggleStretchPlayback();
+
+        break;
+    }
+
+    case Qt::Key_Plus:
+    case Qt::Key_Equal:
+    {
+        std::cout
+            << "[KEY] + - INCREASE STRETCH PLAYBACK SPEED\n";
+
+        increaseStretchPlaybackSpeed();
+
+        break;
+    }
+
+    case Qt::Key_Minus:
+    case Qt::Key_Underscore:
+    {
+        std::cout
+            << "[KEY] - - DECREASE STRETCH PLAYBACK SPEED\n";
+
+        decreaseStretchPlaybackSpeed();
+
+        break;
+    }
+
+
+   
+    
+
+
     case Qt::Key_I:
 
         controller.handleAction(
@@ -165,4 +249,174 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     }
 
     view->update();
+}
+
+void MainWindow::startStretchPlayback()
+{
+    if (stretchPlaybackRunning)
+        return;
+    if (controller.isDebugStretchBendingPlaybackComplete())
+    {
+        std::cout
+            << "[STRETCH PLAYBACK]"
+            << " state=NOT_STARTED"
+            << " reason=AlreadyComplete"
+            << std::endl;
+
+        return;
+    }
+
+    // Start measuring from this moment. This prevents a
+    // large delta time caused by time spent while paused.
+    stretchPlaybackClock.restart();
+
+    stretchPlaybackRunning =
+        true;
+
+    stretchPlaybackTimer.start();
+
+    std::cout
+        << "[STRETCH PLAYBACK]"
+        << " state=PLAYING"
+        << " speed="
+        << stretchPlaybackSpeed
+        << std::endl;
+}
+
+void MainWindow::pauseStretchPlayback()
+{
+    if (!stretchPlaybackRunning)
+        return;
+
+    stretchPlaybackTimer.stop();
+
+    stretchPlaybackRunning =
+        false;
+
+    std::cout
+        << "[STRETCH PLAYBACK]"
+        << " state=PAUSED"
+        << " speed="
+        << stretchPlaybackSpeed
+        << std::endl;
+}
+
+void MainWindow::toggleStretchPlayback()
+{
+    if (stretchPlaybackRunning)
+    {
+        pauseStretchPlayback();
+    }
+    else
+    {
+        startStretchPlayback();
+    }
+}
+
+void MainWindow::updateStretchPlayback()
+{
+    if (!stretchPlaybackRunning)
+        return;
+
+    if (!stretchPlaybackClock.isValid())
+    {
+        stretchPlaybackClock.restart();
+        return;
+    }
+
+    const qint64 elapsedMilliseconds =
+        stretchPlaybackClock.restart();
+
+    const double rawRealDeltaTime =
+        static_cast<double>(
+            elapsedMilliseconds
+            )
+        / 1000.0;
+
+    constexpr double MAX_REAL_DELTA_TIME =
+        0.1;
+
+    const double realDeltaTime =
+        std::clamp(
+            rawRealDeltaTime,
+            0.0,
+            MAX_REAL_DELTA_TIME
+        );
+
+    const double processDeltaTime =
+        realDeltaTime
+        * stretchPlaybackSpeed;
+
+    if (!std::isfinite(processDeltaTime)
+        || processDeltaTime <= 0.0)
+    {
+        return;
+    }
+
+    controller.advanceDebugStretchBendingPlayback(
+        processDeltaTime
+    );
+
+    view->update();
+
+    if (
+        controller.
+        isDebugStretchBendingPlaybackComplete()
+        )
+    {
+        pauseStretchPlayback();
+
+        std::cout
+            << "[STRETCH PLAYBACK COMPLETE]"
+            << " speed="
+            << stretchPlaybackSpeed
+            << std::endl;
+    }
+}
+void MainWindow::increaseStretchPlaybackSpeed()
+{
+    stretchPlaybackSpeed *=
+        2.0;
+
+    stretchPlaybackSpeed =
+        std::min(
+            stretchPlaybackSpeed,
+            8.0
+        );
+
+    // Restart timing so a speed change cannot reuse an
+    // old elapsed interval.
+    if (stretchPlaybackRunning)
+    {
+        stretchPlaybackClock.restart();
+    }
+
+    std::cout
+        << "[STRETCH PLAYBACK SPEED]"
+        << " speed="
+        << stretchPlaybackSpeed
+        << std::endl;
+}
+
+void MainWindow::decreaseStretchPlaybackSpeed()
+{
+    stretchPlaybackSpeed *=
+        0.5;
+
+    stretchPlaybackSpeed =
+        std::max(
+            stretchPlaybackSpeed,
+            0.125
+        );
+
+    if (stretchPlaybackRunning)
+    {
+        stretchPlaybackClock.restart();
+    }
+
+    std::cout
+        << "[STRETCH PLAYBACK SPEED]"
+        << " speed="
+        << stretchPlaybackSpeed
+        << std::endl;
 }
