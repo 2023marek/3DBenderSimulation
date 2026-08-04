@@ -393,6 +393,40 @@ HUDData AppController::buildHUDData() const
 
     data.currentOpName = oss.str();
 
+    const StretchBendingManufacturingState& stretchState =
+        debugStretchManufacturingState;
+
+    data.showStretchPlaybackStatus =
+        debugStretchPlaybackPrepared;
+
+    data.stretchStage =
+        stretchBendingManufacturingStageToString(
+            stretchState.stage
+        );
+
+    data.stretchElapsedTime =
+        stretchState.elapsedTime;
+
+    data.stretchProgress =
+        stretchState.processProgress;
+
+    data.stretchTensionFraction =
+        stretchState.tensionFraction;
+
+    data.stretchBendingFraction =
+        stretchState.bendingFraction;
+
+    data.stretchUnloadingFraction =
+        stretchState.unloadingFraction;
+
+    data.stretchGeometryValid =
+        debugStretchCurrentIntegrationResult.valid
+        && debugStretchCurrentIntegrationResult.isComplete()
+        && !debugStretchCurrentIntegrationResult.nodes.empty();
+
+
+
+
     return data;
 }
 
@@ -460,6 +494,10 @@ void AppController::handleAction(UserAction action)
             << std::endl;
 
         break;
+
+
+    
+
 
     }
 }
@@ -3932,4 +3970,34 @@ isDebugStretchBendingPlaybackComplete() const
     return
         debugStretchManufacturingState.stage
         == StretchBendingManufacturingStage::Complete;
+}
+
+const StretchBendingManufacturingState&
+
+AppController::
+getDebugStretchManufacturingState() const
+{
+    return debugStretchManufacturingState;
+}
+
+const StretchBendingEvaluationResult&
+AppController::
+getDebugStretchEvaluationResult() const
+{
+    return debugStretchEvaluationResult;
+}
+
+bool AppController::
+isDebugStretchPlaybackPrepared() const
+{
+    return debugStretchPlaybackPrepared;
+}
+
+bool AppController::
+isDebugStretchCurrentGeometryValid() const
+{
+    return
+        debugStretchCurrentIntegrationResult.valid
+        && debugStretchCurrentIntegrationResult.isComplete()
+        && !debugStretchCurrentIntegrationResult.nodes.empty();
 }

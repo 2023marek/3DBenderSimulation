@@ -1,0 +1,91 @@
+Phase 10P — Add automatic timed playback, pause/resume, speed control,
+and automatic stop at Complete.
+Phase 10Q — Add a dedicated visibility toggle and compact HUD status 
+for stretch playback.
+Phase 10R — Separate loaded, current, and unloaded preview colors,
+labels, and rendering ownership.
+Phase 10S — Add active-zone boundary markers and visualize the
+fixed machine forming region.
+Phase 10T — Add current tension, curvature, springback, and process-stage data to the HUD.
+Phase 10U — Replace debug-only test input with a reusable stretch-bending operation/configuration type.
+Phase 10V — Connect stretch-bending operations to the manufacturing plan and pass system.
+Phase 10W — Integrate stretch-bending playback into the main SimulationController timeline.
+Phase 10X — Add validation, reset, mode-switching, and regression tests for the integrated process.
+Phase 10Y — Review the Segment 10 architecture, remove temporary diagnostics, and document the
+stretch-bending boundary.
+
+
+
+
+
+
+
+Stretch bending — physical process
+The pipe is clamped at both ends.
+Both ends are held by gripping jaws.
+The pipe cannot slip during forming.
+Axial tension is applied.
+The machine pulls the pipe longitudinally.
+This introduces a controlled tensile strain.
+The tension reduces compressive stresses during bending.
+The pipe is wrapped around a bending form (die).
+While under tension, the bending head rotates.
+Only the active bending zone changes curvature.
+Straight regions before and after the die remain straight.
+The pipe reaches the fully loaded shape.
+Maximum bending curvature is present.
+Axial tension is still applied.
+This corresponds to your LoadedHold stage.
+The bending load is released.
+The pipe elastically recovers.
+Curvature decreases due to springback.
+Axial tension is gradually removed.
+The finished part is unclamped.
+The remaining shape is the final geometry.
+Mapping to your software architecture
+Physical process	Your architecture
+Clamp pipe	StretchBendingManufacturingState::Ready
+Apply tension	ApplyingTension
+Bend while stretched	Forming
+Fully wrapped on die	LoadedHold
+Release die / springback	Unloading
+Finished part	Complete
+Geometry during playback
+
+The important concept—and one you've now implemented—is that 
+the entire pipe is not bent uniformly.
+
+Instead, your current profile represents:
+
+Straight ????? Active bending zone ????? Straight
+
+? = 0          ? = current            ? = 0
+? = 0          ? = current            ? = 0
+
+As playback advances:
+
+ApplyingTension
+Curvature = 0
+Pipe is only stretched.
+Forming
+Curvature inside the active zone increases smoothly from 0 to
+the loaded value.
+This is driven by bendingFraction.
+LoadedHold
+Active zone has maximum loaded curvature.
+The rest of the pipe remains straight.
+Unloading
+Curvature inside the active zone decreases from loaded 
+curvature to the springback-compensated final curvature.
+This is driven by unloadingFraction.
+Complete
+Final springback shape is reached.
+
+This is exactly the behavior your current playback demonstrates.
+The orange preview is no longer just showing a static bend—it
+is visualizing the instantaneous geometry of the pipe throughout
+the stretch-bending process, with curvature evolving only within 
+the active forming zone while the rest of the pipe remains unchanged.
+That is a significant milestone, because it mirrors how an actual 
+stretch-bending 
+machine forms a workpiece.

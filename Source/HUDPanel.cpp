@@ -191,8 +191,37 @@ void HUDPanel::render()
     drawText(
         textX,
         textY + lineH * 7,
-        "KEYS: M Render | N Mode | T Place | A Attach | D Debug | E OVERLAY |I S PREVIEW",
-        glm::vec4(0.7f, 0.7f, 0.7f, 1.0f)
+        "KEYS: M Render | N Mode | T Place | A Attach | D Debug | E Overlay",
+        glm::vec4(
+            0.7f,
+            0.7f,
+            0.7f,
+            1.0f
+        )
+    );
+
+    drawText(
+        textX,
+        textY + lineH * 8,
+        "STRETCH: O Preview | B Play/Pause | [ Reset | ] Step | +/- Speed",
+        glm::vec4(
+            0.8f,
+            0.7f,
+            0.4f,
+            1.0f
+        )
+    );
+
+    drawText(
+        textX,
+        textY + lineH * 8,
+        "STRETCH: O Preview | B Play/Pause | [ Reset | ] Step | +/- Speed",
+        glm::vec4(
+            0.8f,
+            0.7f,
+            0.4f,
+            1.0f
+        )
     );
     drawText(
         textX,
@@ -227,8 +256,139 @@ void HUDPanel::render()
             glm::vec4(1.0f, 0.8f, 0.3f, 1.0f)
         );
     }
+    if (data.showStretchPlaybackStatus)
+    {
+        const std::string playbackState =
+            data.stretchPlaying
+            ? "PLAY"
+            : "PAUSE";
 
+        const std::string visibilityState =
+            data.stretchPreviewVisible
+            ? "ON"
+            : "OFF";
 
+        const std::string geometryState =
+            data.stretchGeometryValid
+            ? "VALID"
+            : "INVALID";
+
+        // =================================================
+        // FORMAT STRETCH PLAYBACK VALUES
+        //
+        // std::to_string() normally prints many unnecessary
+        // decimal places. String streams give us explicit,
+        // compact precision for HUD presentation.
+        // =================================================
+
+        std::ostringstream stretchHeaderStream;
+
+        stretchHeaderStream
+            << std::fixed
+            << std::setprecision(2)
+            << "STRETCH: "
+            << data.stretchStage
+            << " | "
+            << playbackState
+            << " | "
+            << data.stretchPlaybackSpeed
+            << "x";
+
+        std::ostringstream stretchProgressStream;
+
+        stretchProgressStream
+            << std::fixed
+            << std::setprecision(2)
+            << "TIME: "
+            << data.stretchElapsedTime
+            << " s"
+            << " | PROGRESS: "
+            << std::setprecision(1)
+            << (
+                data.stretchProgress
+                * 100.0
+                )
+            << "%";
+
+        std::ostringstream stretchFractionsStream;
+
+        stretchFractionsStream
+            << std::fixed
+            << std::setprecision(2)
+            << "TENSION: "
+            << data.stretchTensionFraction
+            << " | BEND: "
+            << data.stretchBendingFraction
+            << " | UNLOAD: "
+            << data.stretchUnloadingFraction;
+
+        std::ostringstream stretchGeometryStream;
+
+        stretchGeometryStream
+            << "PREVIEW: "
+            << visibilityState
+            << " | GEOMETRY: "
+            << geometryState;
+
+        // =================================================
+        // DRAW COMPACT STRETCH-BENDING HUD SECTION
+        // =================================================
+
+        drawText(
+            textX,
+            textY + lineH * 12,
+            stretchHeaderStream.str(),
+            glm::vec4(
+                1.0f,
+                0.65f,
+                0.2f,
+                1.0f
+            )
+        );
+
+        drawText(
+            textX,
+            textY + lineH * 13,
+            stretchProgressStream.str(),
+            glm::vec4(
+                1.0f,
+                1.0f,
+                1.0f,
+                1.0f
+            )
+        );
+
+        drawText(
+            textX,
+            textY + lineH * 14,
+            stretchFractionsStream.str(),
+            glm::vec4(
+                0.8f,
+                0.9f,
+                1.0f,
+                1.0f
+            )
+        );
+
+        drawText(
+            textX,
+            textY + lineH * 15,
+            stretchGeometryStream.str(),
+            data.stretchGeometryValid
+            ? glm::vec4(
+                0.5f,
+                1.0f,
+                0.5f,
+                1.0f
+            )
+            : glm::vec4(
+                1.0f,
+                0.3f,
+                0.3f,
+                1.0f
+            )
+        );
+    }
 
 
     glBindVertexArray(0);

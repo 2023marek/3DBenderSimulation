@@ -43,6 +43,49 @@ struct HUDData
 
     bool spatialIntegratorPreviewVisible =
         true;
+
+
+//Strech playback
+
+// =====================================================
+// STRETCH-BENDING PLAYBACK HUD
+// =====================================================
+
+    bool showStretchPlaybackStatus =
+        false;
+
+    std::string stretchStage;
+
+    double stretchElapsedTime =
+        0.0;
+
+    double stretchProgress =
+        0.0;
+
+    double stretchTensionFraction =
+        0.0;
+
+    double stretchBendingFraction =
+        0.0;
+
+    double stretchUnloadingFraction =
+        0.0;
+
+    bool stretchGeometryValid =
+        false;
+
+    // These are populated later by MainWindow because
+    // MainWindow owns automatic playback and speed.
+    bool stretchPlaying =
+        false;
+
+    double stretchPlaybackSpeed =
+        1.0;
+
+    // GLView owns this rendering preference.
+    bool stretchPreviewVisible =
+        true;
+
     AdditionalPassExecutionResult additionalPassResult =   AdditionalPassExecutionResult::Disabled;
 
 

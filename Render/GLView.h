@@ -50,9 +50,11 @@ private:
     void drawDebugFrame(
         const Frame& frame,
         double size);
-
+  bool showStretchPlaybackPreview =
+        true;
     bool showStretchCurrentGeometryPreview =
         true;
+  
     // =========================
     // DATA SOURCE
     // =========================
@@ -108,7 +110,7 @@ public:
     {
         hudData = data;
     }
-
+    bool isStretchPlaybackPreviewVisible() const;
 public:
     void setAppController(AppController* a)
     {
@@ -129,7 +131,11 @@ public:
     {
         renderMode = mode;
     }
+
+    void toggleStretchPlaybackPreview();
+    
 private:
+
     PipeRenderer pipeRenderer;
     PipeRenderer spatialDebugRenderer;
     PipeRenderer stretchCurrentDebugRenderer;

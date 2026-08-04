@@ -12,5 +12,6 @@ enum class UserAction
     TogglePlannedPreviewDebug,
     ToggleExplicitAttachMode,
     ToggleDeformableRegionOverlay,
-    ToggleSpatialIntegratorPreview
+    ToggleSpatialIntegratorPreview,
+    ToggleStretchPlaybackPreview
 };

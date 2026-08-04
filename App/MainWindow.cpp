@@ -4,6 +4,7 @@
 #include "MainWindow.h"
 #include "Core/SimulationController.h"
 #include "Render/RenderMode.h"
+#include <string>
 
 MainWindow::MainWindow()
 {
@@ -78,6 +79,16 @@ void MainWindow::onUpdate()
     controller.update(0.016);
 
     HUDData data = controller.buildHUDData();
+
+    data.stretchPlaying =
+        stretchPlaybackRunning;
+
+    data.stretchPlaybackSpeed =
+        stretchPlaybackSpeed;
+
+    data.stretchPreviewVisible =
+        view->isStretchPlaybackPreviewVisible();
+
 
     // ONLY pass data
     view->setHUDData(data);
@@ -219,6 +230,11 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         break;
     }
 
+
+
+
+
+
     case Qt::Key_Minus:
     case Qt::Key_Underscore:
     {
@@ -248,7 +264,11 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         break;
     }
 
+
+
+
     view->update();
+
 }
 
 void MainWindow::startStretchPlayback()
@@ -419,4 +439,16 @@ void MainWindow::decreaseStretchPlaybackSpeed()
         << " speed="
         << stretchPlaybackSpeed
         << std::endl;
+}
+
+bool MainWindow::
+isStretchPlaybackRunning() const
+{
+    return stretchPlaybackRunning;
+}
+
+double MainWindow::
+getStretchPlaybackSpeed() const
+{
+    return stretchPlaybackSpeed;
 }

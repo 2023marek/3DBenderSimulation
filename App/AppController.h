@@ -260,11 +260,7 @@ public:
          return debugStretchFinalIntegrationResult;
      }
 
-     const StretchBendingManufacturingState&
-         getDebugStretchManufacturingState() const
-     {
-         return debugStretchManufacturingState;
-     }
+    
 
      const SpatialCurveIntegrationResult&
          getDebugStretchCurrentIntegrationResult() const;
@@ -274,6 +270,18 @@ public:
      void resetDebugStretchBendingPlayback();
 
      bool isDebugStretchBendingPlaybackComplete() const;
+
+
+     //geters
+     const StretchBendingManufacturingState&
+         getDebugStretchManufacturingState() const;
+
+     const StretchBendingEvaluationResult&
+         getDebugStretchEvaluationResult() const;
+
+     bool isDebugStretchPlaybackPrepared() const;
+
+     bool isDebugStretchCurrentGeometryValid() const;
 
 private:
     

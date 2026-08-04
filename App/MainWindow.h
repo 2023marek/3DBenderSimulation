@@ -21,6 +21,11 @@ protected:
 private slots:
     void onUpdate(); 
 
+public:
+    bool isStretchPlaybackRunning() const;
+
+    double getStretchPlaybackSpeed() const;
+
 private:
     AppController controller;
     HUDPanel* hud;

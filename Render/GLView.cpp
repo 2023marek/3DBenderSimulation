@@ -1647,7 +1647,7 @@ void GLView::drawSpatialDebugTube(
 
 void GLView::drawStretchCurrentGeometryDebugPreview()
 {
-    if (!showStretchCurrentGeometryPreview)
+    if (!showStretchPlaybackPreview)
         return;
 
     if (!app)
@@ -1818,6 +1818,27 @@ void GLView::drawStretchCurrentGeometryTube(
 
     stretchCurrentDebugRenderer.draw();
 }
+
+void GLView::toggleStretchPlaybackPreview()
+{
+    showStretchPlaybackPreview =
+        !showStretchPlaybackPreview;
+
+    std::cout
+        << "[STRETCH PREVIEW VISIBILITY]"
+        << " visible="
+        << showStretchPlaybackPreview
+        << std::endl;
+
+    update();
+}
+
+bool GLView::
+isStretchPlaybackPreviewVisible() const
+{
+    return showStretchPlaybackPreview;
+}
+
 
 
 
