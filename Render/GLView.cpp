@@ -15,6 +15,9 @@
 #include <QOpenGLContext>
 #include <iostream>
 
+#include <cmath>
+#include <cstddef>
+
 GLView::GLView()
 {
     setFocusPolicy(Qt::StrongFocus);
@@ -155,6 +158,32 @@ namespace
             1.0f,
             0.5f
         );
+
+    //define explicit colors
+    const glm::vec3 STRETCH_LOADED_PREVIEW_COLOR{
+      0.70f,
+      0.25f,
+      1.00f
+    };
+
+    const glm::vec3 STRETCH_CURRENT_PREVIEW_COLOR{
+        1.00f,
+        0.55f,
+        0.10f
+    };
+
+    const glm::vec3 STRETCH_FINAL_PREVIEW_COLOR{
+        0.20f,
+        0.90f,
+        0.30f
+    };
+
+
+    const glm::vec3 STRETCH_ACTIVE_ZONE_COLOR{
+    0.10f,
+    0.90f,
+    1.00f
+    };
 
     constexpr float HELIX_PREVIEW_LINE_WIDTH =
         5.0f;
@@ -526,9 +555,14 @@ void GLView::initializeGL()
     
 
     pipeRenderer.init();
-    spatialDebugRenderer.init();
-	stretchCurrentDebugRenderer.init();
     machineRenderer.init();
+
+    spatialDebugRenderer.init();
+
+    stretchLoadedDebugRenderer.init();
+    stretchCurrentDebugRenderer.init();
+    stretchFinalDebugRenderer.init();
+    stretchActiveZoneDebugRenderer.init();
     // =========================
     // CREATE SHADER (YOUR CLASS)
     // =========================
@@ -893,9 +927,26 @@ void GLView::paintGL()
     drawSpatialIntegratorDebugPreviews();
     drawStretchCurrentGeometryDebugPreview();
    
+    // =====================================================
+    // STRETCH-BENDING REFERENCE AND CURRENT PREVIEWS
+    //
+    // Purple:
+    //     fully loaded reference
+    //
+    // Green:
+    //     final unloaded reference
+    //
+    // Orange:
+    //     instantaneous state-driven geometry
+    // =====================================================
 
+    drawStretchLoadedDebugPreview();
 
+    drawStretchFinalDebugPreview();
 
+    drawStretchCurrentDebugPreview();
+
+    drawStretchActiveZoneMarkers();
     // =====================================================
     // MACHINE REFERENCE
     // =====================================================
@@ -1647,7 +1698,7 @@ void GLView::drawSpatialDebugTube(
 
 void GLView::drawStretchCurrentGeometryDebugPreview()
 {
-    if (!showStretchPlaybackPreview)
+    if (!showStretchCurrentPreview)
         return;
 
     if (!app)
@@ -1702,7 +1753,7 @@ void GLView::drawStretchCurrentGeometryDebugPreview()
                 : "MESH"
                 )
             << " visible="
-            << showStretchCurrentGeometryPreview
+            << showStretchCurrentPreview
             << " valid="
             << result.valid
             << " complete="
@@ -1792,6 +1843,8 @@ void GLView::drawStretchCurrentGeometryTube(
         tangents
     );
 
+
+
     constexpr double DEBUG_TUBE_RADIUS =
         4.0;
 
@@ -1821,27 +1874,519 @@ void GLView::drawStretchCurrentGeometryTube(
 
 void GLView::toggleStretchPlaybackPreview()
 {
-    showStretchPlaybackPreview =
-        !showStretchPlaybackPreview;
+    showStretchCurrentPreview =
+        !showStretchCurrentPreview;
 
     std::cout
         << "[STRETCH PREVIEW VISIBILITY]"
         << " visible="
-        << showStretchPlaybackPreview
+        << showStretchCurrentPreview
         << std::endl;
 
     update();
 }
 
-bool GLView::
-isStretchPlaybackPreviewVisible() const
+bool GLView::isStretchPlaybackPreviewVisible() const
 {
-    return showStretchPlaybackPreview;
+    return showStretchCurrentPreview;
+}
+
+bool GLView::isStretchLoadedPreviewVisible() const
+{
+    return showStretchLoadedPreview;
+}
+
+bool GLView::isStretchCurrentPreviewVisible() const
+{
+    return showStretchCurrentPreview;
+}
+
+bool GLView::isStretchFinalPreviewVisible() const
+{
+    return showStretchFinalPreview;
+}
+
+void GLView::toggleStretchLoadedPreview()
+{
+    showStretchLoadedPreview =
+        !showStretchLoadedPreview;
+
+    std::cout
+        << "[STRETCH LOADED PREVIEW]"
+        << " visible="
+        << showStretchLoadedPreview
+        << std::endl;
+
+    update();
+}
+
+void GLView::toggleStretchCurrentPreview()
+{
+    showStretchCurrentPreview =
+        !showStretchCurrentPreview;
+
+    std::cout
+        << "[STRETCH CURRENT PREVIEW]"
+        << " visible="
+        << showStretchCurrentPreview
+        << std::endl;
+
+    update();
+}
+
+void GLView::toggleStretchFinalPreview()
+{
+    showStretchFinalPreview =
+        !showStretchFinalPreview;
+
+    std::cout
+        << "[STRETCH FINAL PREVIEW]"
+        << " visible="
+        << showStretchFinalPreview
+        << std::endl;
+
+    update();
 }
 
 
+void GLView::drawStretchLoadedDebugPreview()
+{
+    if (!showStretchLoadedPreview)
+        return;
+
+    if (!app || !shader)
+        return;
+
+    const SpatialCurveIntegrationResult& result =
+        app->getDebugStretchLoadedIntegrationResult();
+
+    if (!result.valid
+        || !result.isComplete()
+        || result.nodes.size() < 2)
+    {
+        return;
+    }
+
+    shader->setVec3(
+        "pipeColor",
+        STRETCH_LOADED_PREVIEW_COLOR
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        drawStretchDebugLine(
+            result.nodes,
+            stretchLoadedDebugRenderer,
+            2.0f
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawStretchDebugTube(
+            result.nodes,
+            stretchLoadedDebugRenderer,
+            1.5,
+            16
+        );
+    }
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
 
 
+void GLView::drawStretchFinalDebugPreview()
+{
+    if (!showStretchFinalPreview)
+        return;
+
+    if (!app || !shader)
+        return;
+
+    const SpatialCurveIntegrationResult& result =
+        app->getDebugStretchFinalIntegrationResult();
+
+    if (!result.valid
+        || !result.isComplete()
+        || result.nodes.size() < 2)
+    {
+        return;
+    }
+
+    shader->setVec3(
+        "pipeColor",
+        STRETCH_FINAL_PREVIEW_COLOR
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        drawStretchDebugLine(
+            result.nodes,
+            stretchFinalDebugRenderer,
+            2.0f
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawStretchDebugTube(
+            result.nodes,
+            stretchFinalDebugRenderer,
+            1.5,
+            16
+        );
+    }
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
+
+void GLView::drawStretchCurrentDebugPreview()
+{
+    if (!showStretchCurrentPreview)
+        return;
+
+    if (!app)
+        return;
+
+    if (!shader)
+        return;
+
+    const SpatialCurveIntegrationResult& result =
+        app->getDebugStretchCurrentIntegrationResult();
+
+    if (!result.valid)
+        return;
+
+    if (!result.isComplete())
+        return;
+
+    if (result.nodes.size() < 2)
+        return;
+
+    // =====================================================
+    // ONE-TIME DIAGNOSTIC PER RENDER MODE
+    // =====================================================
+
+    static bool printedLineOnce =
+        false;
+
+    static bool printedMeshOnce =
+        false;
+
+    bool& printedForCurrentMode =
+        (
+            renderMode == RenderMode::LINE
+            ? printedLineOnce
+            : printedMeshOnce
+            );
+
+    if (!printedForCurrentMode)
+    {
+        std::cout
+            << "[STRETCH CURRENT PREVIEW]"
+            << " mode="
+            << (
+                renderMode == RenderMode::LINE
+                ? "LINE"
+                : "MESH"
+                )
+            << " visible="
+            << showStretchCurrentPreview
+            << " valid="
+            << result.valid
+            << " complete="
+            << result.isComplete()
+            << " nodes="
+            << result.nodes.size()
+            << std::endl;
+
+        printedForCurrentMode =
+            true;
+    }
+
+    // =====================================================
+    // CURRENT STATE-DRIVEN PREVIEW COLOR
+    //
+    // Orange:
+    //     instantaneous stretch-bending geometry
+    // =====================================================
+
+    shader->setVec3(
+        "pipeColor",
+        STRETCH_CURRENT_PREVIEW_COLOR
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        drawStretchDebugLine(
+            result.nodes,
+            stretchCurrentDebugRenderer,
+            3.0f
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawStretchDebugTube(
+            result.nodes,
+            stretchCurrentDebugRenderer,
+            2.0,
+            16
+        );
+    }
+
+    // Restore shared shader state for later draw calls.
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
+
+void GLView::drawStretchDebugLine(
+    const std::vector<PipeNode>& nodes,
+    PipeRenderer& renderer,
+    float lineWidth)
+{
+    if (nodes.size() < 2)
+        return;
+
+    renderer.setMode(
+        RenderMode::LINE
+    );
+
+    renderer.uploadLine(
+        nodesToFloatLine(
+            nodes
+        )
+    );
+
+    glLineWidth(
+        lineWidth
+    );
+
+    renderer.draw();
+
+    glLineWidth(
+        MANUFACTURING_LINE_WIDTH
+    );
+}
+
+
+void GLView::drawStretchDebugTube(
+    const std::vector<PipeNode>& nodes,
+    PipeRenderer& renderer,
+    double radius,
+    int radialSegments)
+{
+    if (nodes.size() < 2)
+        return;
+
+    std::vector<Vec3D> centers;
+    std::vector<Vec3D> tangents;
+
+    nodesToCenterlineAndTangents(
+        nodes,
+        centers,
+        tangents
+    );
+
+    tubeMesh.generate(
+        centers,
+        tangents,
+        radius,
+        radialSegments
+    );
+
+    renderer.uploadMesh(
+        tubeMesh.getVertices(),
+        tubeMesh.getIndices()
+    );
+
+    renderer.setMode(
+        RenderMode::MESH
+    );
+
+    renderer.draw();
+}
+
+void GLView::toggleStretchActiveZoneMarkers()
+{
+    showStretchActiveZoneMarkers =
+        !showStretchActiveZoneMarkers;
+
+    std::cout
+        << "[STRETCH ACTIVE ZONE MARKERS]"
+        << " visible="
+        << showStretchActiveZoneMarkers
+        << std::endl;
+
+    update();
+}
+
+bool GLView::areStretchActiveZoneMarkersVisible() const
+{
+    return showStretchActiveZoneMarkers;
+}
+
+const PipeNode*
+GLView::findClosestNodeAtArcLength(
+    const SpatialCurveIntegrationResult& result,
+    double targetArcLength) const
+{
+    if (!result.valid)
+        return nullptr;
+
+    if (result.nodes.empty())
+        return nullptr;
+
+    if (result.arcLengths.size()
+        != result.nodes.size())
+    {
+        return nullptr;
+    }
+
+    std::size_t bestIndex =
+        0;
+
+    double bestDistance =
+        std::abs(
+            result.arcLengths[0]
+            - targetArcLength
+        );
+
+    for (std::size_t i = 1;
+        i < result.arcLengths.size();
+        ++i)
+    {
+        const double distance =
+            std::abs(
+                result.arcLengths[i]
+                - targetArcLength
+            );
+
+        if (distance < bestDistance)
+        {
+            bestDistance =
+                distance;
+
+            bestIndex =
+                i;
+        }
+    }
+
+    return
+        &result.nodes[bestIndex];
+}
+
+void GLView::drawStretchActiveZoneMarkers()
+{
+    if (!showStretchActiveZoneMarkers)
+        return;
+
+    if (!app || !shader)
+        return;
+
+    const SpatialCurveIntegrationResult& result =
+        app->getDebugStretchCurrentIntegrationResult();
+
+    if (!result.valid
+        || !result.isComplete()
+        || result.nodes.size() < 2)
+    {
+        return;
+    }
+
+    const StretchBendingActiveZone& activeZone =
+        app->getDebugStretchActiveZone();
+
+    if (!activeZone.isValidForLength(
+        result.integratedArcLength
+    ))
+    {
+        return;
+    }
+
+    const PipeNode* startNode =
+        findClosestNodeAtArcLength(
+            result,
+            activeZone.startS
+        );
+
+    const PipeNode* endNode =
+        findClosestNodeAtArcLength(
+            result,
+            activeZone.endS
+        );
+
+    if (!startNode || !endNode)
+        return;
+
+    shader->setVec3(
+        "pipeColor",
+        STRETCH_ACTIVE_ZONE_COLOR
+    );
+
+    drawStretchActiveZoneMarker(
+        *startNode
+    );
+
+    drawStretchActiveZoneMarker(
+        *endNode
+    );
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
+
+void GLView::drawStretchActiveZoneMarker(
+    const PipeNode& node)
+{
+    constexpr double HALF_MARKER_LENGTH =
+        6.0;
+
+    const Vec3D firstPoint =
+        node.pos
+        - node.N
+        * HALF_MARKER_LENGTH;
+
+    const Vec3D secondPoint =
+        node.pos
+        + node.N
+        * HALF_MARKER_LENGTH;
+
+    std::vector<float> vertices{
+        static_cast<float>(firstPoint.x),
+        static_cast<float>(firstPoint.y),
+        static_cast<float>(firstPoint.z),
+
+        static_cast<float>(secondPoint.x),
+        static_cast<float>(secondPoint.y),
+        static_cast<float>(secondPoint.z)
+    };
+
+    stretchActiveZoneDebugRenderer.setMode(
+        RenderMode::LINE
+    );
+
+    stretchActiveZoneDebugRenderer.uploadLine(
+        vertices
+    );
+
+    glLineWidth(
+        4.0f
+    );
+
+    stretchActiveZoneDebugRenderer.draw();
+
+    glLineWidth(
+        MANUFACTURING_LINE_WIDTH
+    );
+}
 
 
 

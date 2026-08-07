@@ -86,6 +86,58 @@ struct HUDData
     bool stretchPreviewVisible =
         true;
 
+    //Vextending visibilte data
+    bool stretchLoadedPreviewVisible =
+        true;
+
+    bool stretchCurrentPreviewVisible =
+        true;
+
+    bool stretchFinalPreviewVisible =
+        true;
+
+    //
+
+    bool stretchActiveZoneMarkersVisible =
+        true;
+
+    double stretchActiveZoneStart =
+        0.0;
+
+    double stretchActiveZoneEnd =
+        0.0;
+    //compact stretch-process values
+
+    // =====================================================
+// STRETCH-BENDING PROCESS VALUES
+//
+// Data only. Presentation will be redesigned later.
+// =====================================================
+
+    double stretchCommandedTension =
+        0.0;
+
+    double stretchRecommendedTension =
+        0.0;
+
+    double stretchCurrentCurvature =
+        0.0;
+
+    double stretchLoadedCurvature =
+        0.0;
+
+    double stretchFinalCurvature =
+        0.0;
+
+    double stretchSpringbackRatio =
+        0.0;
+
+    double stretchCurvatureRecovery =
+        0.0;
+
+    bool stretchSpringbackValid =
+        false;
+
     AdditionalPassExecutionResult additionalPassResult =   AdditionalPassExecutionResult::Disabled;
 
 

@@ -24,6 +24,7 @@
 #include "Core/Forming/StretchBendingProcessInput.h"
 #include "Core/Geometry/CurvatureTorsionProfile.h"
 #include "Core/Forming/StretchBendingManufacturingState.h"
+#include "Core/Forming/StretchBendingProcessInputBuilder.h"
 
 struct StretchBendingEvaluationResult;
 
@@ -283,6 +284,8 @@ public:
 
      bool isDebugStretchCurrentGeometryValid() const;
 
+     const StretchBendingActiveZone&
+         getDebugStretchActiveZone() const;
 private:
     
 
@@ -406,6 +409,14 @@ private:
    StretchBendingManufacturingTiming
        debugStretchManufacturingTiming;
 
-      
+  
+   void  debugPrintStretchProcessHudData() const;
+
+    StretchBendingOperation
+        buildTestStretchBendingOperation() const;
+private:
+    StretchBendingOperation
+        debugStretchOperation;
+    
 }; 
-      
+

@@ -50,10 +50,18 @@ private:
     void drawDebugFrame(
         const Frame& frame,
         double size);
-  bool showStretchPlaybackPreview =
-        true;
-    bool showStretchCurrentGeometryPreview =
-        true;
+
+  //bool showStretchPlaybackPreview =
+   //     true;
+
+  bool showStretchLoadedPreview =
+      true;
+
+  bool showStretchCurrentPreview =
+      true;
+
+  bool showStretchFinalPreview =
+      true;
   
     // =========================
     // DATA SOURCE
@@ -111,6 +119,19 @@ public:
         hudData = data;
     }
     bool isStretchPlaybackPreviewVisible() const;
+
+    bool isStretchLoadedPreviewVisible() const;
+
+    bool isStretchCurrentPreviewVisible() const;
+
+    bool isStretchFinalPreviewVisible() const;
+
+    void toggleStretchLoadedPreview();
+
+    void toggleStretchCurrentPreview();
+
+    void toggleStretchFinalPreview();
+
 public:
     void setAppController(AppController* a)
     {
@@ -133,6 +154,11 @@ public:
     }
 
     void toggleStretchPlaybackPreview();
+
+    void toggleStretchActiveZoneMarkers();
+
+    bool areStretchActiveZoneMarkersVisible() const;
+
     
 private:
 
@@ -200,5 +226,51 @@ private:
     void drawStretchCurrentGeometryTube(
         const std::vector<PipeNode>& nodes
     );
+
+
+    void drawStretchLoadedDebugPreview();
+
+    void drawStretchCurrentDebugPreview();
+
+    void drawStretchFinalDebugPreview();
+
+
+    PipeRenderer stretchLoadedDebugRenderer;
+   
+    PipeRenderer stretchFinalDebugRenderer;
+
+    
+
+
+    void drawStretchDebugLine(
+        const std::vector<PipeNode>& nodes,
+        PipeRenderer& renderer,
+        float lineWidth
+    );
+   ;
+
+
+    void drawStretchDebugTube(
+        const std::vector<PipeNode>& nodes,
+        PipeRenderer& renderer,
+        double radius,
+        int radialSegments
+    );
+
+    bool showStretchActiveZoneMarkers =
+        true;
+
+    const PipeNode* findClosestNodeAtArcLength(
+        const SpatialCurveIntegrationResult& result,
+        double targetArcLength
+    ) const;
+
+    void drawStretchActiveZoneMarkers();
+
+    void drawStretchActiveZoneMarker(
+        const PipeNode& node
+    );
+
+    PipeRenderer stretchActiveZoneDebugRenderer;
 
 };

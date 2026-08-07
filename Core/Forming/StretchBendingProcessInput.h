@@ -29,7 +29,7 @@ struct StretchBendingProcessInput
     // epsilon_0 = T / (E A)
     double axialStretchStrain =
         0.0;
-
+    
     // Material feed speed through the fixed active zone.
     //
     // Units:
@@ -41,8 +41,11 @@ struct StretchBendingProcessInput
     // curve integrator.
     double sampleStep =
         0.5;
-
-   
+    //geometry
+    double arcLength =
+        0.0;
+	double targetFinalCurvature = 0.0;
+	double targetTorsion = 0.0;
 
     double springbackRatio =
         0.0;

@@ -1,0 +1,137 @@
+Here are a few simplified examples showing why the separation helps.
+
+1. Loading a job from a file
+
+A file could describe the manufacturing request:
+
+pipe diameter = 20 mm
+wall thickness = 1.5 mm
+target curvature = 0.002
+arc length = 200 mm
+axial strain = 0.03
+springback ratio = 0.10
+
+Load it into:
+
+StretchBendingOperation operation;
+
+Then convert it:
+
+StretchBendingProcessInput input =
+    StretchBendingProcessInputBuilder::build(
+        operation
+    );
+
+The file loader does not need to know how the evaluator is organized.
+
+2. Supporting several operations
+
+You could store several jobs:
+
+std::vector<StretchBendingOperation> operations;
+
+For example:
+
+Operation 1:
+    curvature = 0.0015
+    length = 150
+
+Operation 2:
+    curvature = 0.0020
+    length = 200
+
+Operation 3:
+    curvature = 0.0030
+    length = 100
+
+Then evaluate them one by one:
+
+for (const StretchBendingOperation& operation : operations)
+{
+    const StretchBendingProcessInput input =
+        StretchBendingProcessInputBuilder::build(
+            operation
+        );
+
+    const StretchBendingEvaluationResult result =
+        StretchBendingEvaluator::evaluate(
+            input
+        );
+}
+
+The operation list stores manufacturing intent. The evaluator still receives its own specialized input.
+
+3. Building a manufacturing queue
+
+Later, a general queue could contain different operation types:
+
+Feed 300 mm
+Rotate 45°
+Stretch-bend section A
+Feed 100 mm
+Stretch-bend section B
+
+Conceptually:
+
+ManufacturingOperation op;
+
+could hold:
+
+FeedOperation
+RotateOperation
+StretchBendingOperation
+
+The queue does not need to store evaluator internals.
+
+It only stores commands describing what should happen.
+
+4. Changing evaluator requirements later
+
+Suppose later the evaluator needs a new field:
+
+double frictionCoefficient;
+
+You can add conversion logic inside:
+
+StretchBendingProcessInputBuilder
+
+without changing:
+
+job files,
+operation queues,
+UI forms,
+manufacturing plans.
+
+The builder becomes the adaptation layer.
+
+5. Reusing one operation in different contexts
+
+The same operation can be used for:
+
+validation
+preview geometry
+manufacturing playback
+export
+report generation
+
+For example:
+
+StretchBendingOperation operation;
+
+can be:
+
+validateOperation(operation);
+previewOperation(operation);
+enqueueOperation(operation);
+saveOperation(operation);
+
+Each subsystem receives the same manufacturing request, but converts it into the internal format it needs.
+
+Core idea
+StretchBendingOperation
+    describes WHAT should be manufactured
+
+StretchBendingProcessInput
+    describes WHAT the evaluator needs
+
+That separation becomes more valuable as the project grows.

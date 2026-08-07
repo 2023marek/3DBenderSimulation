@@ -4372,3 +4372,597 @@ private:
     void increaseStretchPlaybackSpeed();
 
     void decreaseStretchPlaybackSpeed();
+
+
+    =======================================================
+    =========================================================
+
+Phase 10S — Add Active-Zone Boundary Markers and Fixed Forming-Region Visualization
+
+Goal:
+
+loaded/current/final geometry stay unchanged
+active zone [startS, endS] becomes visible
+markers move with the generated pipe geometry
+
+Use a distinct marker color, for example cyan:
+
+Use a distinct marker color, for example cyan:
+
+const glm::vec3 STRETCH_ACTIVE_ZONE_COLOR{
+    0.10f,
+    0.90f,
+    1.00f
+};
+10S.1 — Add visibility state
+
+In GLView.h:
+
+private:
+    bool showStretchActiveZoneMarkers =
+        true;
+
+This is private because it is rendering state owned by GLView.
+
+Add public methods:
+
+public:
+    void toggleStretchActiveZoneMarkers();
+
+    bool areStretchActiveZoneMarkersVisible() const;
+
+Implementation:
+
+void GLView::toggleStretchActiveZoneMarkers()
+{
+    showStretchActiveZoneMarkers =
+        !showStretchActiveZoneMarkers;
+
+    std::cout
+        << "[STRETCH ACTIVE ZONE MARKERS]"
+        << " visible="
+        << showStretchActiveZoneMarkers
+        << std::endl;
+
+    update();
+}
+
+bool GLView::areStretchActiveZoneMarkersVisible() const
+{
+    return showStretchActiveZoneMarkers;
+}
+10S.2 — Expose the active zone
+
+In AppController.h:
+
+public:
+    const StretchBendingActiveZone&
+    getDebugStretchActiveZone() const;
+
+Implementation:
+
+const StretchBendingActiveZone&
+AppController::getDebugStretchActiveZone() const
+{
+    return debugStretchManufacturingState.activeZone;
+}
+
+This returns read-only process data. It does not rebuild geometry.
+
+10S.3 — Add a node lookup helper
+
+The marker locations are defined by arc length:.........................
+
+
+Phase 10T — Add Current Tension, Curvature, Springback, and Process-Stage Data
+
+We will not expand the HUD layout now. Phase 10T will only prepare a clean data model so the values can later be shown in a redesigned panel.
+
+10T.1 — Extend HUDData with compact stretch-process values
+
+In the HUDData struct, add:
+
+// =====================================================
+// STRETCH-BENDING PROCESS VALUES
+//
+// Data only. Presentation will be redesigned later.
+// =====================================================
+
+double stretchCommandedTension =
+    0.0;
+
+double stretchRecommendedTension =
+    0.0;
+
+double stretchCurrentCurvature =
+    0.0;
+
+double stretchLoadedCurvature =
+    0.0;
+
+double stretchFinalCurvature =
+    0.0;
+
+double stretchSpringbackRatio =
+    0.0;
+
+double stretchCurvatureRecovery =
+    0.0;
+
+bool stretchSpringbackValid =
+    false;
+
+These remain public because HUDData is a transfer structure.
+
+10T.2 — Resolve instantaneous curvature
+
+Inside AppController::buildHUDData(), after obtaining:
+
+const StretchBendingManufacturingState& stretchState =
+    debugStretchManufacturingState;
+
+resolve the current parameters:
+
+const StretchBendingCurrentProfileParameters
+    currentParameters =
+        StretchBendingCurrentProfileParameterResolver::
+            resolve(.................................
+
+Phase 10U — Reusable Stretch-Bending Operation and Configuration
+
+The goal is to replace this pattern:
+
+StretchBendingProcessInput input =
+    buildTestStretchBendingProcessInput();
+
+input.geometry.targetCurvature = 0.002;
+input.geometry.targetTorsion = 0.0;
+input.geometry.targetArcLength = 200.0;
+input.axialStretchStrain = 0.03;
+input.sampleStep = 0.25;
+
+with a reusable operation object:
+
+StretchBendingOperation
+        ?
+StretchBendingProcessInputBuilder
+        ?
+StretchBendingProcessInput
+        ?
+existing evaluator/profile/integrator pipeline
+
+The evaluator should remain unchanged.
+
+10U.1 — Define the reusable operation
+
+Create:
+
+Core/Forming/StretchBendingOperation.h
+#pragma once
+
+#include <cmath>
+
+#include "Core/Forming/StretchBendingPipeSection.h"
+#include "Core/Forming/StretchBendingMaterial.h"
+
+// =====================================================
+// STRETCH-BENDING OPERATION
+//
+// Reusable description of one requested stretch-bending
+// manufacturing operation.
+//
+// Unlike StretchBendingProcessInput, this object is
+// suitable for storage in a manufacturing plan.
+//
+// It describes what should be manufactured, not the
+// current runtime state.
+// =====================================================
+
+struct StretchBendingOperation
+{
+    // Pipe cross-section used by this operation.
+    StretchBendingPipeSection pipeSection;
+
+    // Material model used for feasibility and force
+    // evaluation.
+    StretchBendingMaterial material;
+
+    // Requested final curvature after unloading.
+    //
+    // Units:
+    //     1 / mm
+    double targetFinalCurvature =
+        0.0;
+
+    // Requested torsion.
+    //
+    // Units:
+    //     1 / mm
+    double targetTorsion =
+        0.0;
+
+    // Total pipe-centerline length represented by this
+    // standalone operation.
+    //
+    // Units:
+    //     mm
+    double arcLength =
+        0.0;
+
+    // Commanded axial centerline strain.
+    double axialStretchStrain =
+        0.0;
+
+    // Material feed speed.
+    //
+    // Units:
+    //     mm / second
+    double feedSpeed =
+        0.0;
+
+    // Requested springback compensation.
+    bool compensateSpringback =
+        true;
+
+    // Fraction of loaded curvature expected to recover.
+    //
+    // Must satisfy:
+    //
+    //     0 <= springbackRatio < 1
+    double springbackRatio =
+        0.0;
+
+    // Spatial integration sample distance.
+    //
+    // Units:
+    //     mm
+    double sampleStep =
+        0.5;
+
+    bool enabled =
+        true;
+
+    bool isValid() const
+    {
+        if (!enabled)
+            return false;
+
+        if (!pipeSection.isValid())
+            return false;
+
+        if (!material.isValid())
+            return false;
+
+        if (!std::isfinite(targetFinalCurvature)
+            || !std::isfinite(targetTorsion)
+            || !std::isfinite(arcLength)
+            || !std::isfinite(axialStretchStrain)
+            || !std::isfinite(feedSpeed)
+            || !std::isfinite(springbackRatio)
+            || !std::isfinite(sampleStep))
+        {
+            return false;
+        }
+
+        if (targetFinalCurvature < 0.0)
+            return false;
+
+        if (arcLength <= 0.0)
+            return false;
+
+        if (axialStretchStrain < 0.0)
+            return false;
+
+        if (feedSpeed <= 0.0)
+            return false;
+
+        if (springbackRatio < 0.0
+            || springbackRatio >= 1.0)
+        {
+            return false;
+        }
+
+        if (sampleStep <= 1e-9)
+            return false;
+
+        return true;
+    }
+};
+
+Ownership
+
+This is a plain data structure.
+
+public fields:
+    suitable for construction, serialization,
+    operation queues and manufacturing plans
+10U.2 — Keep operation and process input separate
+
+Do not replace StretchBendingProcessInput.
+
+They have different roles:
+
+StretchBendingOperation
+    persistent manufacturing request
+
+StretchBendingProcessInput
+    normalized evaluator-ready input
+
+This separation gives you one controlled conversion point.
+
+10U.3 — Create the input builder
+
+Create:
+
+Core/Forming/StretchBendingProcessInputBuilder.h...............
+
+Adjust the exact geometry member names if your StretchBendingGeometryInput uses different names.
+
+10U.4 — Add a reusable test-operation builder
+
+In AppController.h, add a private helper:..............
+
+10U.5 — Replace the old debug-input construction
+
+Inside:
+
+debugTestStretchBendingGeometry()
+
+replace:
+
+StretchBendingProcessInput input =
+    buildTestStretchBendingProcessInput();
+
+input.geometry.targetCurvature =
+    0.002;
+
+input.geometry.targetTorsion =
+    0.0;
+
+input.geometry.targetArcLength =
+    200.0;
+
+input.axialStretchStrain =
+    0.03;
+
+input.sampleStep =
+    0.25;
+
+with:
+
+const StretchBendingOperation operation =
+    buildTestStretchBendingOperation();
+
+const StretchBendingProcessInput input =
+    StretchBendingProcessInputBuilder::build(
+        operation
+    );
+
+Then retain the existing evaluator code unchanged:
+
+const StretchBendingEvaluationResult evaluation =
+    StretchBendingEvaluator::evaluate(
+        input
+    );
+10U.6 — Validate both layers explicitly
+
+Before evaluation:
+
+if (!operation.isValid())
+{
+    std::cout
+        << "[STRETCH OPERATION]"
+        << " valid=0"
+        << " reason=InvalidOperation"
+        << std::endl;
+
+    return;
+}
+
+if (!input.isValid())
+{
+    std::cout
+        << "[STRETCH OPERATION]"
+        << " operationValid=1"
+        << " inputValid=0"
+        << " reason=ConversionFailed"
+        << std::endl;
+
+    return;
+}
+
+Success diagnostic:
+
+std::cout
+    << "[STRETCH OPERATION]"
+    << " operationValid="
+    << operation.isValid()
+    << " inputValid="
+    << input.isValid()
+    << " targetKappa="
+    << operation.targetFinalCurvature
+    << " torsion="
+    << operation.targetTorsion
+    << " arcLength="
+    << operation.arcLength
+    << " axialStrain="
+    << operation.axialStretchStrain
+    << " springbackRatio="
+    << operation.springbackRatio
+    << std::endl;
+
+Expected:
+
+[STRETCH OPERATION]
+operationValid=1
+inputValid=1
+targetKappa=0.002
+torsion=0
+arcLength=200
+axialStrain=0.03
+springbackRatio=0.1
+10U.7 — Store the accepted operation
+
+In AppController.h, add:
+
+private:
+    StretchBendingOperation
+        debugStretchOperation;
+
+After validation:
+
+debugStretchOperation =
+    operation;
+
+This lets later phases reuse the exact accepted operation instead of reconstructing it.
+
+10U.8 — Update reset logic
+
+Your reset currently rebuilds the test input manually.
+
+Replace that with:
+
+void AppController::
+resetDebugStretchBendingPlayback()
+{
+    if (!debugStretchOperation.isValid())
+        return;
+
+    const StretchBendingProcessInput input =
+        StretchBendingProcessInputBuilder::build(
+            debugStretchOperation
+        );
+
+    if (!input.isValid())
+        return;
+
+    StretchBendingActiveZone activeZone;
+
+    activeZone.startS =
+        40.0;
+
+    activeZone.endS =
+        160.0;
+
+    debugStretchManufacturingState =
+        StretchBendingManufacturingStateBuilder::
+            buildReadyState(
+                input,
+                debugStretchEvaluationResult,
+                activeZone
+            );
+
+    rebuildDebugStretchCurrentGeometry();
+
+    std::cout
+        << "[STRETCH PLAYBACK RESET]"
+        << " stage="
+        << stretchBendingManufacturingStageToString(
+            debugStretchManufacturingState.stage
+        )
+        << " time="
+        << debugStretchManufacturingState.elapsedTime
+        << std::endl;
+}
+
+Now reset uses the stored reusable operation.
+
+10U.9 — Add operation rejection tests
+
+Add a small test helper:
+
+void AppController::
+debugTestStretchBendingOperationValidation() const
+{
+    StretchBendingOperation valid =
+        buildTestStretchBendingOperation();
+
+    StretchBendingOperation invalidLength =
+        valid;
+
+    invalidLength.arcLength =
+        0.0;
+
+    StretchBendingOperation invalidSpringback =
+        valid;
+
+    invalidSpringback.springbackRatio =
+        1.0;
+
+    StretchBendingOperation invalidSpeed =
+        valid;
+
+    invalidSpeed.feedSpeed =
+        0.0;
+
+    std::cout
+        << "[STRETCH OPERATION CASE]"
+        << " name=Valid"
+        << " accepted="
+        << valid.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH OPERATION CASE]"
+        << " name=InvalidLength"
+        << " accepted="
+        << !invalidLength.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH OPERATION CASE]"
+        << " name=InvalidSpringback"
+        << " accepted="
+        << !invalidSpringback.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH OPERATION CASE]"
+        << " name=InvalidSpeed"
+        << " accepted="
+        << !invalidSpeed.isValid()
+        << std::endl;
+}
+
+Expected:
+
+Valid               accepted=1
+InvalidLength       accepted=1
+InvalidSpringback   accepted=1
+InvalidSpeed        accepted=1
+Data flow after Phase 10U
+StretchBendingOperation
+        ?
+        ? reusable manufacturing request
+        ?
+StretchBendingProcessInputBuilder
+        ?
+        ? normalization / conversion
+        ?
+StretchBendingProcessInput
+        ?
+        ?
+StretchBendingEvaluator
+        ?
+        ?
+profiles ? geometry ? playback ? rendering
+Phase 10U acceptance criteria
+? reusable StretchBendingOperation exists
+
+? operation validation is independent from evaluator input
+
+? one builder converts operation to process input
+
+? existing evaluator remains unchanged
+
+? debug geometry uses the reusable operation
+
+? reset uses the stored operation
+
+? invalid operation cases are rejected
+
+? playback, geometry and HUD behavior remain unchanged
+
+? no duplicate hard-coded process values remain in reset and geometry setup
+
+  

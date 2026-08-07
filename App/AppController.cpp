@@ -31,6 +31,7 @@
 #include "Core/Forming/StretchBendingManufacturingTiming.h"
 #include "Core/Forming/StretchBendingCurrentProfileParameterResolver.h"
 #include "Core/Forming/StretchBendingCurrentProfileBuilder.h"
+#include "Core/Forming/StretchBendingOperation.h"
 
 
 
@@ -151,13 +152,13 @@ namespace
         200.0;
 
     constexpr double TEST_STRETCH_TARGET_CURVATURE =
-        0.01;
+        0.002;
 
     constexpr double TEST_STRETCH_TARGET_TORSION =
         0.0;
 
     constexpr double TEST_STRETCH_AXIAL_STRAIN =
-        0.02;
+        0.03;
 
     constexpr double TEST_STRETCH_FEED_SPEED =
         40.0;
@@ -242,6 +243,7 @@ AppController::AppController()
     debugTestStretchBendingGeometry();
     debugTestStretchBendingStateProgression();
     debugTestStretchBendingSpringback();
+    debugPrintStretchProcessHudData();
 
 }
 
@@ -249,6 +251,8 @@ AppController::AppController()
 void AppController::update(double dt)
 {
     sim.update(dt);
+
+
 }
 
 HUDData AppController::buildHUDData() const
@@ -424,6 +428,65 @@ HUDData AppController::buildHUDData() const
         && debugStretchCurrentIntegrationResult.isComplete()
         && !debugStretchCurrentIntegrationResult.nodes.empty();
 
+    data.stretchActiveZoneStart =
+        debugStretchManufacturingState.activeZone.startS;
+
+    data.stretchActiveZoneEnd =
+        debugStretchManufacturingState.activeZone.endS;
+    const StretchBendingCurrentProfileParameters
+        currentParameters =
+        StretchBendingCurrentProfileParameterResolver::
+        resolve(
+            stretchState,
+            debugStretchEvaluationResult
+        );
+
+    data.stretchCurrentCurvature =
+        currentParameters.isValid()
+        ? currentParameters.curvature
+        : 0.0;
+    data.stretchCommandedTension =
+        debugStretchEvaluationResult.commandedTension;
+
+    data.stretchRecommendedTension =
+        debugStretchEvaluationResult.recommendedTension;
+    data.stretchLoadedCurvature =
+        debugStretchEvaluationResult.loadedCurvatureCommand;
+
+    data.stretchFinalCurvature =
+        debugStretchEvaluationResult.predictedFinalCurvature;
+    data.stretchSpringbackRatio =
+        debugStretchEvaluationResult.springbackRatio;
+
+    data.stretchSpringbackValid =
+        debugStretchEvaluationResult.springbackPredictionValid;
+    data.stretchCurvatureRecovery =
+        debugStretchEvaluationResult.loadedCurvatureCommand
+        - debugStretchEvaluationResult.predictedFinalCurvature;
+    if (debugStretchEvaluationResult.valid)
+    {
+        data.stretchCommandedTension =
+            debugStretchEvaluationResult.commandedTension;
+
+        data.stretchRecommendedTension =
+            debugStretchEvaluationResult.recommendedTension;
+
+        data.stretchLoadedCurvature =
+            debugStretchEvaluationResult.loadedCurvatureCommand;
+
+        data.stretchFinalCurvature =
+            debugStretchEvaluationResult.predictedFinalCurvature;
+
+        data.stretchSpringbackRatio =
+            debugStretchEvaluationResult.springbackRatio;
+
+        data.stretchCurvatureRecovery =
+            debugStretchEvaluationResult.loadedCurvatureCommand
+            - debugStretchEvaluationResult.predictedFinalCurvature;
+
+        data.stretchSpringbackValid =
+            debugStretchEvaluationResult.springbackPredictionValid;
+    }
 
 
 
@@ -1878,7 +1941,7 @@ void AppController::debugTestStretchBendingProfileBuilder()
 {
     if (!DEBUG_TEST_STRETCH_BENDING_INPUT)
         return;
-
+    
     // =====================================================
     // BUILD A KNOWN VALID TEST CASE
     //
@@ -1949,9 +2012,18 @@ void AppController::debugTestStretchBendingProfileBuilder()
             << last.torsion
             << std::endl;
     }
+    StretchBendingOperation rejectedOperation =
+        buildTestStretchBendingOperation();
 
-    StretchBendingProcessInput rejectedInput =
-        buildTestStretchBendingProcessInput();
+    rejectedOperation.targetFinalCurvature =
+        0.01;
+
+    rejectedOperation.axialStretchStrain =
+        0.02;
+    const StretchBendingProcessInput rejectedInput =
+        StretchBendingProcessInputBuilder::build(
+            rejectedOperation
+        );
 
     const StretchBendingEvaluationResult rejectedEvaluation =
         evaluator.evaluate(
@@ -1966,10 +2038,16 @@ void AppController::debugTestStretchBendingProfileBuilder()
 
     std::cout
         << "[STRETCH PROFILE REJECTION]"
+        << " operationValid="
+        << rejectedOperation.isValid()
+        << " inputValid="
+        << rejectedInput.isValid()
         << " evaluationStatus="
         << stretchBendingEvaluationStatusToString(
             rejectedEvaluation.status
         )
+        << " evaluationValid="
+        << rejectedEvaluation.valid
         << " profileValid="
         << rejectedProfile.valid
         << " samples="
@@ -1989,24 +2067,60 @@ void AppController::debugTestStretchBendingGeometry()
     // modify rotary-draw playback or manufacturing history.
     // =====================================================
 
-    StretchBendingProcessInput input =
-        buildTestStretchBendingProcessInput();
+    const StretchBendingOperation operation =
+        buildTestStretchBendingOperation();
 
-    input.geometry.targetCurvature =
-        0.002;
+    const StretchBendingProcessInput input =
+        StretchBendingProcessInputBuilder::build(
+            operation
+        );
+    if (!operation.isValid())
+    {
+        std::cout
+            << "[STRETCH OPERATION]"
+            << " valid=0"
+            << " reason=InvalidOperation"
+            << std::endl;
 
-    input.geometry.targetTorsion =
-        0.0;
+        return;
+    }
 
-    input.geometry.targetArcLength =
-        200.0;
+    if (!input.isValid())
+    {
+        std::cout
+            << "[STRETCH OPERATION]"
+            << " operationValid=1"
+            << " inputValid=0"
+            << " reason=ConversionFailed"
+            << std::endl;
 
-    input.axialStretchStrain =
-        0.03;
+        return;
+    }
 
-    input.sampleStep =
-        0.25;
+    std::cout
+    << "[STRETCH OPERATION]"
+    << " operationValid="
+    << operation.isValid()
+    << " inputValid="
+    << input.isValid()
+    << " targetKappa="
+    << operation.targetFinalCurvature
+    << " torsion="
+    << operation.targetTorsion
+    << " arcLength="
+    << operation.arcLength
+    << " axialStrain="
+    << operation.axialStretchStrain
+    << " springbackRatio="
+    << operation.springbackRatio
+    << std::endl;
 
+StretchBendingEvaluator evaluator;
+
+const StretchBendingEvaluationResult evaluation =
+    evaluator.evaluate(
+        input
+    );
     // =====================================================
     // 2. EVALUATE MATERIAL / PROCESS FEASIBILITY
     //
@@ -2014,18 +2128,11 @@ void AppController::debugTestStretchBendingGeometry()
     // to this function. Previous compiler errors were caused
     // by declaring these variables a second time below.
     // =====================================================
+   
+  
 
-    StretchBendingEvaluator evaluator;
-
-    const StretchBendingEvaluationResult evaluation =
-        evaluator.evaluate(
-            input
-        );
-    
     if (!evaluation.valid)
     {
-        // Clear every output owned by this debug scenario so
-        // stale geometry/state cannot remain visible.
         debugStretchLoadedIntegrationResult.clear();
         debugStretchFinalIntegrationResult.clear();
 
@@ -2044,6 +2151,10 @@ void AppController::debugTestStretchBendingGeometry()
         return;
     }
 
+    
+
+    debugStretchOperation =
+        operation;
     debugStretchEvaluationResult =
         evaluation;
 
@@ -3904,6 +4015,36 @@ advanceDebugStretchBendingPlayback(
 
     }
 
+    if (
+        debugStretchManufacturingState.stage
+        != previousStage
+        )
+    {
+        const StretchBendingCurrentProfileParameters
+            currentParameters =
+            StretchBendingCurrentProfileParameterResolver::
+            resolve(
+                debugStretchManufacturingState,
+                debugStretchEvaluationResult
+            );
+
+        std::cout
+            << "[STRETCH PROCESS TRANSITION DATA]"
+            << " stage="
+            << stretchBendingManufacturingStageToString(
+                debugStretchManufacturingState.stage
+            )
+            << " tension="
+            << debugStretchEvaluationResult.commandedTension
+            << " currentKappa="
+            << currentParameters.curvature
+            << " loadedKappa="
+            << debugStretchEvaluationResult.loadedCurvatureCommand
+            << " finalKappa="
+            << debugStretchEvaluationResult.predictedFinalCurvature
+            << std::endl;
+    }
+
 
 }
 
@@ -4001,3 +4142,100 @@ isDebugStretchCurrentGeometryValid() const
         && debugStretchCurrentIntegrationResult.isComplete()
         && !debugStretchCurrentIntegrationResult.nodes.empty();
 }
+
+const StretchBendingActiveZone&
+AppController::getDebugStretchActiveZone() const
+{
+    return debugStretchManufacturingState.activeZone;
+}
+
+
+void AppController::
+debugPrintStretchProcessHudData() const
+{
+    const HUDData data =
+        buildHUDData();
+
+    std::cout
+        << "[STRETCH PROCESS DATA]"
+        << " stage="
+        << data.stretchStage
+        << " commandedTension="
+        << data.stretchCommandedTension
+        << " recommendedTension="
+        << data.stretchRecommendedTension
+        << " currentKappa="
+        << data.stretchCurrentCurvature
+        << " loadedKappa="
+        << data.stretchLoadedCurvature
+        << " finalKappa="
+        << data.stretchFinalCurvature
+        << " springbackRatio="
+        << data.stretchSpringbackRatio
+        << " recovery="
+        << data.stretchCurvatureRecovery
+        << " springbackValid="
+        << data.stretchSpringbackValid
+        << std::endl;
+}
+
+StretchBendingOperation
+AppController::buildTestStretchBendingOperation() const
+{
+  
+
+    // Reuse your existing known-valid section and material
+    // values here.
+    StretchBendingOperation operation;
+
+    operation.pipeSection.outerDiameter =
+        TEST_STRETCH_OUTER_DIAMETER;
+
+    operation.pipeSection.wallThickness =
+        TEST_STRETCH_WALL_THICKNESS;
+
+    operation.material.youngModulus =
+        TEST_STRETCH_YOUNG_MODULUS;
+
+    operation.material.yieldStress =
+        TEST_STRETCH_YIELD_STRESS;
+
+    operation.material.hardeningModulus =
+        TEST_STRETCH_HARDENING_MODULUS;
+
+    operation.material.allowableStrain =
+        TEST_STRETCH_ALLOWABLE_STRAIN;
+    //geometry
+    operation.arcLength =
+        TEST_STRETCH_TARGET_LENGTH;
+
+    operation.targetFinalCurvature =
+        TEST_STRETCH_TARGET_CURVATURE;
+
+    operation.targetTorsion =
+        TEST_STRETCH_TARGET_TORSION;
+    //process parameters
+    operation.axialStretchStrain =
+        TEST_STRETCH_AXIAL_STRAIN;
+
+    operation.feedSpeed =
+        TEST_STRETCH_FEED_SPEED;
+
+    operation.sampleStep =
+        TEST_STRETCH_SAMPLE_STEP;
+
+    operation.springbackRatio =
+        TEST_STRETCH_SPRINGBACK_RATIO;
+
+    operation.compensateSpringback =
+        true;
+
+    operation.enabled =
+        true;
+
+
+   
+    
+    return operation;
+}
+

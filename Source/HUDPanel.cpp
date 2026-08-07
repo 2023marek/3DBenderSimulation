@@ -212,20 +212,10 @@ void HUDPanel::render()
         )
     );
 
+  
     drawText(
         textX,
-        textY + lineH * 8,
-        "STRETCH: O Preview | B Play/Pause | [ Reset | ] Step | +/- Speed",
-        glm::vec4(
-            0.8f,
-            0.7f,
-            0.4f,
-            1.0f
-        )
-    );
-    drawText(
-        textX,
-        textY + lineH * 8,
+        textY + lineH * 9,
         "DEBUG: " + data.previewDebugName,
         glm::vec4(0.7f, 0.9f, 0.7f, 1.0f)
     );
@@ -234,7 +224,7 @@ void HUDPanel::render()
 
     drawText(
         textX,
-        textY + lineH * 9,
+        textY + lineH * 10,
         "ATTACH: " + data.attachModeName,
         glm::vec4(0.8f, 0.8f, 1.0f, 1.0f)
     );
@@ -272,6 +262,32 @@ void HUDPanel::render()
             data.stretchGeometryValid
             ? "VALID"
             : "INVALID";
+
+        const std::string loadedVisibility =
+            data.stretchLoadedPreviewVisible
+            ? "ON"
+            : "OFF";
+
+        const std::string currentVisibility =
+            data.stretchCurrentPreviewVisible
+            ? "ON"
+            : "OFF";
+
+        const std::string finalVisibility =
+            data.stretchFinalPreviewVisible
+            ? "ONNNN"
+            : "OFF";
+
+        std::ostringstream stretchLegendStream;
+
+        stretchLegendStream
+            << "LOADED="
+            << loadedVisibility
+            << " | CURRENT="
+            << currentVisibility
+            << " | FINAL="
+            << finalVisibility;
+
 
         // =================================================
         // FORMAT STRETCH PLAYBACK VALUES
@@ -321,15 +337,121 @@ void HUDPanel::render()
             << data.stretchBendingFraction
             << " | UNLOAD: "
             << data.stretchUnloadingFraction;
+        std::ostringstream stretchActiveZoneStream;
 
+        stretchActiveZoneStream
+            << std::fixed
+            << std::setprecision(1)
+            << "ACTIVE ZONE: "
+            << data.stretchActiveZoneStart
+            << " - "
+            << data.stretchActiveZoneEnd
+            << " mm"
+            << " | MARKERS="
+            << (
+                data.stretchActiveZoneMarkersVisible
+                ? "ON"
+                : "OFF"
+                );
+
+        drawText(
+            textX,
+            textY + lineH * 26,
+            stretchActiveZoneStream.str(),
+            glm::vec4(
+                0.10f,
+                0.90f,
+                1.00f,
+                1.00f
+            )
+        );
         std::ostringstream stretchGeometryStream;
 
         stretchGeometryStream
             << "PREVIEW: "
             << visibilityState
-            << " | GEOMETRY: "
+            << " | GEOMETRY: " 
             << geometryState;
 
+
+
+        drawText(
+            textX + 50.0f   ,
+            textY + lineH * 18,
+            stretchHeaderStream.str(),
+            glm::vec4(1.0f, 0.65f, 0.2f, 1.0f)
+        );
+
+        drawText(
+            textX,
+            textY + lineH * 17,
+            stretchProgressStream.str(),
+            glm::vec4(1.0f, 1.0f, 1.0f, 1.0f)
+        );
+
+        drawText(
+            textX,
+            textY + lineH * 14,
+            stretchFractionsStream.str(),
+            glm::vec4(0.8f, 0.9f, 1.0f, 1.0f)
+        );
+
+        drawText(
+            textX,
+            textY + lineH * 15,
+            stretchGeometryStream.str(),
+            data.stretchGeometryValid
+            ? glm::vec4(0.5f, 1.0f, 0.5f, 1.0f)
+            : glm::vec4(1.0f, 0.3f, 0.3f, 1.0f)
+        );
+
+        drawText(
+            textX,
+            textY + lineH * 20,
+            stretchLegendStream.str(),
+            glm::vec4(
+                0.9f,
+                0.85f,
+                1.0f,
+                1.0f
+            )
+        );
+
+        drawText(
+			textX + 70.0f,
+            textY + lineH * 20,
+            "LOADED=" + loadedVisibility,
+            glm::vec4(
+                0.70f,
+                0.25f,
+                1.00f,
+                1.0f
+            )
+        );
+
+        drawText(
+            textX + 124.0f,
+            textY + lineH * 20,
+            "CURRENT=" + currentVisibility,
+            glm::vec4(
+                1.00f,
+                0.55f,
+                0.10f,
+                1.0f
+            )
+        );
+
+        drawText(
+            textX + 100.0f,
+            textY + lineH * 20,
+            "FINAL=" + finalVisibility,
+            glm::vec4(
+                0.20f,
+                0.90f,
+                0.30f,
+                1.0f
+            )
+        );
         // =================================================
         // DRAW COMPACT STRETCH-BENDING HUD SECTION
         // =================================================

@@ -85,11 +85,21 @@ void MainWindow::onUpdate()
 
     data.stretchPlaybackSpeed =
         stretchPlaybackSpeed;
-
+    // later remove it
     data.stretchPreviewVisible =
         view->isStretchPlaybackPreviewVisible();
 
+    data.stretchLoadedPreviewVisible =
+        view->isStretchLoadedPreviewVisible();
 
+    data.stretchCurrentPreviewVisible =
+        view->isStretchCurrentPreviewVisible();
+
+    data.stretchFinalPreviewVisible =
+        view->isStretchFinalPreviewVisible();
+
+    data.stretchActiveZoneMarkersVisible =
+        view->areStretchActiveZoneMarkersVisible();
     // ONLY pass data
     view->setHUDData(data);
     view->setRenderMode(controller.getRenderMode());
@@ -181,6 +191,48 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
             UserAction::ToggleDeformableRegionOverlay
         );
         break;
+
+    case Qt::Key_L:
+    {
+        std::cout
+            << "[KEY] L - TOGGLE STRETCH LOADED PREVIEW\n";
+
+        view->toggleStretchLoadedPreview();
+
+        break;
+    }
+
+    case Qt::Key_Z:
+    {
+        std::cout
+            << "[KEY] Z - TOGGLE STRETCH ACTIVE ZONE MARKERS\n";
+
+        view->toggleStretchActiveZoneMarkers();
+
+        break;
+    }
+
+    case Qt::Key_O:
+    {
+        std::cout
+            << "[KEY] O - TOGGLE STRETCH PLAYBACK PREVIEW\n";
+
+        view->toggleStretchCurrentPreview();
+
+        break;
+    }
+
+    case Qt::Key_F:
+    {
+        std::cout
+            << "[KEY] F - TOGGLE STRETCH FINAL PREVIEW\n";
+
+        view->toggleStretchFinalPreview();
+
+        break;
+    }
+
+
 
     case Qt::Key_BracketRight:
     {

@@ -133,8 +133,11 @@ set(CORE_HEADERS
     Core/Forming/StretchBendingManufacturingStateBuilder.h
     Core/Forming/StretchBendingManufacturingStateBuilder.cpp
     Core/Forming/StretchBendingManufacturingTiming.h
+    Core/Forming/StretchBendingOperation.h
     Core/Forming/StretchBendingPlaybackStatus.h
     Core/Forming/StretchBendingProcessInput.h
+    Core/Forming/StretchBendingProcessInputBuilder.h
+    Core/Forming/StretchBendingProcessInputBuilder.cpp
     Core/Forming/StretchBendingPipeSection.h
     Core/Forming/StretchBendingProfileBuilder.h
     Core/Forming/StretchBendingProfileBuilder.cpp
