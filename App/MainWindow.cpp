@@ -298,10 +298,70 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         break;
     }
 
+    case Qt::Key_H:
+    {
+        std::cout
+            << "[KEY] H - ADVANCE STRETCH HELIX WRAP\n";
 
-   
+        controller.advanceDebugStretchHelixWrapping(
+            25.0
+        );
+
+        break;
+    }
+
+    case Qt::Key_J:
+    {
+        std::cout
+            << "[KEY] J - RESET STRETCH HELIX WRAP\n";
+
+        controller.resetDebugStretchHelixWrapping();
+
+        break;
+    }
     
+    case Qt::Key_1:
+    {
+        std::cout
+            << "[CAMERA] FRONT\n";
 
+        view->setFrontCameraView();
+
+        break;
+    }
+
+
+    case Qt::Key_2:
+    {
+        std::cout
+            << "[CAMERA] LEFT\n";
+
+        view->setLeftCameraView();
+
+        break;
+    }
+
+
+    case Qt::Key_3:
+    {
+        std::cout
+            << "[CAMERA] TOP\n";
+
+        view->setTopCameraView();
+
+        break;
+    }
+
+
+    case Qt::Key_4:
+    {
+        std::cout
+            << "[CAMERA] PERSPECTIVE\n";
+
+        view->setPerspectiveCameraView();
+
+        break;
+    }
 
     case Qt::Key_I:
 

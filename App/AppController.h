@@ -305,6 +305,14 @@ public:
 
      const SpatialCurveIntegrationResult&
          getDebugStretchHelixReferenceResult() const;
+
+     const SpatialCurveIntegrationResult&
+         getDebugStretchHelixCurrentResult() const;
+     void advanceDebugStretchHelixWrapping(
+         double deltaWrappedLength
+     );
+
+     void resetDebugStretchHelixWrapping();
 private:
     
 
@@ -473,5 +481,7 @@ private:
   
    bool rebuildDebugStretchHelixCurrentGeometry();
    void debugTestStretchHelixContactProgression();
+
+  
 }; 
 

@@ -1,6 +1,14 @@
 #pragma once
 #include <glm/glm.hpp>
 
+enum class CameraView
+{
+    Perspective,
+    Front,
+    Left,
+    Top
+};
+
 class ControlCamera
 {
 public:
@@ -19,4 +27,19 @@ public:
     void processMouseMovement(float dx, float dy);
     void processScroll(float offset);
     void processPan(float dx, float dy);
+
+    // =====================================================
+   // STANDARD ENGINEERING VIEWS
+   // =====================================================
+
+    void setPerspectiveView();
+    void setFrontView();
+    void setLeftView();
+    void setTopView();
+
+    CameraView getView() const;
+
+private:
+    CameraView view =
+        CameraView::Perspective;
 };

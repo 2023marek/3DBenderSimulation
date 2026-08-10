@@ -564,6 +564,7 @@ void GLView::initializeGL()
     stretchFinalDebugRenderer.init();
     stretchActiveZoneDebugRenderer.init();
     stretchHelixReferenceRenderer.init();
+    stretchHelixCurrentRenderer.init();
     // =========================
     // CREATE SHADER (YOUR CLASS)
     // =========================
@@ -951,6 +952,9 @@ void GLView::paintGL()
     drawStretchActiveZoneMarkers();
 
     drawStretchHelixReference();
+
+    // Orange actual/current geometry.
+    drawStretchHelixCurrent();
     // =====================================================
     // MACHINE REFERENCE
     // =====================================================
@@ -2442,6 +2446,89 @@ void GLView::drawStretchHelixReference()
         "pipeColor",
         DEFAULT_PIPE_COLOR
     );
+}
+
+void GLView::drawStretchHelixCurrent()
+{
+    if (!showStretchHelixCurrent)
+        return;
+
+    if (!app || !shader)
+        return;
+
+    const SpatialCurveIntegrationResult& result =
+        app->getDebugStretchHelixCurrentResult();
+     
+    if (!result.valid
+        || !result.isComplete()
+        || result.nodes.size() < 2)
+    {
+        return;
+    }
+
+    // Orange = actual/current wrapping geometry.
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(
+            1.0f,
+            0.45f,
+            0.05f
+        )
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        drawStretchDebugLine(
+            result.nodes,
+            stretchHelixCurrentRenderer,
+            1.0f
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawStretchDebugTube(
+            result.nodes,
+            stretchHelixCurrentRenderer,
+            5.2,
+            16
+        );
+    }
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
+    );
+}
+
+void GLView::setFrontCameraView()
+{
+    camera.setFrontView();
+
+    update();
+}
+
+
+void GLView::setLeftCameraView()
+{
+    camera.setLeftView();
+
+    update();
+}
+
+
+void GLView::setTopCameraView()
+{
+    camera.setTopView();
+
+    update();
+}
+
+
+void GLView::setPerspectiveCameraView()
+{
+    camera.setPerspectiveView();
+
+    update();
 }
 
 

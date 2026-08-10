@@ -159,7 +159,13 @@ public:
 
     bool areStretchActiveZoneMarkersVisible() const;
 
-    
+    void setFrontCameraView();
+
+    void setLeftCameraView();
+
+    void setTopCameraView();
+
+    void setPerspectiveCameraView();
 private:
 
     PipeRenderer pipeRenderer;
@@ -280,5 +286,13 @@ private:
         true;
 
     void drawStretchHelixReference();
+
+    PipeRenderer
+        stretchHelixCurrentRenderer;
+
+    bool showStretchHelixCurrent =
+        true;
+
+    void drawStretchHelixCurrent();
 
 };
