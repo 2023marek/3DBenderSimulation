@@ -563,6 +563,7 @@ void GLView::initializeGL()
     stretchCurrentDebugRenderer.init();
     stretchFinalDebugRenderer.init();
     stretchActiveZoneDebugRenderer.init();
+    stretchHelixReferenceRenderer.init();
     // =========================
     // CREATE SHADER (YOUR CLASS)
     // =========================
@@ -924,8 +925,8 @@ void GLView::paintGL()
 // AppController. Drawing does not rerun evaluation,
 // profile construction or integration.
 // =====================================================
-    drawSpatialIntegratorDebugPreviews();
-    drawStretchCurrentGeometryDebugPreview();
+    
+    
    
     // =====================================================
     // STRETCH-BENDING REFERENCE AND CURRENT PREVIEWS
@@ -939,6 +940,7 @@ void GLView::paintGL()
     // Orange:
     //     instantaneous state-driven geometry
     // =====================================================
+    drawSpatialIntegratorDebugPreviews();
 
     drawStretchLoadedDebugPreview();
 
@@ -947,6 +949,8 @@ void GLView::paintGL()
     drawStretchCurrentDebugPreview();
 
     drawStretchActiveZoneMarkers();
+
+    drawStretchHelixReference();
     // =====================================================
     // MACHINE REFERENCE
     // =====================================================
@@ -2385,6 +2389,58 @@ void GLView::drawStretchActiveZoneMarker(
 
     glLineWidth(
         MANUFACTURING_LINE_WIDTH
+    );
+}
+
+void GLView::drawStretchHelixReference()
+{
+    if (!showStretchHelixReference)
+        return;
+
+    if (!app || !shader)
+        return;
+
+    const SpatialCurveIntegrationResult& result =
+        app->getDebugStretchHelixReferenceResult();
+
+    if (!result.valid
+        || !result.isComplete()
+        || result.nodes.size() < 2)
+    {
+        return;
+    }
+
+    // Yellow reference geometry.
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(
+            1.0f,
+            0.85f,
+            0.1f
+        )
+    );
+
+    if (renderMode == RenderMode::LINE)
+    {
+        drawStretchDebugLine(
+            result.nodes,
+            stretchHelixReferenceRenderer,
+            2.0f
+        );
+    }
+    else if (renderMode == RenderMode::MESH)
+    {
+        drawStretchDebugTube(
+            result.nodes,
+            stretchHelixReferenceRenderer,
+            1.0,
+            16
+        );
+    }
+
+    shader->setVec3(
+        "pipeColor",
+        DEFAULT_PIPE_COLOR
     );
 }
 

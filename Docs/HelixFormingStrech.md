@@ -1,0 +1,1219 @@
+Proposed implementation sequence
+
+I would now temporarily branch away from the old uniform-active-zone model and create a new path:
+
+Phase H1
+Define StretchHelixWrappingInput
+    support radius
+    pipe diameter
+    axial speed
+    rotation speed
+    pipe length
+    stretch strain
+
+Phase H2
+Compute machine-command helix:
+    P, r, ?, ?
+
+Phase H3
+Render the cylindrical support/reference helix
+
+Phase H4
+Create MovingContactState:
+    wrappedLength / contactFrontS
+
+Phase H5
+Build ?(s),?(s) behind the moving contact front
+
+Phase H6
+Integrate and render current progressively wrapped pipe
+
+Phase H7
+Synchronize contact advancement with ? and axial feed
+
+Phase H8
+Apply tension mechanics and feasibility limits
+
+Phase H9
+Add unloading and curvature/torsion springback
+
+Phase H10
+Accept a pre-bent semi-finished pipe from Pass 1
+
+That last point is especially important for your production process: 
+the initial input to this model eventually does not need to be a straight pipe. 
+It can be the centerline geometry produced by the first machine/pass.
+
+So the long-term flow becomes:
+
+PASS 1
+rotary draw + roll forming
+        ?
+        ?
+semi-finished pipe geometry
+        ?
+        ?
+PASS 2
+stretch-helix wrapping machine
+        ?
+        ??? tension
+        ??? cylinder rotation
+        ??? axial movement
+        ??? moving contact front
+        ?
+        ?
+helical finished component
+
+This is the model I recommend pursuing now. The existing stretch-bending
+implementation remains useful as a verified mechanics/solver foundation, but 
+the moving-contact wrapping model should become the actual 
+stretch-helix production model.
+
+Proposed new model
+
+I recommend calling it something like:
+
+StretchHelixWrappingProcess
+
+rather than extending the existing StretchBendingCurrentProfileBuilder.
+
+The new data flow should be:
+
+MACHINE COMMANDS
+
+support radius
+rotation speed ?
+axial speed vz
+tension T / stretch strain ?0
+pipe length
+        ?
+        ?
+HelixWrappingKinematics
+        ?
+        ??? pitch P
+        ??? centerline radius r
+        ??? curvature ?
+        ??? torsion ?
+        ?
+        ?
+MovingContactState
+        ?
+        ??? wrappedLength
+        ??? contactFrontS
+        ??? contactProgress
+        ?
+        ?
+ContactProfileBuilder
+        ?
+        ?
+?(s), ?(s)
+        ?
+        ?
+SpatialCurveIntegrator
+        ?
+        ?
+current pipe geometry
+
+The fundamental time-dependent variable should no longer be:
+
+?(t)
+
+as in your current stretch-bending model.
+
+Instead:
+
+wrappedLength(t)
+
+or:
+
+contactFrontS(t)
+
+should grow.
+
+===========================================================================
+Phase H1 — Define StretchHelixWrappingInput
+
+H1 should do data definition only. No geometry integration, no contact progression, no rendering yet.
+
+The purpose is to describe the machine command and workpiece needed for the wrapping process:
+
+support cylinder
+      +
+pipe geometry/material
+      +
+axial motion
+      +
+rotation
+      +
+stretch/tension command
+      ?
+StretchHelixWrappingInput
+H1.1 — Create the input type
+
+Create:
+
+Core/Forming/StretchHelixWrappingInput.h
+#pragma once
+
+#include <cmath>
+
+#include "Core/Forming/StretchBendingPipeSection.h"
+#include "Core/Forming/StretchBendingMaterial.h"
+
+// =====================================================
+// STRETCH-HELIX WRAPPING INPUT
+//
+// Describes the commanded setup for progressively
+// wrapping a tensioned pipe around a cylindrical support.
+//
+// This structure contains only process input.
+// It does NOT contain:
+//....................
+H1.2 — Why supportOuterRadius, not helixRadius
+
+This is intentional.
+
+Your machine controls the physical support radius:
+
+support axis
+    O
+    |
+    | supportOuterRadius
+    |
+    +--------- support surface
+              |
+              | pipeRadius
+              |
+              * workpiece centerline
+
+So later we derive:
+
+helixCenterlineRadius =
+    supportOuterRadius
+    + pipeSection.outerDiameter * 0.5;
+
+The input should store the machine dimension; derived geometry belongs in H.....
+H1.3 — Why keep axialSpeed and rotationSpeed
+
+Do not store pitch as the primary command yet.
+
+The machine command is:
+
+rotationSpeed
++
+axialSpeed
+
+and later H2 derives:
+
+P=
+???
+2?v
+z
+	?
+
+	?
+
+
+This lets the simulator answer:
+
+“What helix does this machine motion actually produce?”
+
+instead of forcing the geometry first.
+
+H1.4 — Add a known-valid debug builder
+
+In AppController.h, private:
+
+StretchHelixWrappingInput
+buildTestStretchHelixWrappingInput() const;
+
+In AppController.cpp:..........................
+
+H1.5 — Add a simple validation test
+
+In AppController.h, private:
+
+void debugTestStretchHelixWrappingInput() const;
+
+Implementation:.......................
+H1.6 — Important architecture boundary
+
+At the end of H1 we should have only:
+
+StretchHelixWrappingInput
+        ?
+        ??? pipe/material
+        ??? support radius
+        ??? axial speed
+        ??? rotation speed
+        ??? rotation direction
+        ??? stretch strain
+        ??? sample step
+
+We should not yet calculate:
+
+pitch
+helix radius
+curvature
+torsion
+contact front
+wrapped length
+geometry
+
+Those begin in Phase H2 — derive helix geometry and machine kinematics from StretchHelixWrappingInput.
+
+H1 acceptance is simply: the valid case passes
+Phase H2 — Derive Helix Geometry and Machine Kinematics
+
+H2 converts the machine-level input from H1 into the geometric quantities the rest of the simulator will use.
+
+The flow is:
+
+StretchHelixWrappingInput
+        -
+        +¦¦ supportOuterRadius
+        +¦¦ pipe outer diameter
+        +¦¦ axialSpeed
+        +¦¦ rotationSpeed
+        L¦¦ rotationDirection
+        -
+        ¡
+StretchHelixWrappingKinematics
+        -
+        +¦¦ centerlineRadius r
+        +¦¦ pitch P
+        +¦¦ b = P / 2?
+        +¦¦ curvature ?
+        +¦¦ torsion ?
+        +¦¦ helixAngle ?
+        L¦¦ arcLengthPerRevolution
+
+The important idea is that H2 still does no progressive wrapping.
+It only answers:
+
+Given this machine motion, what helix would the contacted pipe follow?
+
+H2.1 — Create the result structure
+
+Create:
+
+Core/Forming/StretchHelixWrappingKinematics.h
+#pragma once
+
+#include <cmath>
+
+// =====================================================
+// STRETCH-HELIX WRAPPING KINEMATICS
+//
+// Derived geometric/machine quantities for a cylindrical
+// helix generated by axial translation plus rotation.
+//
+// This structure contains no playback/contact state.
+// =====================================================
+
+H2.2 — Create the kinematics evaluator
+
+Create:
+
+Core/Forming/StretchHelixWrappingKinematicsBuilder.h
+#pragma once
+
+#include "Core/Forming/StretchHelixWrappingInput.h"
+#include "Core/Forming/StretchHelixWrappingKinematics.h"
+
+// =====================================================
+// STRETCH-HELIX WRAPPING KINEMATICS BUILDER
+//
+// Converts machine motion into target helix geometry.
+// =====================================================
+
+H2.3 — Important note about rotation sign
+
+You currently have both:
+
+double rotationSpeed;
+int rotationDirection;
+
+For H2, use:
+
+abs(rotationSpeed)
+
+for the magnitude and:
+
+rotationDirection
+
+for handedness.
+
+So:
+
+rotationSpeed = 2 rad/s
+rotationDirection = +1
+
+produces positive torsion.
+
+And:
+
+rotationSpeed = 2 rad/s
+rotationDirection = -1
+
+produces negative torsion.
+
+That avoids ambiguous states like:
+
+rotationSpeed = -2
+rotationDirection = -1
+
+Later, we may simplify this API to one signed angular velocity,
+but do not change H1 now.
+
+H2.4 — Add a debug test
+
+In AppController.h, private:
+
+void debugTestStretchHelixWrappingKinematics() const;
+
+Implementation:
+
+void AppController::
+debugTestStretchHelixWrappingKinematics() const
+{
+    const StretchHelixWrappingInput input =
+        buildTestStretchHelixWrappingInput();
+
+    const StretchHelixWrappingKinematics kinematics =
+        StretchHelixWrappingKinematicsBuilder::build(
+            input
+        );
+H2.5 — Expected numerical values
+
+With the H1 test input:
+
+supportOuterRadius = 50 mm
+pipe OD            = 20 mm   ‹ assuming your existing test pipe is 20
+axialSpeed         = 20 mm/s
+rotationSpeed      = 2 rad/s
+
+the centerline radius should be:
+
+H2.6 — Add consistency checks
+
+We should verify that the derived values reconstruct the expected geometric identities.
+
+Add after the main diagnostic:
+
+const double denominator =
+    kinematics.centerlineRadius
+        * kinematics.centerlineRadius
+    + kinematics.helixRisePerRadian
+        * kinematics.helixRisePerRadian;
+
+const double reconstructedKa
+
+H2.7 — Test handedness
+
+This is important before we ever render a helix.
+
+Add:
+
+StretchHelixWrappingInput oppositeInput =
+    input;
+
+oppositeInput.rotationDirection =
+    -1;
+
+const StretchHelixWrappingKinematics opposite =
+    StretchHelixWrappingKinematicsBuilder::build(
+        oppositeInput
+    );
+
+const bool handednessAccepted =
+    opposite.valid
+    && std::abs(
+        opposite.curvature
+        - kinematics.curvature
+    ) <= tolerance
+    && std::abs(
+        opposite.torsion
+        + kinematics.torsion
+    ) <= tolerance;
+
+std::cout
+    << "[STRETCH HELIX HANDEDNESS]"
+    << " positiveTau="
+    << kinematics.torsion
+    << " negativeTau="
+    << opposite.torsion
+    << " accepted="
+    << handednessAccepted
+    << std::endl;
+
+Expected:
+
+positiveTau=...
+negativeTau=-...
+accepted=1
+
+Curvature must stay the same. Only torsion changes sign.
+
+H2.8 — One conceptual distinction to keep clear
+
+At the end of H2:
+
+rotation + axial motion
+        ¡
+target contact helix
+        ¡
+?helix, ?helix
+
+But the pipe has not yet wrapped around anything.
+
+We have only calculated the trajectory it should follow when it is in contact.
+
+So:
+
+H1 = machine command
+
+H2 = helix implied by that machine command
+
+H3 = visualize the support cylinder and reference helix
+
+H4 = introduce moving contact / wrapped length
+
+That sequence is important because when H4 starts moving the contact front, we already know that the geometry behind the front must approach the H2 ? and ?.
+
+H2 acceptance
+
+Proceed to H3 only when you get:
+
+inputValid=1
+kinematics valid=1
+curvatureAccepted=1
+torsionAccepted=1
+handedness accepted=1
+
+and the printed pitch/radius/?/? values are numerically sensible.
+
+
+=================================================================
+Phase H3 — Reference Support + Reference Helix
+
+Yes. We should keep H3 much simpler. No new HUD data, no dashboard, no contact mechanics yet. H3 should establish one standard engineering visualization that we can later reuse for the wrapping simulation.
+
+Phase H3 — Reference Support + Reference Helix
+
+The purpose of H3 is only to answer visually:
+
+“For the machine parameters calculated in H2, where is the cylindrical support and where should the pipe centerline lie when fully wrapped?”
+
+Nothing moves yet.
+
+H3 principle
+
+Side view, simplified:
+
+                     pipe centerline helix
+                           /
+                       /  /
+                    /    /
+                 /      /
+              /        /
+          ???????????????????
+          ?                 ?
+          ?  support pipe   ?
+          ?                 ?
+          ?                 ?
+          ???????????????????
+                 ?
+                 ?
+              axis Z
+
+Looking along the support axis:
+
+                 workpiece centerline
+                         ?
+                       / |
+                      /  | Dpipe / 2
+                     /   |
+                    ?????+
+              support surface
+                  /
+                 / Rsupport
+                /
+               O
+         support axis
+
+Therefore:
+
+r
+helix
+	?
+
+=R
+support
+	?
+
++
+2
+D
+pipe
+	?
+
+	?
+
+
+For our current test:
+
+support radius       = 50 mm
+pipe OD              = 20 mm
+
+centerline radius    = 60 mm
+
+And H2 tells us:
+
+pitch      = 62.8319 mm
+?          = 0.0162162
+?          = 0.0027027
+H3.1 — What we render
+
+Only two new reference objects:
+
+GRAY/CYAN  ? cylindrical support centerline/surface reference
+YELLOW     ? full reference helix centerline
+
+Your actual stretch pipe remains separate.
+
+Conceptually:
+
+                      yellow reference helix
+                    /      /      /
+                  /      /      /
+               ????????????????????
+               ?                  ?
+               ?  support pipe    ?
+               ?                  ?
+               ????????????????????
+
+Later H4 will introduce:
+
+ORANGE ? actual progressively wrapping pipe
+
+That will give us:
+
+cyan/gray support
+yellow target
+orange current
+
+This is very similar to your existing rotary-draw debugging philosophy:
+
+reference geometry
+       +
+current manufactured geometry
+H3.2 — Store the H1/H2 results in AppController
+
+We need GLView to read them.
+
+In AppController.h, private fields:
+
+StretchHelixWrappingInput
+    debugStretchHelixWrappingInput;
+
+StretchHelixWrappingKinematics
+    debugStretchHelixWrappingKinematics;
+
+    H3.3 — Store the valid H2 calculation
+
+In:
+
+debugTestStretchHelixWrappingKinematics()
+
+you currently probably have:
+
+const StretchHelixWrappingInput input =
+    buildTestStretchHelixWrappingInput();................................
+H3.4 — Build the reference helix using your existing integrator
+
+This is important.
+
+We do not need another helix generator.
+
+You already proved:
+
+SpatialCurveIntegrator
++
+constant ?
++
+constant ?
+=
+correct helix
+
+So reuse it.
+
+Add in AppController.h, private field:
+
+SpatialCurveIntegrationResult
+    debugStretchHelixReferenceResult;
+
+H3.5 — Build the reference profile
+
+Still after successful H2:
+
+const CurvatureTorsionProfile referenceProfile =
+    ConstantCurvatureTorsionProfileBuilder::build(
+        input.pipeArcLength,
+        kinematics.curvature,
+        kinematics.torsion
+    );
+
+This describes:
+
+s = 0 -------------------------------- s = L
+
+? = constant
+? = constant
+
+This is the fully wrapped target reference, not the current pipe.
+
+H3.6 — Choose a separate start frame
+
+Keep it away from your existing geometry.
+
+For example:
+
+Frame referenceStartFrame;
+
+referenceStartFrame.P =
+    Vec3D{
+        0.0,
+        -500.0,
+        0.0
+    };
+
+referenceStartFrame.T =
+    Vec3D{
+        0.0,....................
+
+        .................
+                1.0
+    };
+
+The exact orientation is not physically important yet.
+
+H3 asks only:
+
+Does the reference geometry look like the correct helix?
+
+
+H3.7 — Integrate
+SpatialCurveIntegrator integrator;
+
+debugStretchHelixReferenceResult =
+    integrator.integrate(
+        referenceStartFrame,
+        referenceProfile,
+        input.sampleStep
+    );
+
+Then diagnostic:
+
+std::cout
+    << "[STRETCH HELIX REFERENCE]"
+    << " valid="......................................
+
+    H3.8 — Render the reference helix
+
+In GLView.h, add private:
+
+PipeRenderer
+    stretchHelixReferenceRenderer;
+
+bool showStretchHelixReference =
+    true;................
+
+H3.9 — Drawing function
+
+In GLView.cpp:
+
+void GLView::drawStretchHelixReference()
+{
+    if (!showStretchHelixReference)
+        return;
+
+    if (!app || !shader)
+        return;.......................
+
+H3.10 — Call from paintGL()
+
+Add:
+
+drawStretchHelixReference();
+
+near your other debug/reference geometries.
+
+At this point you should see one yellow helix.
+
+H3 acceptance
+
+Do not add contact progression yet.
+
+First confirm only:
+
+? reference profile valid
+? reference integration complete
+? yellow helix visible
+? LINE works
+? MESH works
+? approximate radius visually correct
+? pitch visually correct
+? support reference has radius 50 mm
+? helix centerline has radius 60 mm
+
+The conceptual result of H3 should remain very simple:
+
+          TARGET HELIX
+             yellow
+               /
+             /
+           /
+
+      ??????????????
+      ?  SUPPORT   ?
+      ?   R=50     ?
+      ??????????????
+
+centerline radius = 60
+
+Once that is correct, H4 will be the important phase:
+we stop displaying only a complete reference helix and
+introduce the moving wrapping/contact front, where the orange pipe progressively 
+occupies the yellow reference trajectory.
+
+So the flow inside this one function is:
+
+buildTestStretchHelixWrappingInput()
+              ?
+              ?
+           input
+              ?
+              ?
+     validate H1 input
+              ?
+              ?
+StretchHelixWrappingKinematicsBuilder
+              ?
+              ?
+         kinematics
+              ?
+              ?
+       validate H2
+              ?
+              ?
+     store H1/H2 data
+              ?
+              ?
+??????????????????????????????????????
+?             H3.5                   ?
+?                                    ?
+? input.pipeArcLength                ?
+? kinematics.curvature               ?
+? kinematics.torsion                 ?
+?             ?                      ?
+?             ?                      ?
+? CurvatureTorsionProfile            ?
+??????????????????????????????????????
+              ?
+              ?
+         H3.6 frame
+              ?
+              ?
+       H3.7 integration
+              ?
+              ?
+       reference helix
+==========================================================================
+
+Phase H4 — introduce the moving wrapping/contact front and progressively occupy
+the reference helix with the actual pipe geometry.
+
+That is where the simulation begins to represent the physical
+wrapping process rather than only showing the final target helix.
+
+Phase H4 — Moving Wrapping / Contact Front
+
+Now we make the first major change from a reference helix to a forming simulation.
+
+H3 gave us:
+
+YELLOW = complete target helix
+
+       / / / /
+      / / / /
+     / / / /
+
+H4 adds an actual pipe that progressively occupies this target:
+
+YELLOW = target/reference
+ORANGE = currently wrapped pipe
+
+
+Step 0
+
+ORANGE ???????????????????????????????
+
+YELLOW     / / / / /
+
+
+Step 1
+
+ORANGE     /???? straight remainder
+          /
+YELLOW    / / / / /
+
+
+Step 2
+
+ORANGE    / /
+         / /???? straight remainder
+
+YELLOW    / / / / /
+
+
+Step 3
+
+ORANGE    / / / /
+         / / / /????
+
+YELLOW    / / / / /
+
+
+Step final
+
+ORANGE    / / / / /
+YELLOW    / / / / /
+
+The important principle is:
+
+? and ? do NOT gradually increase.
+
+Instead:
+
+?wrapped = ?H2
+?wrapped = ?H2
+
+and
+
+wrappedLength grows.
+
+So H4 introduces:
+
+L
+wrapped
+	?
+
+(t)
+
+and:
+
+s
+front
+	?
+
+=L
+wrapped
+	?
+
+
+For now the contact front starts at material coordinate:
+
+s=0
+
+Later, when Pass 2 consumes a pre-bent pipe, we can
+introduce a non-zero contact-start position.
+
+H4.1 — Define the wrapping state
+
+Create:
+
+Core/Forming/StretchHelixWrappingState.h
+
+Use a simple structure:
+
+#pragma once
+
+#include <cmath>
+
+// =====================================================
+// STRETCH-HELIX WRAPPING STATE...................
+
+H4.2 — Build the initial state
+
+Create:
+
+Core/Forming/StretchHelixWrappingStateBuilder.h
+#pragma once
+
+#include "Core/Forming/StretchHelixWrappingInput.h"
+#include "Core/Forming/StretchHelixWrappingState.h"
+
+class StretchHelixWrappingStateBuilder
+{.................................
+
+H4.3 — Create the most important H4 builder
+
+Now we need:
+
+StretchHelixWrappingState
+            +
+H2 kinematics
+            ?
+?(s), ?(s)
+
+Create:
+
+Core/Forming/StretchHelixCurrentProfileBuilder.h
+#pragma once
+
+#include "Core/Geometry/CurvatureTorsionProfile.h"
+
+#include "Core/Forming/StretchHelixWrappingInput.h"
+#include "Core/Forming/StretchHelixWrappingKinematics.h"
+#include "Core/Forming/StretchHelixWrappingState.h"
+
+class StretchHelixCurrentProfileBuilder
+{
+public:
+    static CurvatureTorsionProfile build(
+        const StretchHelixWrappingInput& input,
+        const StretchHelixWrappingKinematics& kinematics,
+        const StretchHelixWrappingState& state
+    );......................
+
+    H4.4 — The profile mathematics
+
+Suppose:
+
+total length   = 500 mm
+wrapped length = 150 mm
+
+Then:
+
+s=0                    s=150                         s=500
+ |=======================|-----------------------------|
+       WRAPPED                  FREE
+       
+ ? = ?helix                  ? = 0
+ ? = ?helix                  ? = 0
+
+So:
+
+?(s)={
+?
+h
+	?
+
+,
+0,
+	?
+
+0?s<s
+f
+	?
+
+s>s
+f
+	?
+
+	?
+H4.5 — Implement the current profile builder
+
+Create .cpp:
+
+#include "Core/Forming/StretchHelixCurrentProfileBuilder.h"
+
+#include <cmath>
+
+CurvatureTorsionProfile
+StretchHelixCurrentProfileBuilder::build(
+    const StretchHelixWrappingInput& input,
+    const StretchHelixWrappingKinematics& kinematics,
+    const StretchHelixWrappingState& state)
+{
+    CurvatureTorsionProfile profile;
+
+    profile.clear();..........................
+
+    }
+
+This is the conceptual heart of H4.
+
+H4.6 — Why duplicate samples again?
+
+You already solved this exact problem during Phase 10L.
+
+At:
+
+s = contactFrontS
+
+we need two values:
+
+before front:
+    ? = ?helix
+    ? = ?helix
+
+after front:
+    ? = 0
+    ? = 0
+
+So:
+
+sample 1: s=150 ?=0.0162162 ?=0.0027027
+sample 2: s=150 ?=0         ?=0
+
+This represents a sharp material boundary.
+
+Your existing:
+
+SpatialCurveIntegrator::sampleProfileAtArcLength()
+
+already has the duplicate-sample behavior we tested in 10L.
+
+That work is now being reused.......................
+
+H4.7 — Store current wrapping state and geometry
+
+In AppController.h, private:
+
+StretchHelixWrappingState
+    debugStretchHelixWrappingState;
+
+CurvatureTorsionProfile
+    debugStretchHelixCurrentProfile;.................
+
+
+H4.8 — Initialize H4 after successful H3
+
+After the H3 reference geometry has been successfully built:
+
+debugStretchHelixWrappingState =
+    StretchHelixWrappingStateBuilder::buildInitial(
+        debugStretchHelixWrappingInput
+    );
+
+Check:.....................
+
+
+H4.9 — Add one geometry rebuild function
+
+This will become very important later.
+
+In AppController.h, private:
+
+bool rebuildDebugStretchHelixCurrentGeometry();
+
+Implementation:
+
+bool AppController::
+rebuildDebugStretchHelixCurrentGeometry()
+{..............................................
+H4.10 — First manual contact-front test
+
+Before creating automatic motion, test fixed percentages.
+
+Add private:
+
+void debugTestStretchHelixContactProgression();
+
+Implementation:
+
+void AppController::............................
+
+H4.11 — Render current pipe orange
+
+In GLView.h, private:
+
+PipeRenderer
+    stretchHelixCurrentRenderer;
+
+bool showStretchHelixCurrent =
+    true;
+
+    H4.12 — Drawing order
+
+In paintGL():
+
+// Yellow target.
+drawStretchHelixReference();
+
+// Orange actual/current geometry.
+drawStretchHelixCurrent();.........................
+H4.13 — Add manual step control
+
+Now make it interactive.
+
+In AppController.h, public:
+
+void advanceDebugStretchHelixWrapping(
+    double deltaWrappedLength
+);
+
+void resetDebugStretchHelixWrapping();
+
+
+H4.14 — Temporary keys
+
+Use free keys of your choice.
+
+For example:
+
+H = advance wrapping
+J = reset wrapping
+
+If free:
+
+case Qt::Key_H:
+{
+    std::cout
+        << "[KEY] H - ADVANCE STRETCH HELIX WRAP\n";
+
+    controller.advanceDebugStretchHelixWrapping(
+        25.0
+    );
+
+    break;
+}
+
+case Qt::Key_J:.......................
+Important limitation of H4
+
+H4 is deliberately a kinematic moving-front model.
+
+It assumes:
+
+behind contact front:
+    pipe exactly follows H2 helix
+
+ahead of contact front:
+    pipe is tangent/free
+
+at front:
+    instantaneous transition
+
+Real contact will have a finite transition zone due to:
+
+bending stiffness
+contact pressure
+friction
+roller/support geometry
+tension
+
+Do not solve that yet.
+
+First verify that the basic physical concept is represented correctly:
+
+fixed target helix
++
+moving material contact front
++
+wrapped region grows
+
+That is the foundation we need before adding machine-time synchronization in H5.
+

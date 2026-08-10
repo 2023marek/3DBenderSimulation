@@ -1,3 +1,294 @@
+Phase 10V — Connect StretchBendingOperation to the Manufacturing Plan / Operation Queue
+
+Until Phase 10U, stretch bending is a complete but isolated subsystem:
+
+buildTestStretchBendingOperation()
+            ?
+            ?
+StretchBendingOperation
+            ?
+            ?
+StretchBendingProcessInputBuilder
+            ?
+            ?
+Evaluator ? Profiles ? Geometry ? Playback
+
+Phase 10V changes where the operation comes from.
+
+Instead of the debug code saying:
+
+"create one stretch-bending test"
+
+the manufacturing plan will say:
+
+"this is the next operation to execute"
+
+The target architecture becomes:
+
+                  MANUFACTURING PLAN
+                         ?
+                         ?
+                  OperationQueue
+                         ?
+         ????????????????????????????????????
+         ?               ?                  ?
+         ?               ?                  ?
+       FEED             ROTATE        STRETCH_BEND
+                                             ?
+                                             ?
+                                 StretchBendingOperation
+                                             ?
+                                             ?
+                             ProcessInputBuilder
+                                             ?
+                                             ?
+                                      Evaluator
+                                             ?
+                                             ?
+                              Manufacturing State
+                                             ?
+                                             ?
+                                 Current Profile
+                                             ?
+                                             ?
+                                    Integrator
+                                             ?
+                                             ?
+                                     Geometry
+
+The important conceptual change is that StretchBendingOperation becomes a command in the manufacturing program, not just debug data.
+
+Another way to see the pipeflow:
+
+PROGRAM
+  ?
+  ??? Feed 300 mm
+  ?
+  ??? Rotate 20°
+  ?
+  ??? Stretch Bend
+  ?       ??? target ? = 0.002
+  ?       ??? axial strain = 0.03
+  ?       ??? length = 200
+  ?
+  ??? Feed 120 mm
+  ?
+  ??? Stretch Bend
+          ??? different parameters
+
+                  ?
+
+OperationQueue
+
+                  ?
+
+current operation selected
+
+                  ?
+
+SimulationController / AppController
+
+                  ?
+
+appropriate process executor
+
+
+============================================
+
+Yes — that separation makes much more sense for your real production flow.
+
+For the continuous single-machine process, the queue should represent operations executed sequentially on the same workpiece and machine:
+
+MACHINE 1 — CONTINUOUS PROCESS
+
+raw pipe
+   ?
+   ?
+FEED
+   ?
+   ?
+ROTATE
+   ?
+   ?
+ROTARY_DRAW_BEND
+   ?
+   ?
+FEED
+   ?
+   ?
+TWO_ROLL / THREE_ROLL BEND
+   ?
+   ??? planar arc
+   ??? helix
+   ?
+   ?
+next operation...
+
+So here I agree: two-roll / three-roll bending should become another normal OperationQueue operation, alongside FEED, ROTATE, BEND, etc.
+
+Conceptually:
+
+Operation::FEED
+Operation::ROTATE
+Operation::BEND
+Operation::ROLL_BEND
+
+and later perhaps:
+
+RollBendingOperation
+{
+    curvature;
+    torsion;
+    arcLength;
+    ...
+};
+
+The queue then describes one continuous manufacturing timeline on Machine 1.
+
+For stretch helix bending, your production model is fundamentally different.
+
+You have:
+
+PHASE / PASS 1 — MACHINE 1
+
+raw pipe
+   ?
+   ?
+pre-bending operations
+   ?
+   ?
+semi-finished pipe geometry
+   ?
+   ?
+STORE PASS RESULT
+
+Then:
+
+PHASE / PASS 2 — MACHINE 2
+
+semi-finished pipe from Pass 1
+   ?
+   ?
+load / position in stretch machine
+   ?
+   ?
+clamp
+   ?
+   ?
+apply tension
+   ?
+   ?
+stretch + helix forming
+   ?
+   ?
+unload / springback
+   ?
+   ?
+finished geometry
+
+So yes: PASS is the better abstraction for this, rather than pretending stretch bending is simply the next operation on Machine 1.
+
+The important hierarchy becomes:
+
+ManufacturingPlan
+?
+??? Pass 1 — Machine 1
+?      ?
+?      ??? OperationQueue
+?             ??? FEED
+?             ??? ROTATE
+?             ??? ROTARY_DRAW_BEND
+?             ??? FEED
+?             ??? ROLL_BEND
+?
+?      output:
+?      semi-finished pipe geometry
+?
+??? Pass 2 — Machine 2
+       ?
+       ??? StretchBendingProcess
+              ??? input = Pass 1 geometry
+              ??? clamping
+              ??? tension
+              ??? forming
+              ??? loaded hold
+              ??? unloading
+              ??? final geometry
+
+That changes our planned Phase 10V slightly.
+
+We should not put StretchBendingOperation directly into the same continuous OperationQueue yet. Instead:
+
+OperationQueue
+    ? rotary draw + roll bending
+    ? belongs to a machine/pass
+
+StretchBendingOperation
+    ? belongs to a later PASS
+    ? consumes semi-finished geometry from previous PASS
+
+The distinction is valuable because the stretch process needs more than just scalar input parameters. Eventually it also needs a starting semi-finished geometry:
+
+Pass 1 output geometry
+        ?
+        ?
+Pass 2 input geometry
+        ?
+        + StretchBendingOperation
+        ?
+        ?
+stretch-helix process
+
+So I would revise the next architectural work to:
+
+Phase 10V
+Define stretch bending as a second-pass manufacturing process
+and connect it to a previous-pass geometry result.
+
+Later:
+integrate two-/three-roll bending into the normal
+continuous OperationQueue for Machine 1.
+
+This is cleaner and much closer to the actual manufacturing process you described.
+
+wczoraj 18:25
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+So Phase 10V is mainly about routing and ownership. We should not rewrite the evaluator, integrator, springback model, or current playback logic.
+
+10V.1 — Extend the general Operation type
+
+You already have code like:
+
+if (currentOp->type == Operation::FEED)
+{
+    ...
+}
+
+
+
+
+
 Here are a few simplified examples showing why the separation helps.
 
 1. Loading a job from a file

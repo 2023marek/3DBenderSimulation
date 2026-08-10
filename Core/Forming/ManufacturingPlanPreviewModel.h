@@ -75,7 +75,7 @@ class ManufacturingPlanPreviewModel
 {
 public:
     explicit ManufacturingPlanPreviewModel(
-        double sampleStep = 0.5)
+        double sampleStep = 0.25)
         : ds(sampleStep)
     {
     }

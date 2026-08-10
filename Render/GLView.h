@@ -273,4 +273,12 @@ private:
 
     PipeRenderer stretchActiveZoneDebugRenderer;
 
+    PipeRenderer
+        stretchHelixReferenceRenderer;
+
+    bool showStretchHelixReference =
+        true;
+
+    void drawStretchHelixReference();
+
 };

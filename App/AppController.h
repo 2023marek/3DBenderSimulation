@@ -25,6 +25,15 @@
 #include "Core/Geometry/CurvatureTorsionProfile.h"
 #include "Core/Forming/StretchBendingManufacturingState.h"
 #include "Core/Forming/StretchBendingProcessInputBuilder.h"
+#include "Core/Forming/StretchHelixWrappingInput.h"
+#include "Core/Forming/StretchHelixWrappingKinematicsBuilder.h"
+#include "Core/Forming/StretchHelixWrappingState.h"
+#include "Core/Forming/StretchHelixWrappingStateBuilder.h"
+#include "Core/Forming/StretchHelixWrappingKinematics.h"
+
+
+
+
 
 struct StretchBendingEvaluationResult;
 
@@ -286,6 +295,16 @@ public:
 
      const StretchBendingActiveZone&
          getDebugStretchActiveZone() const;
+
+     //getters
+     const StretchHelixWrappingInput&
+         getDebugStretchHelixWrappingInput() const;
+
+     const StretchHelixWrappingKinematics&
+         getDebugStretchHelixWrappingKinematics() const;
+
+     const SpatialCurveIntegrationResult&
+         getDebugStretchHelixReferenceResult() const;
 private:
     
 
@@ -417,6 +436,42 @@ private:
 private:
     StretchBendingOperation
         debugStretchOperation;
-    
+  void debugTestStretchBendingOperationValidation() const;
+
+  StretchHelixWrappingInput
+      buildTestStretchHelixWrappingInput() const;
+
+  void debugTestStretchHelixWrappingInput() const;
+  void debugTestStretchHelixWrappingKinematics() ;
+  //
+  StretchHelixWrappingInput
+      debugStretchHelixWrappingInput;
+
+  StretchHelixWrappingKinematics
+      debugStretchHelixWrappingKinematics;
+
+  StretchHelixWrappingState
+      debugStretchHelixWrappingState;
+
+  CurvatureTorsionProfile
+      debugStretchHelixCurrentProfile;
+
+   SpatialCurveIntegrationResult
+      debugStretchHelixReferenceResult;
+
+  
+
+   Frame
+       debugStretchHelixReferenceStartFrame;
+
+   // Current moving-front profile.
+  
+   // Current orange H4 geometry.
+   SpatialCurveIntegrationResult
+       debugStretchHelixCurrentResult;
+
+  
+   bool rebuildDebugStretchHelixCurrentGeometry();
+   void debugTestStretchHelixContactProgression();
 }; 
 

@@ -32,6 +32,7 @@
 #include "Core/Forming/StretchBendingCurrentProfileParameterResolver.h"
 #include "Core/Forming/StretchBendingCurrentProfileBuilder.h"
 #include "Core/Forming/StretchBendingOperation.h"
+#include "Core/Forming/StretchHelixCurrentProfileBuilder.h"
 
 
 
@@ -98,7 +99,7 @@ namespace
         0.0;
 
     constexpr double TEST_INTEGRATOR_SAMPLE_STEP =
-        0.5;
+        0.25;
     //Threshold initial
     constexpr double TEST_MAX_ENDPOINT_POSITION_ERROR =
         0.05; // mm
@@ -164,7 +165,7 @@ namespace
         40.0;
 
     constexpr double TEST_STRETCH_SAMPLE_STEP =
-        0.5;
+        0.25;
 
     constexpr double TEST_STRETCH_SPRINGBACK_RATIO =
         0.10;
@@ -244,6 +245,10 @@ AppController::AppController()
     debugTestStretchBendingStateProgression();
     debugTestStretchBendingSpringback();
     debugPrintStretchProcessHudData();
+    debugTestStretchBendingOperationValidation();
+    debugTestStretchHelixWrappingInput();
+    debugTestStretchHelixWrappingKinematics();
+    debugTestStretchHelixContactProgression();
 
 }
 
@@ -4239,3 +4244,593 @@ AppController::buildTestStretchBendingOperation() const
     return operation;
 }
 
+
+void AppController::
+debugTestStretchBendingOperationValidation() const
+{
+    const StretchBendingOperation valid =
+        buildTestStretchBendingOperation();
+
+    StretchBendingOperation invalidLength =
+        valid;
+
+    invalidLength.arcLength =
+        0.0;
+
+    StretchBendingOperation invalidSpringback =
+        valid;
+
+    invalidSpringback.springbackRatio =
+        1.0;
+
+    StretchBendingOperation invalidSpeed =
+        valid;
+
+    invalidSpeed.feedSpeed =
+        0.0;
+
+    std::cout
+        << "[STRETCH OPERATION CASE]"
+        << " name=Valid"
+        << " accepted="
+        << valid.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH OPERATION CASE]"
+        << " name=InvalidLength"
+        << " accepted="
+        << !invalidLength.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH OPERATION CASE]"
+        << " name=InvalidSpringback"
+        << " accepted="
+        << !invalidSpringback.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH OPERATION CASE]"
+        << " name=InvalidSpeed"
+        << " accepted="
+        << !invalidSpeed.isValid()
+        << std::endl;
+}
+
+StretchHelixWrappingInput
+AppController::buildTestStretchHelixWrappingInput() const
+{
+    StretchHelixWrappingInput input;
+
+    // =================================================
+    // WORKPIECE
+    // =================================================
+
+    input.pipeSection.outerDiameter =
+        TEST_STRETCH_OUTER_DIAMETER;
+
+    input.pipeSection.wallThickness =
+        TEST_STRETCH_WALL_THICKNESS;
+
+    input.material.youngModulus =
+        TEST_STRETCH_YOUNG_MODULUS;
+
+    input.material.yieldStress =
+        TEST_STRETCH_YIELD_STRESS;
+
+    input.material.hardeningModulus =
+        TEST_STRETCH_HARDENING_MODULUS;
+
+    input.material.allowableStrain =
+        TEST_STRETCH_ALLOWABLE_STRAIN;
+
+    input.pipeArcLength =
+        500.0;
+
+    // =================================================
+    // SUPPORT
+    // =================================================
+
+    input.supportOuterRadius =
+        50.0;
+
+    // =================================================
+    // MACHINE MOTION
+    // =================================================
+
+    input.axialSpeed =
+        20.0;
+
+    input.rotationSpeed =
+        2.0;
+
+    input.rotationDirection =
+        1;
+
+    // =================================================
+    // STRETCH
+    // =================================================
+
+    input.axialStretchStrain =
+        0.03;
+
+    // =================================================
+    // NUMERICS
+    // =================================================
+
+    input.sampleStep =
+        0.25;
+
+    input.enabled =
+        true;
+
+    return input;
+}
+
+void AppController::
+debugTestStretchHelixWrappingInput() const
+{
+    const StretchHelixWrappingInput valid =
+        buildTestStretchHelixWrappingInput();
+
+    StretchHelixWrappingInput invalidRadius =
+        valid;
+
+    invalidRadius.supportOuterRadius =
+        0.0;
+
+    StretchHelixWrappingInput invalidRotation =
+        valid;
+
+    invalidRotation.rotationSpeed =
+        0.0;
+
+    StretchHelixWrappingInput invalidDirection =
+        valid;
+
+    invalidDirection.rotationDirection =
+        0;
+
+    StretchHelixWrappingInput invalidLength =
+        valid;
+
+    invalidLength.pipeArcLength =
+        0.0;
+
+    std::cout
+        << "[STRETCH HELIX INPUT CASE]"
+        << " name=Valid"
+        << " accepted="
+        << valid.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH HELIX INPUT CASE]"
+        << " name=InvalidRadius"
+        << " accepted="
+        << !invalidRadius.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH HELIX INPUT CASE]"
+        << " name=InvalidRotation"
+        << " accepted="
+        << !invalidRotation.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH HELIX INPUT CASE]"
+        << " name=InvalidDirection"
+        << " accepted="
+        << !invalidDirection.isValid()
+        << std::endl;
+
+    std::cout
+        << "[STRETCH HELIX INPUT CASE]"
+        << " name=InvalidLength"
+        << " accepted="
+        << !invalidLength.isValid()
+        << std::endl;
+}
+
+void AppController::
+debugTestStretchHelixWrappingKinematics() 
+{
+    const StretchHelixWrappingInput input =
+        buildTestStretchHelixWrappingInput();
+    
+
+    const StretchHelixWrappingKinematics kinematics =
+        StretchHelixWrappingKinematicsBuilder::build(
+            input
+        );
+
+
+
+    std::cout
+        << "[STRETCH HELIX KINEMATICS]"
+        << " inputValid="
+        << input.isValid()
+        << " valid="
+        << kinematics.valid
+        << " supportRadius="
+        << input.supportOuterRadius
+        << " pipeOD="
+        << input.pipeSection.outerDiameter
+        << " centerlineRadius="
+        << kinematics.centerlineRadius
+        << " axialSpeed="
+        << input.axialSpeed
+        << " rotationSpeed="
+        << input.rotationSpeed
+        << " direction="
+        << input.rotationDirection
+        << " pitch="
+        << kinematics.pitch
+        << " b="
+        << kinematics.helixRisePerRadian
+        << " curvature="
+        << kinematics.curvature
+        << " torsion="
+        << kinematics.torsion
+        << " helixAngle="
+        << kinematics.helixAngle
+        << " lengthPerRev="
+        << kinematics.arcLengthPerRevolution
+        << std::endl;
+
+    if (!input.isValid()
+        || !kinematics.valid)
+    {
+        return;
+    }
+
+    debugStretchHelixWrappingInput =
+        input;
+
+    debugStretchHelixWrappingKinematics =
+        kinematics;
+
+    const CurvatureTorsionProfile referenceProfile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            input.pipeArcLength,
+            kinematics.curvature,
+            kinematics.torsion
+        );
+
+
+    // =====================================================
+    // H3.5 — VALIDATE REFERENCE PROFILE
+    // =====================================================
+
+    if (!referenceProfile.valid)
+    {
+        std::cout
+            << "[STRETCH HELIX REFERENCE PROFILE]"
+            << " valid=0"
+            << std::endl;
+
+        return;
+    }
+
+
+    std::cout
+        << "[STRETCH HELIX REFERENCE PROFILE]"
+        << " valid="
+        << referenceProfile.valid
+        << " samples="
+        << referenceProfile.samples.size()
+        << " length="
+        << referenceProfile.totalArcLength
+        << " curvature="
+        << kinematics.curvature
+        << " torsion="
+        << kinematics.torsion
+        << std::endl;
+
+//// =====================================================
+    // H3.6 comes HERE
+    // Build referenceStartFrame
+    // =====================================================
+    Frame referenceStartFrame;
+    debugStretchHelixReferenceStartFrame =
+        referenceStartFrame;
+
+    referenceStartFrame.P =
+        Vec3D{
+            0.0,
+            -500.0,
+            0.0
+    };
+
+    referenceStartFrame.T =
+        Vec3D{
+            0.0,
+            1.0,
+            0.0
+    };
+
+    referenceStartFrame.N =
+        Vec3D{
+            -1.0,
+            0.0,
+            0.0
+    };
+
+    referenceStartFrame.B =
+        Vec3D{
+            0.0,
+            0.0,
+            1.0
+    };
+
+    // =====================================================
+       // H3.7 comes after H3.6
+       // Integrate referenceProfile
+       // =====================================================
+
+    SpatialCurveIntegrator integrator;
+
+    debugStretchHelixReferenceResult =
+        integrator.integrate(
+            referenceStartFrame,
+            referenceProfile,
+            input.sampleStep
+        );
+    std::cout
+        << "[STRETCH HELIX REFERENCE]"
+        << " valid="
+        << debugStretchHelixReferenceResult.valid
+        << " complete="
+        << debugStretchHelixReferenceResult.isComplete()
+        << " nodes="
+        << debugStretchHelixReferenceResult.nodes.size()
+        << " length="
+        << debugStretchHelixReferenceResult.integratedArcLength
+        << std::endl;
+
+    debugStretchHelixWrappingState =
+        StretchHelixWrappingStateBuilder::buildInitial(
+            debugStretchHelixWrappingInput
+        );
+    if (!debugStretchHelixWrappingState.isValidForLength(
+        debugStretchHelixWrappingInput.pipeArcLength
+    ))
+    {
+        std::cout
+            << "[STRETCH HELIX WRAPPING STATE]"
+            << " valid=0"
+            << std::endl;
+
+        return;
+    }
+
+
+    const double denominator =
+        kinematics.centerlineRadius
+        * kinematics.centerlineRadius
+        + kinematics.helixRisePerRadian
+        * kinematics.helixRisePerRadian;
+
+    const double reconstructedKappa =
+        kinematics.centerlineRadius
+        / denominator;
+
+    const double reconstructedTauMagnitude =
+        kinematics.helixRisePerRadian
+        / denominator;
+
+    constexpr double tolerance =
+        1e-12;
+
+    const bool curvatureAccepted =
+        std::abs(
+            reconstructedKappa
+            - kinematics.curvature
+        ) <= tolerance;
+
+    const bool torsionAccepted =
+        std::abs(
+            reconstructedTauMagnitude
+            - std::abs(
+                kinematics.torsion
+            )
+        ) <= tolerance;
+
+    const bool accepted =
+        kinematics.valid
+        && curvatureAccepted
+        && torsionAccepted;
+
+    std::cout
+        << "[STRETCH HELIX KINEMATICS ACCEPTANCE]"
+        << " curvatureAccepted="
+        << curvatureAccepted
+        << " torsionAccepted="
+        << torsionAccepted
+        << " accepted="
+        << accepted
+        << std::endl;
+
+    StretchHelixWrappingInput oppositeInput =
+        input;
+
+    oppositeInput.rotationDirection =
+        -1;
+
+    const StretchHelixWrappingKinematics opposite =
+        StretchHelixWrappingKinematicsBuilder::build(
+            oppositeInput
+        );
+
+    const bool handednessAccepted =
+        opposite.valid
+        && std::abs(
+            opposite.curvature
+            - kinematics.curvature
+        ) <= tolerance
+        && std::abs(
+            opposite.torsion
+            + kinematics.torsion
+        ) <= tolerance;
+
+    std::cout
+        << "[STRETCH HELIX HANDEDNESS]"
+        << " positiveTau="
+        << kinematics.torsion
+        << " negativeTau="
+        << opposite.torsion
+        << " accepted="
+        << handednessAccepted
+        << std::endl;
+
+
+
+}
+
+//getters implemention
+const StretchHelixWrappingInput&
+AppController::
+getDebugStretchHelixWrappingInput() const
+{
+    return debugStretchHelixWrappingInput;
+}
+
+const StretchHelixWrappingKinematics&
+AppController::
+getDebugStretchHelixWrappingKinematics() const
+{
+    return debugStretchHelixWrappingKinematics;
+}
+
+const SpatialCurveIntegrationResult&
+AppController::
+getDebugStretchHelixReferenceResult() const
+{
+    return debugStretchHelixReferenceResult;
+}
+
+bool AppController::
+rebuildDebugStretchHelixCurrentGeometry()
+{
+    debugStretchHelixCurrentProfile.clear();
+    debugStretchHelixCurrentResult.clear();
+
+    const StretchHelixWrappingInput& input =
+        debugStretchHelixWrappingInput;
+
+    const StretchHelixWrappingKinematics& kinematics =
+        debugStretchHelixWrappingKinematics;
+
+    const StretchHelixWrappingState& state =
+        debugStretchHelixWrappingState;
+
+    if (!input.isValid())
+        return false;
+
+    if (!kinematics.valid)
+        return false;
+
+    if (!state.isValidForLength(
+        input.pipeArcLength
+    ))
+    {
+        return false;
+    }
+
+    // =================================================
+    // BUILD CURRENT MOVING-CONTACT PROFILE
+    // =================================================
+
+    debugStretchHelixCurrentProfile =
+        StretchHelixCurrentProfileBuilder::build(
+            input,
+            kinematics,
+            state
+        );
+
+    if (!debugStretchHelixCurrentProfile.valid)
+        return false;
+
+    // =================================================
+    // INTEGRATE CURRENT PIPE
+    //
+    // IMPORTANT:
+    // Use exactly the same start frame as the yellow
+    // reference helix.
+    // =================================================
+
+    SpatialCurveIntegrator integrator;
+
+    debugStretchHelixCurrentResult =
+        integrator.integrate(
+            debugStretchHelixReferenceStartFrame,
+            debugStretchHelixCurrentProfile,
+            input.sampleStep
+        );
+
+    return
+        debugStretchHelixCurrentResult.valid
+        && debugStretchHelixCurrentResult.isComplete();
+}
+
+void AppController::
+debugTestStretchHelixContactProgression()
+{
+    const double fractions[] =
+    {
+        0.0,
+        0.25,
+        0.50,
+        0.75,
+        1.0
+    };
+
+    const double totalLength =
+        debugStretchHelixWrappingInput.pipeArcLength;
+
+    for (double fraction : fractions)
+    {
+        debugStretchHelixWrappingState.progress =
+            fraction;
+
+        debugStretchHelixWrappingState.wrappedLength =
+            totalLength
+            * fraction;
+
+        debugStretchHelixWrappingState.contactFrontS =
+            debugStretchHelixWrappingState.wrappedLength;
+
+        debugStretchHelixWrappingState.complete =
+            fraction >= 1.0;
+
+        debugStretchHelixWrappingState.valid =
+            true;
+
+        const bool geometryValid =
+            rebuildDebugStretchHelixCurrentGeometry();
+
+        std::cout
+            << "[STRETCH HELIX CONTACT]"
+            << " progress="
+            << fraction
+            << " wrappedLength="
+            << debugStretchHelixWrappingState.wrappedLength
+            << " frontS="
+            << debugStretchHelixWrappingState.contactFrontS
+            << " geometryValid="
+            << geometryValid
+            << " nodes="
+            << debugStretchHelixCurrentResult.nodes.size()
+            << std::endl;
+    }
+
+    // Return test state to zero.
+    debugStretchHelixWrappingState =
+        StretchHelixWrappingStateBuilder::buildInitial(
+            debugStretchHelixWrappingInput
+        );
+
+    rebuildDebugStretchHelixCurrentGeometry();
+}

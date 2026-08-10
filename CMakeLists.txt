@@ -145,6 +145,15 @@ set(CORE_HEADERS
     Core/Forming/StretchBendingFinalProfileBuilder.cpp
     Core/Forming/StretchBendingMaterial.h
     Core/Geometry/Frame.h
+    Core/Forming/StretchHelixWrappingInput.h
+    Core/Forming/StretchHelixWrappingKinematics.h
+    Core/Forming/StretchHelixWrappingKinematicsBuilder.h
+    Core/Forming/StretchHelixWrappingKinematicsBuilder.cpp
+    Core/Forming/StretchHelixWrappingState.h
+    Core/Forming/StretchHelixWrappingStateBuilder.h
+    Core/Forming/StretchHelixWrappingStateBuilder.cpp
+    Core/Forming/StretchHelixCurrentProfileBuilder.h
+    Core/Forming/StretchHelixCurrentProfileBuilder.cpp
     Core/Geometry/PipeNode.h
     Core/Geometry/PipeSegment.h
     Core/Geometry/GeometricPipeModel.h
