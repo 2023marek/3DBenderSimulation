@@ -45,6 +45,14 @@ struct StretchHelixWrappingKinematics
     double arcLengthPerRevolution =
         0.0;
 
+    // Workpiece centerline travel speed along the
+// reference helix.
+//
+// Units:
+//     mm / s
+    double centerlineSpeed =
+        0.0;
+
     bool valid =
         false;
 
@@ -60,6 +68,8 @@ struct StretchHelixWrappingKinematics
         helixAngle = 0.0;
         arcLengthPerRevolution = 0.0;
 
+        centerlineSpeed =
+            0.0;
         valid = false;
     }
 };

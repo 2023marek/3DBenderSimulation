@@ -1885,3 +1885,585 @@ pipe is now explicitly tied to the reference-helix tangent at the
 contact point, instead of being an incidental consequence of integrating a
 piecewise curvature profile.
 
+====================================
+
+
+Phase H6 — Synchronize Wrapping with Machine Time
+
+
+Yes. After H6, the straight free section will still change its spatial orientation as the contact front moves around the support.
+
+That is physically expected in the model we are building, because the free section is always tangent to the reference helix at the current contact point:
+
+                   free straight pipe
+                          \
+                           \
+                            \
+                             *  contact front
+                           / /
+                         / /
+                       / /
+                 reference helix
+
+As the front advances around the cylinder, the helix tangent itself rotates in 3D. Therefore the straight free section rotates with that tangent.
+
+H6 will change how fast the front moves, not this geometric rule:
+
+H5:
+front position chosen manually
+? free pipe tangent follows that position
+
+H6:
+front position calculated from machine time
+? free pipe tangent still follows that position
+
+So H6 becomes approximately:
+
+rotation speed ?
+axial speed vz
+time dt
+      ?
+      ?
+machine motion
+      ?
+      ?
+contactFrontS(t)
+      ?
+      ?
+reference helix point + tangent
+      ?
+      ??? wrapped section
+      ?      follows helix
+      ?
+      ??? free section
+             remains straight
+             and tangent at front
+
+One subtle point will matter later: whether the whole incoming
+free pipe physically rotates around the support axis, or whether
+machine guides/clamps constrain its position while the support 
+rotates underneath it. That depends on the real
+machine arrangement.
+
+For H6, I recommend preserving the current H5 rule—straight and 
+tangent at the moving front—because it is the clean kinematic foundation.
+Later we can add guide/clamp constraints if the actual machine keeps
+the incoming pipe in a fixed spatial direction.
+
+Phase H6 — Synchronize Wrapping with Machine Time
+
+Now we replace the manual rule:
+
+press H
+? add 25 mm wrapped length
+
+with:
+
+time advances
+? machine rotates
+? machine moves axially
+? contact front advances
+? wrapped length grows automatically
+
+H6 should still reuse the H5 geometry exactly as it is.
+
+The new flow is:
+
+dt
+?
+??? axialSpeed
+??? rotationSpeed
+?
+?
+machine travel during dt
+?
+?
+wrappedLength increment
+?
+?
+contactFrontS
+?
+?
+H5 tangent/contact geometry
+H6.1 — First derive material speed along the helix
+
+Your H2 helix has:
+
+r = centerline radius
+b = rise per radian
+? = rotation speed
+
+For one radian of support rotation:
+
+circumferential travel = r
+axial travel           = b
+
+So centerline travel per radian is:
+
+r
+2
++b
+2
+	?
+
+
+Therefore wrapped centerline speed is:..................
+
+his is the quantity H6 should use to advance wrappedLength.
+
+For your current case:
+
+r  = 60 mm
+?  = 2 rad/s
+vz = 20 mm/s
+
+approximately:
+
+circumferential speed = 120 mm/s
+axial speed           = 20 mm/s
+
+wrapped speed
+? sqrt(120? + 20?)
+? 121.66 mm/s
+
+So a 500 mm pipe would wrap in roughly:
+
+500 / 121.66 ? 4.11 s..................
+H6.2 — Add a wrapping speed helper
+
+Create:
+
+Core/Forming/StretchHelixWrappingKinematicsUtils.h
+
+or, simpler for now, add a function to the existing H2 kinematics type:
+
+double centerlineSpeed =
+    0.0;
+
+I prefer adding it to StretchHelixWrappingKinematics.
+
+In:
+
+StretchHelixWrappingKinematics
+
+add:
+
+// Workpiece centerline travel speed along the
+// reference helix.
+//
+// Units:
+//     mm / s
+double centerlineSpeed =
+    0.0;
+
+Also clear it:
+
+centerlineSpeed =
+    0.0;
+H6.3 — Compute it inside H2 builder
+
+Inside:
+
+StretchHelixWrappingKinematicsBuilder::build()
+
+after:
+
+const double r =
+    result.centerlineRadius;
+
+const double b =
+    result.helixRisePerRadian;
+
+add:
+
+result.centerlineSpeed =
+    absoluteRotationSpeed
+    * std::sqrt(
+        r * r
+        + b * b
+    );
+
+Equivalent check:
+
+const double alternativeSpeed =
+    std::sqrt(
+        (
+            r
+            * absoluteRotationSpeed
+        )
+        * (
+            r
+            * absoluteRotationSpeed
+        )
+        +
+        input.axialSpeed
+        * input.axialSpeed
+    );
+
+These should match.
+
+H6.4 — Add speed diagnostic
+
+Extend your H2 log:
+
+<< " centerlineSpeed="
+<< kinematics.centerlineSpeed
+
+Expected approximately:
+
+centerlineSpeed=121.655
+
+Then add acceptance:
+
+const double expectedCenterlineSpeed =
+    std::sqrt(
+        std::pow(
+            kinematics.centerlineRadius
+            * std::abs(................
+Add to diagnostic:
+
+<< " speedAccepted="
+<< centerlineSpeedAccepted
+H6.5 — Add elapsed time to wrapping state
+
+In:
+
+StretchHelixWrappingState
+
+add:
+
+// Process time since wrapping started.
+//
+// Units:
+//     seconds
+double elapsedTime =
+    0.0;
+
+In clear():
+
+elapsedTime =
+    0.0;
+
+In buildInitial():
+
+state.elapsedTime =
+    0.0;
+
+Also validate it:
+
+if (!std::isfinite(elapsedTime)
+    || elapsedTime < 0.0)
+{
+    return false;
+}
+H6.6 — Create a state advancer
+
+Create:
+
+Core/Forming/StretchHelixWrappingStateAdvancer.h
+#pragma once
+
+#include "Core/Forming/StretchHelixWrappingInput.h"
+#include "Core/Forming/StretchHelixWrappingKinematics.h"
+#include "Core/Forming/StretchHelixWrappingState.h"
+
+class StretchHelixWrappingStateAdvancer
+{
+public:
+    static void advance(
+        StretchHelixWrappingState& state,
+        double dt,
+        const StretchHelixWrappingInput& input,
+        const StretchHelixWrappingKinematics& kinematics..............
+Implementation:
+
+#include "Core/Forming/StretchHelixWrappingStateAdvancer.h"
+
+#include <algorithm>
+#include <cmath>
+
+void StretchHelixWrappingStateAdvancer::advance(
+    StretchHelixWrappingState& state,
+    double dt,
+    const StretchHelixWrappingInput& input,
+    const StretchHelixWrappingKinematics& kinematics)
+{.......................
+
+
+H6.7 — Add AppController time-based advance
+
+In AppController.h, public:
+
+void advanceDebugStretchHelixWrappingTime(
+    double dt
+);
+
+Implementation:
+
+void AppController::
+advanceDebugStretchHelixWrappingTime(
+    double dt)
+{
+    if (!debugStretchHelixWrappingState.valid)
+        return;
+
+    StretchHelixWrappingStateAdvancer::advance(
+        debugStretchHelixWrappingState,
+        dt,
+        debugStretchHelixWrappingInput,
+        debugStretchHelixWrappingKinematics
+    );
+
+    const bool contactGeometryValid =
+        rebuildDebugStretchHelixContactGeometry();
+
+    std::cout
+        << "[STRETCH HELIX TIME STEP]"
+        << " dt="
+        << dt
+        << " elapsedTime="
+        << debugStretchHelixWrappingState.elapsedTime
+        << " wrappedLength="
+        << debugStretchHelixWrappingState.wrappedLength
+        << " frontS="
+        << debugStretchHelixWrappingState.contactFrontS
+        << " progress="
+        << debugStretchHelixWrappingState.progress
+        << " complete="
+        << debugStretchHelixWrappingState.complete
+        << " geometryValid="
+        << contactGeometryValid
+        << std::endl;
+}
+
+Notice: H6 should rebuild the H5 contact geometry,
+not rely on the old H4 profile geometry.
+
+H6.8 — Reset must reset time too
+
+Your existing:
+
+resetDebugStretchHelixWrapping()
+
+already rebuilds initial state.
+
+Because buildInitial() now sets:
+
+elapsedTime = 0.0;
+
+reset automatically becomes:
+
+wrappedLength = 0
+frontS        = 0
+elapsedTime   = 0
+
+Update the diagnostic:
+
+std::cout
+    << "[STRETCH HELIX WRAP RESET]"
+    << " wrappedLength="
+    << debugStretchHelixWrappingState.wrappedLength
+    << " frontS="
+    << debugStretchHelixWrappingState.contactFrontS
+    << " time="
+    << debugStretchHelixWrappingState.elapsedTime
+    << std::endl;................................
+
+H6.9 — Temporary manual time-step key
+
+Keep H, but change what it means.
+
+Instead of:
+
+controller.advanceDebugStretchHelixWrapping(
+    25.0
+);
+
+use:
+
+controller.advanceDebugStretchHelixWrappingTime(
+    0.25
+);
+
+Now:
+
+H = advance machine by 0.25 seconds
+
+For your current speed:
+
+121.66 mm/s × 0.25 s
+? 30.4 mm
+
+So each H press should advance the front by about:
+
+30.4 mm
+
+not exactly 25 mm anymore.
+
+That is the first visible proof that H6 is machine-driven.
+
+H6.10 — Expected log
+
+After reset:
+
+[STRETCH HELIX WRAP RESET]
+wrappedLength=0
+frontS=0
+time=0
+
+First H:
+
+[STRETCH HELIX TIME STEP]
+dt=0.25
+elapsedTime=0.25
+wrappedLength?30.41
+frontS?30.41
+progress?0.0608
+complete=0
+geometryValid=1
+
+Second:
+
+elapsedTime=0.5
+wrappedLength?60.83
+progress?0.1217
+
+And so on.
+
+Around 4.1 seconds:
+
+..................................
+
+H6.11 — Add completion guard
+
+At the start of:
+
+advanceDebugStretchHelixWrappingTime()
+
+add:
+
+if (debugStretchHelixWrappingState.complete)
+{
+    std::cout
+        << "[STRETCH HELIX TIME STEP]"
+        << " ignored=1"
+        << " reason=AlreadyComplete"
+        << std::endl;
+
+    return;
+}
+
+This mirrors the guard from your previous stretch playback system.
+
+H6.12 — Add a time-consistency acceptance test
+
+Add a debug test:
+
+void AppController::
+debugTestStretchHelixWrappingTimeProgression()
+
+Use:
+
+StretchHelixWrappingState state =
+    StretchHelixWrappingStateBuilder::buildInitial(
+        debugStretchHelixWrappingInput
+    );
+
+Then choose:
+
+const double dt =
+    1.0;
+
+Advance once:
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    debugStretchHelixWrappingInput,
+    debugStretchHelixWrappingKinematics
+);
+
+Expected:
+
+const double expectedLength =
+    std::min(
+        debugStretchHelixWrappingInput.pipeArcLength,
+        debugStretchHelixWrappingKinematics.centerlineSpeed
+            * dt
+    );
+
+Acceptance:
+
+const bool accepted =
+    std::abs(
+        state.wrappedLength
+        - expectedLength
+    ) <= 1e-9;
+
+Diagnostic:
+
+std::cout
+    << "[STRETCH HELIX TIME ACCEPTANCE]"
+    << " dt="
+    << dt
+    << " expectedLength="
+    << expectedLength
+    << " actualLength="
+    << state.wrappedLength
+    << " accepted="
+    << accepted
+    << std::endl;
+H6.13 — What should visually change?
+
+The geometry rule does not change from H5:
+
+wrapped section
+    follows yellow reference helix
+
+free section
+    stays straight
+    tangent at moving contact front
+
+What changes is the progression law.
+
+Before H6:
+
+front += arbitrary 25 mm
+
+After H6:
+
+front += centerlineSpeed × dt
+
+So:
+
+machine commands
+        ?
+time
+        ?
+physical travel distance
+        ?
+contact front
+        ?
+H5 geometry
+
+That is the first real connection between your simulated
+machine motion and the visible forming process.
+
+H6 acceptance
+
+Proceed only when:
+
+? centerlineSpeed derived correctly
+? elapsedTime advances correctly
+? wrappedLength = centerlineSpeed × time
+? contactFrontS follows wrappedLength
+? progress reaches 1
+? geometry remains valid
+? yellow reference stays fixed
+? orange free section stays tangent
+? completion occurs around the expected process time
+? stepping after Complete is ignored
+
+After H6, the next logical phase is H7 — automatic timed
+playback using real frame dt, plus pause/resume and machine-speed controls
+for axial speed and rotation speed.

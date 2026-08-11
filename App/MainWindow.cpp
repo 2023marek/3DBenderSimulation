@@ -304,7 +304,7 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
             << "[KEY] H - ADVANCE STRETCH HELIX WRAP\n";
 
         controller.advanceDebugStretchHelixWrapping(
-            25.0
+            0.25
         );
 
         break;

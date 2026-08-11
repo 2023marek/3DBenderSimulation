@@ -55,7 +55,12 @@ struct StretchHelixWrappingState
 
     bool valid =
         false;
-
+    // Process time since wrapping started.
+//
+// Units:
+//     seconds
+    double elapsedTime =
+        0.0;
     void clear()
     {
         wrappedLength =
@@ -69,7 +74,8 @@ struct StretchHelixWrappingState
 
         complete =
             false;
-
+        elapsedTime =
+            0.0;
         valid =
             false;
     }
@@ -111,7 +117,11 @@ struct StretchHelixWrappingState
         {
             return false;
         }
-
+        if (!std::isfinite(elapsedTime)
+            || elapsedTime < 0.0)
+        {
+            return false;
+        }
         return true;
     }
 };

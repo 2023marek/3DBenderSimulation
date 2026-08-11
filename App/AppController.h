@@ -319,6 +319,10 @@ public:
 
      const std::vector<PipeNode>&
          getDebugStretchHelixContactGeometryNodes() const;
+
+     void advanceDebugStretchHelixWrappingTime(
+         double dt
+     );
 private:
     
 
@@ -491,5 +495,6 @@ private:
    std::vector<PipeNode>
        debugStretchHelixContactGeometryNodes;
    bool rebuildDebugStretchHelixContactGeometry();
+   void debugTestStretchHelixWrappingTimeProgression();
 }; 
 

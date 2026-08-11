@@ -2,7 +2,7 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
-
+#include <algorithm>
 #include "AppController.h"
 
 #include "Core/Forming/ManufacturingPass.h"
@@ -33,6 +33,8 @@
 #include "Core/Forming/StretchBendingCurrentProfileBuilder.h"
 #include "Core/Forming/StretchBendingOperation.h"
 #include "Core/Forming/StretchHelixCurrentProfileBuilder.h"
+#include "Core/Forming/StretchHelixWrappingStateAdvancer.h"
+
 
 
 
@@ -170,7 +172,7 @@ namespace
     constexpr double TEST_STRETCH_SPRINGBACK_RATIO =
         0.10;
    
-
+   
     struct StretchEvaluationTestCase
     {
         const char* name =
@@ -249,6 +251,7 @@ AppController::AppController()
     debugTestStretchHelixWrappingInput();
     debugTestStretchHelixWrappingKinematics();
     debugTestStretchHelixContactProgression();
+    debugTestStretchHelixWrappingTimeProgression();
 
 }
 
@@ -4446,7 +4449,28 @@ debugTestStretchHelixWrappingKinematics()
             input
         );
 
-
+    const double expectedCenterlineSpeed =
+        std::sqrt(
+            std::pow(
+                kinematics.centerlineRadius
+                * std::abs(
+                    input.rotationSpeed
+                ),
+                2.0
+            )
+            +
+            std::pow(
+                input.axialSpeed,
+                2.0
+            )
+        );
+    constexpr double speedTolerance =
+        1e-9;
+    const bool centerlineSpeedAccepted =
+        std::abs(
+            expectedCenterlineSpeed
+            - kinematics.centerlineSpeed
+        ) <= speedTolerance;
 
     std::cout
         << "[STRETCH HELIX KINEMATICS]"
@@ -4478,7 +4502,13 @@ debugTestStretchHelixWrappingKinematics()
         << kinematics.helixAngle
         << " lengthPerRev="
         << kinematics.arcLengthPerRevolution
+        << " centerlineSpeed="
+        << kinematics.centerlineSpeed
+        << " speedAccepted="
+        << centerlineSpeedAccepted
         << std::endl;
+        
+
 
     if (!input.isValid()
         || !kinematics.valid)
@@ -4610,7 +4640,7 @@ debugTestStretchHelixWrappingKinematics()
             << "[STRETCH HELIX WRAPPING STATE]"
             << " valid=0"
             << std::endl;
-
+       
         return;
     }
 
@@ -5068,8 +5098,12 @@ resetDebugStretchHelixWrapping()
 
     std::cout
         << "[STRETCH HELIX WRAP RESET]"
-        << " wrappedLength=0"
-        << " frontS=0"
+        << " wrappedLength="
+        << debugStretchHelixWrappingState.wrappedLength
+        << " frontS="
+        << debugStretchHelixWrappingState.contactFrontS
+        << " time="
+        << debugStretchHelixWrappingState.elapsedTime
         << std::endl;
 }
 
@@ -5242,4 +5276,205 @@ rebuildDebugStretchHelixContactGeometry()
 
         return accepted;
     }
+}
+
+void AppController::
+advanceDebugStretchHelixWrappingTime(
+    double dt)
+{
+    if (debugStretchHelixWrappingState.complete)
+    {
+        std::cout
+            << "[STRETCH HELIX TIME STEP]"
+            << " ignored=1"
+            << " reason=AlreadyComplete"
+            << std::endl;
+
+        return;
     }
+
+    if (!debugStretchHelixWrappingState.valid)
+        return;
+
+    StretchHelixWrappingStateAdvancer::advance(
+        debugStretchHelixWrappingState,
+        dt,
+        debugStretchHelixWrappingInput,
+        debugStretchHelixWrappingKinematics
+    );
+
+    const bool contactGeometryValid =
+        rebuildDebugStretchHelixContactGeometry();
+
+    std::cout
+        << "[STRETCH HELIX TIME STEP]"
+        << " dt="
+        << dt
+        << " elapsedTime="
+        << debugStretchHelixWrappingState.elapsedTime
+        << " wrappedLength="
+        << debugStretchHelixWrappingState.wrappedLength
+        << " frontS="
+        << debugStretchHelixWrappingState.contactFrontS
+        << " progress="
+        << debugStretchHelixWrappingState.progress
+        << " complete="
+        << debugStretchHelixWrappingState.complete
+        << " geometryValid="
+        << contactGeometryValid
+        << std::endl;
+
+   
+}
+
+void AppController::
+debugTestStretchHelixWrappingTimeProgression()
+{
+    // =====================================================
+    // H6.12 — TIME-DRIVEN WRAPPING ACCEPTANCE TEST
+    //
+    // This test verifies:
+    //
+    //     wrappedLength =
+    //         centerlineSpeed * dt
+    //
+    // for one controlled time step.
+    //
+    // It does NOT modify the real playback state.
+    // =====================================================
+
+    const StretchHelixWrappingInput input =
+        buildTestStretchHelixWrappingInput();
+
+    if (!input.isValid())
+    {
+        std::cout
+            << "[STRETCH HELIX TIME ACCEPTANCE]"
+            << " accepted=0"
+            << " reason=InvalidInput"
+            << std::endl;
+
+        return;
+    }
+
+    const StretchHelixWrappingKinematics kinematics =
+        StretchHelixWrappingKinematicsBuilder::build(
+            input
+        );
+
+    if (!kinematics.valid)
+    {
+        std::cout
+            << "[STRETCH HELIX TIME ACCEPTANCE]"
+            << " accepted=0"
+            << " reason=InvalidKinematics"
+            << std::endl;
+
+        return;
+    }
+
+    StretchHelixWrappingState state =
+        StretchHelixWrappingStateBuilder::buildInitial(
+            input
+        );
+
+    if (!state.isValidForLength(
+        input.pipeArcLength
+    ))
+    {
+        std::cout
+            << "[STRETCH HELIX TIME ACCEPTANCE]"
+            << " accepted=0"
+            << " reason=InvalidInitialState"
+            << std::endl;
+
+        return;
+    }
+
+    // =====================================================
+    // CONTROLLED TEST STEP
+    // =====================================================
+
+    const double dt =
+        1.0;
+
+    const double expectedWrappedLength =
+        std::min(
+            input.pipeArcLength,
+            kinematics.centerlineSpeed * dt
+        );
+
+    StretchHelixWrappingStateAdvancer::advance(
+        state,
+        dt,
+        input,
+        kinematics
+    );
+
+    // =====================================================
+    // ACCEPTANCE
+    // =====================================================
+
+    constexpr double tolerance =
+        1e-9;
+
+    const bool timeAccepted =
+        std::abs(
+            state.elapsedTime - dt
+        ) <= tolerance;
+
+    const bool lengthAccepted =
+        std::abs(
+            state.wrappedLength
+            - expectedWrappedLength
+        ) <= tolerance;
+
+    const bool frontAccepted =
+        std::abs(
+            state.contactFrontS
+            - state.wrappedLength
+        ) <= tolerance;
+
+    const double expectedProgress =
+        expectedWrappedLength
+        / input.pipeArcLength;
+
+    const bool progressAccepted =
+        std::abs(
+            state.progress
+            - expectedProgress
+        ) <= tolerance;
+
+    const bool accepted =
+        timeAccepted
+        && lengthAccepted
+        && frontAccepted
+        && progressAccepted;
+
+    std::cout
+        << "[STRETCH HELIX TIME ACCEPTANCE]"
+        << " dt="
+        << dt
+        << " centerlineSpeed="
+        << kinematics.centerlineSpeed
+        << " expectedLength="
+        << expectedWrappedLength
+        << " actualLength="
+        << state.wrappedLength
+        << " elapsedTime="
+        << state.elapsedTime
+        << " progress="
+        << state.progress
+        << " timeAccepted="
+        << timeAccepted
+        << " lengthAccepted="
+        << lengthAccepted
+        << " frontAccepted="
+        << frontAccepted
+        << " progressAccepted="
+        << progressAccepted
+        << " accepted="
+        << accepted
+        << std::endl;
+}
+

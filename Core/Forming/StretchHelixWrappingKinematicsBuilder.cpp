@@ -105,6 +105,30 @@ StretchHelixWrappingKinematicsBuilder::build(
 
     const double b =
         result.helixRisePerRadian;
+    const double alternativeSpeed =
+        std::sqrt(
+            (
+                r
+                * absoluteRotationSpeed
+                )
+            * (
+                r
+                * absoluteRotationSpeed
+                )
+            +
+            input.axialSpeed
+            * input.axialSpeed
+        );
+
+    result.centerlineSpeed =
+        absoluteRotationSpeed
+        * std::sqrt(
+            r * r
+            + b * b
+        );
+
+
+   
 
     const double denominator =
         r * r
@@ -182,4 +206,5 @@ StretchHelixWrappingKinematicsBuilder::build(
         true;
 
     return result;
+
 }

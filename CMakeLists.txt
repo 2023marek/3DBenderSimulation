@@ -150,6 +150,8 @@ set(CORE_HEADERS
     Core/Forming/StretchHelixWrappingKinematicsBuilder.h
     Core/Forming/StretchHelixWrappingKinematicsBuilder.cpp
     Core/Forming/StretchHelixWrappingState.h
+    Core/Forming/StretchHelixWrappingStateAdvancer.h
+    Core/Forming/StretchHelixWrappingStateAdvancer.cpp
     Core/Forming/StretchHelixWrappingStateBuilder.h
     Core/Forming/StretchHelixWrappingStateBuilder.cpp
     Core/Forming/StretchHelixCurrentProfileBuilder.h
