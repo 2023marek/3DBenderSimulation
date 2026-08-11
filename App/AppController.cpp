@@ -5032,6 +5032,26 @@ advanceDebugStretchHelixWrapping(
         << " geometryValid="
         << debugStretchHelixCurrentResult.valid
         << std::endl;
+
+    const bool contactGeometryValid =
+        rebuildDebugStretchHelixContactGeometry();
+    std::cout
+        << "[STRETCH HELIX WRAP STEP]"
+        << " wrappedLength="
+        << debugStretchHelixWrappingState.wrappedLength
+        << " frontS="
+        << debugStretchHelixWrappingState.contactFrontS
+        << " progress="
+        << debugStretchHelixWrappingState.progress
+        << " complete="
+        << debugStretchHelixWrappingState.complete
+        << " profileGeometryValid="
+        << debugStretchHelixCurrentResult.valid
+        << " contactGeometryValid="
+        << contactGeometryValid
+        << std::endl;
+
+
 }
 
 void AppController::
@@ -5041,8 +5061,10 @@ resetDebugStretchHelixWrapping()
         StretchHelixWrappingStateBuilder::buildInitial(
             debugStretchHelixWrappingInput
         );
-
     rebuildDebugStretchHelixCurrentGeometry();
+
+    rebuildDebugStretchHelixContactGeometry();
+
 
     std::cout
         << "[STRETCH HELIX WRAP RESET]"
@@ -5050,3 +5072,174 @@ resetDebugStretchHelixWrapping()
         << " frontS=0"
         << std::endl;
 }
+
+const std::vector<PipeNode>&
+AppController::
+getDebugStretchHelixContactGeometryNodes() const
+{
+    return debugStretchHelixContactGeometryNodes;
+}
+
+
+
+
+bool AppController::
+rebuildDebugStretchHelixContactGeometry()
+{
+    debugStretchHelixContactGeometryNodes.clear();
+
+    if (!debugStretchHelixReferenceResult.valid)
+        return false;
+
+    if (!debugStretchHelixReferenceResult.isComplete())
+        return false;
+
+    const std::vector<PipeNode>& referenceNodes =
+        debugStretchHelixReferenceResult.nodes;
+
+    if (referenceNodes.size() < 2)
+        return false;
+
+    const double totalLength =
+        debugStretchHelixWrappingInput.pipeArcLength;
+
+    if (
+        !debugStretchHelixWrappingState.isValidForLength(
+            totalLength
+        )
+        )
+    {
+        return false;
+    }
+
+    const double frontS =
+        debugStretchHelixWrappingState.contactFrontS;
+
+    const double normalizedFront =
+        std::clamp(
+            frontS / totalLength,
+            0.0,
+            1.0
+        );
+
+    const std::size_t lastIndex =
+        referenceNodes.size() - 1;
+
+    const std::size_t frontIndex =
+        static_cast<std::size_t>(
+            std::llround(
+                normalizedFront
+                * static_cast<double>(
+                    lastIndex
+                    )
+            )
+            );
+
+    debugStretchHelixContactGeometryNodes.reserve(
+        referenceNodes.size()
+    );
+
+    // =====================================================
+    // COPY WRAPPED PART FROM THE REFERENCE HELIX
+    // =====================================================
+
+    for (std::size_t i = 0;
+        i <= frontIndex;
+        ++i)
+    {
+        debugStretchHelixContactGeometryNodes.push_back(
+            referenceNodes[i]
+        );
+    }
+
+    Vec3D tangent;
+
+    if (frontIndex == 0)
+    {
+        tangent =
+            referenceNodes[1].pos
+            - referenceNodes[0].pos;
+    }
+    else if (
+        frontIndex >= lastIndex
+        )
+    {
+        tangent =
+            referenceNodes[lastIndex].pos
+            - referenceNodes[lastIndex - 1].pos;
+    }
+    else
+    {
+        tangent =
+            referenceNodes[frontIndex + 1].pos
+            - referenceNodes[frontIndex - 1].pos;
+    }
+
+    tangent =
+        tangent.normalized();
+
+
+
+    const Vec3D frontPosition =
+        referenceNodes[frontIndex].pos;
+
+    const double remainingLength =
+        totalLength
+        - frontS;
+
+    const std::size_t remainingNodeCount =
+        lastIndex
+        - frontIndex;
+
+    if (remainingNodeCount > 0)
+    {
+        for (std::size_t j = 1;
+            j <= remainingNodeCount;
+            ++j)
+        {
+            const double localFraction =
+                static_cast<double>(j)
+                / static_cast<double>(
+                    remainingNodeCount
+                    );
+
+            const double localLength =
+                remainingLength
+                * localFraction;
+
+            PipeNode node =
+                referenceNodes[frontIndex];
+
+            node.pos =
+                frontPosition
+                + tangent
+                * localLength;
+
+            debugStretchHelixContactGeometryNodes.push_back(
+                node
+            );
+        }
+
+        const bool accepted =
+            debugStretchHelixContactGeometryNodes.size()
+            == referenceNodes.size();
+
+        std::cout
+            << "[STRETCH HELIX CONTACT GEOMETRY]"
+            << " frontS="
+            << frontS
+            << " frontIndex="
+            << frontIndex
+            << " wrappedNodes="
+            << (
+                frontIndex + 1
+                )
+            << " totalNodes="
+            << debugStretchHelixContactGeometryNodes.size()
+            << " accepted="
+            << accepted
+            << std::endl;
+
+        return accepted;
+    }
+    }

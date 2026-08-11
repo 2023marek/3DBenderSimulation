@@ -42,4 +42,5 @@ public:
 private:
     CameraView view =
         CameraView::Perspective;
+    bool rebuildDebugStretchHelixContactGeometry();
 };

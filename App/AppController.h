@@ -306,13 +306,19 @@ public:
      const SpatialCurveIntegrationResult&
          getDebugStretchHelixReferenceResult() const;
 
-     const SpatialCurveIntegrationResult&
-         getDebugStretchHelixCurrentResult() const;
+     
+
      void advanceDebugStretchHelixWrapping(
          double deltaWrappedLength
      );
 
      void resetDebugStretchHelixWrapping();
+
+    const SpatialCurveIntegrationResult&
+         getDebugStretchHelixCurrentResult() const;
+
+     const std::vector<PipeNode>&
+         getDebugStretchHelixContactGeometryNodes() const;
 private:
     
 
@@ -482,6 +488,8 @@ private:
    bool rebuildDebugStretchHelixCurrentGeometry();
    void debugTestStretchHelixContactProgression();
 
-  
+   std::vector<PipeNode>
+       debugStretchHelixContactGeometryNodes;
+   bool rebuildDebugStretchHelixContactGeometry();
 }; 
 

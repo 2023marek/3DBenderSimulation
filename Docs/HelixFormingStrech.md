@@ -1215,5 +1215,673 @@ moving material contact front
 +
 wrapped region grows
 
-That is the foundation we need before adding machine-time synchronization in H5.
+That is the foundation we need before adding machine-time 
+synchronization in H5.
+
+
+==========================
+Phase H5 — 
+wrapped part:
+follows reference helix exactly
+
+free part:
+straight line starting at front
+and aligned with tangent of reference helix
+
+This is a better model for the forming principle.
+
+So I would make this the first task of Phase H5, before
+adding the visible support cylinder:
+
+H5.1
+Find the front point on the reference helix.
+
+H5.2
+Read its tangent frame.
+
+H5.3
+Use reference-helix nodes only up to frontS.
+
+H5.4
+Append a straight tangent tail from the front.
+
+H5.5
+Verify that the tail no longer appears to rotate incorrectly 
+around the support.
+
+The key architectural change is subtle but important:
+
+H4:
+current geometry derived only from ?(s), ?(s)
+
+H5:
+wrapped part derived from reference helix
++
+free part derived explicitly from front tangent
+
+That will make the animation much closer to the actual pipe approaching
+and wrapping onto the helical path.
+Phase H5 — Make the Free Pipe Tangent to the Moving Helix Contact Front
+
+H4 proved the moving-front concept. H5 now corrects the kinematics of the unwrapped straight section.
+
+The target behavior is:
+
+REFERENCE HELIX — yellow
+
+        / / / / / /
+       / / / / / /
+      / / / / / /
+
+
+CURRENT PIPE — orange
+
+        / / /
+       / / *
+          / \
+         /   \
+        /     \???????????? straight free pipe
+              ^
+              tangent direction at contact front
+
+The essential rule becomes:
+
+0 ... frontS
+    copy the reference helix
+
+frontS ... pipe end
+    straight line tangent to the reference helix
+    at frontS
+
+This is more physical than asking the curvature/torsion integrator to generate the entire current pipe.
+
+H5.1 — Change the conceptual ownership
+
+H4 used:
+
+WrappingState
+     ?
+?(s), ?(s)
+     ?
+SpatialCurveIntegrator
+     ?
+whole current pipe
+
+For H5 we use:
+
+             H3 reference helix
+                    ?
+                    ? find front
+                    ?
+             reference node
+                    ?
+           ???????????????????
+           ?                 ?
+           ?                 ?
+ wrapped section          free section
+ copy reference         tangent straight
+           ?                 ?
+           ???????????????????
+                    ?
+             CURRENT PIPE
+
+Do not delete the H4 profile builder. It remains a useful mathematical/debug test.
+
+H5 introduces a second, more physical geometry-construction path.
+
+H5.2 — Store explicit current geometry
+
+In AppController.h, private:
+
+std::vector<PipeNode>
+    debugStretchHelixContactGeometryNodes;
+
+Public getter:..............
+
+H5.3 — Add the H5 geometry builder
+
+In AppController.h, private:
+
+bool rebuildDebugStretchHelixContactGeometry();
+
+This function will use:
+
+debugStretchHelixReferenceResult
+debugStretchHelixWrappingState.............
+H5.4 — Find the moving front node
+
+We know:
+
+reference length = 500 mm
+reference nodes  = 2001
+sample step      = 0.25 mm
+
+Therefore the reference geometry is uniformly sampled.
+
+For now, calculate the front index using normalized arc length:
+
+const std::vector<PipeNode>& referenceNodes =
+    debugStretchHelixReferenceResult.nodes;
+
+const double totalLength =
+    debugStretchHelixWrappingInput.pipeArcLength;
+
+const double frontS =
+    debugStretchHelixWrappingState.contactFrontS;.....................
+
+H5.5 — Derive the tangent from the reference helix
+
+We don't need to rely on a particular PipeNode frame member.
+
+Use neighboring positions.
+
+For an interior node:
+
+Vec3D tangent =
+    referenceNodes[frontIndex + 1].pos
+    - referenceNodes[frontIndex - 1].pos;...
+    H5.6 — Copy the wrapped part
+
+Start the H5 rebuild function:
+
+bool AppController::
+rebuildDebugStretchHelixContactGeometry()
+{
+    debugStretchHelixContactGeometryNodes.clear();...
+
+H5.2 — Store explicit current geometry
+
+In AppController.h, private:
+
+std::vector<PipeNode>
+    debugStretchHelixContactGeometryNodes;
+
+Public getter:
+
+const std::vector<PipeNode>&
+getDebugStretchHelixContactGeometryNodes() const;
+
+You may need the header containing PipeNode.
+
+Implementation:..................
+H5.3 — Add the H5 geometry builder
+
+In AppController.h, private:
+
+bool rebuildDebugStretchHelixContactGeometry();
+
+This function will use:
+
+debugStretchHelixReferenceResult
+debugStretchHelixWrappingState
+
+It does not call SpatialCurveIntegrator.
+
+H5.4 — Find the moving front no.....................
+H5.4 — Find the moving front node
+
+We know:
+
+reference length = 500 mm
+reference nodes  = 2001
+sample step      = 0.25 mm
+
+Therefore the reference geometry is uniformly sampled.
+
+For now, calculate the front index using normalized arc length:
+
+const std::vector<PipeNode>& referenceNodes =
+    debugStretchHelixReferenceResult.nodes;
+
+const double totalLength =
+    debugStretchHelixWrappingInput.pipeArcLength;
+
+const double frontS =
+    debugStretchHelixWrappingState.contactFrontS;
+
+const double normalizedFront =
+    std::clamp(
+        frontS / totalLength,
+        0.0,
+        1.0
+    );
+
+const std::size_t lastIndex =
+    referenceNodes.size() - 1;
+
+const std::size_t frontIndex =
+    static_cast<std::size_t>(
+        std::llround(
+            normalizedFront
+            * static_cast<double>(lastIndex)
+        )
+    );
+
+For your current test this produces approximately:
+
+frontS =   0 ? index    0
+frontS =  25 ? index  100
+frontS = 125 ? index  500
+frontS = 250 ? index 1000
+frontS = 500 ? index 2000
+
+
+H5.5 — Derive the tangent from the reference helix
+
+We don't need to rely on a particular PipeNode frame member.
+
+Use neighboring positions.
+
+For an interior node:
+
+Vec3D tangent =
+    referenceNodes[frontIndex + 1].pos
+    - referenceNodes[frontIndex - 1].pos;
+
+tangent.normalize();
+
+However, adapt normalize() to your actual Vec3D API.
+
+If your Vec3D does not have .normalize(), use your existing normalization helper.
+
+A complete boundary-safe pattern:
+
+Vec3D tangent;....................
+H5.6 — Copy the wrapped part
+
+Start the H5 rebuild function:
+
+bool AppController::
+rebuildDebugStretchHelixContactGeometry()
+{
+    debugStretchHelixContactGeometryNodes.clear();
+
+    if (!debugStretchHelixReferenceResult.valid)
+        return false;
+
+    if (!debugStretchHelixReferenceResult.isComplete())
+        return false;
+
+    const std::vector<PipeNode>& referenceNodes =
+        debugStretchHelixReferenceResult.nodes;
+
+    if (referenceNodes.size() < 2)
+        return false;
+
+    const double totalLength =
+        debugStretchHelixWrappingInput.pipeArcLength;.......
+At this point:
+
+orange wrapped part
+=
+yellow helix exactly
+
+H5.7 — Find the tangent
+
+Continue in the same function:
+
+    Vec3D tangent;
+
+    if (frontIndex == 0)
+    {
+        tangent =
+            referenceNodes[1].pos
+            - referenceNodes[0].pos;
+    }
+    else if (.............
+
+Do not invent another vector class.
+
+H5.8 — Generate the straight free tail
+
+The front point:
+
+const Vec3D frontPosition =
+    referenceNodes[frontIndex].pos;
+
+The remaining material length:
+
+const double remainingLength =
+    totalLength
+    - frontS;
+
+Now append nodes along:
+
+P(s)=P
+front
+	?
+
++sT
+front
+	?
+
+
+where:
+
+0 ? s ? remainingLength
+
+Use the same sample density as the reference geometry.
+
+Continue:
+
+    const Vec3D frontPosition =
+        referenceNodes[frontIndex].pos;
+
+    const double remainingLength =
+        totalLength
+        - frontS;
+
+    const std::size_t remainingNodeCount =
+        lastIndex
+        - frontIndex;
+
+    if (remainingNodeCount > 0)
+    {
+        for (std::size_t j = 1;
+             j <= remainingNodeCount;
+             ++j)
+        {
+            const double localFraction =
+                static_cast<double>(j)
+                / static_cast<double>(
+                    remainingNodeCount
+                );
+
+            const double localLength =
+                remainingLength
+                * localFraction;
+
+            PipeNode node =
+                referenceNodes[frontIndex];
+
+            node.pos =
+                frontPosition
+                + tangent
+                * localLength;
+
+            debugStretchHelixContactGeometryNodes.push_back(
+                node
+            );
+        }
+    }
+
+Using:
+
+PipeNode node =
+    referenceNodes[frontIndex];
+
+is intentional.
+
+It preserves whatever other metadata your PipeNode currently carries while we explicitly replace its position.
+
+For H5 rendering, position is what matters.
+
+H5.9 — Complete the builder
+
+Finish:
+
+    const bool accepted =
+        debugStretchHelixContactGeometryNodes.size()
+        == referenceNodes.size();
+
+    std::cout
+        << "[STRETCH HELIX CONTACT GEOMETRY]"
+        << " frontS="
+        << frontS
+        << " frontIndex="
+        << frontIndex
+        << " wrappedNodes="
+        << (
+            frontIndex + 1
+        )
+        << " totalNodes="
+        << debugStretchHelixContactGeometryNodes.size()
+        << " accepted="
+        << accepted
+        << std::endl;
+
+    return accepted;
+}
+
+So the complete node count should remain:
+
+2001
+
+throughout the entire animation.
+
+H5.10 — Special cases
+
+This algorithm naturally produces sensible endpoints.
+
+At reset
+frontS = 0
+
+Only the first reference point is copied.
+
+Then nearly the entire pipe is constructed as a straight tangent:
+
+*
+ \____________________________________
+At 50%
+frontS = 250
+
+approximately:
+
+half helix
+~~~~~~~~~~~~*
+             \
+              \____________________
+At completion
+frontS = 500
+
+all reference nodes are copied:
+
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+No straight tail remains.
+
+That is precisely our desired H5 behavior.
+
+H5.11 — Call H5 whenever H4 state changes
+
+Inside:
+
+advanceDebugStretchHelixWrapping()
+
+after changing:
+
+wrappedLength
+contactFrontS
+progress
+complete
+
+currently you probably call:
+
+rebuildDebugStretchHelixCurrentGeometry();
+
+Keep that H4 diagnostic if you want.
+
+Then add:
+
+const bool contactGeometryValid =
+    rebuildDebugStretchHelixContactGeometry();
+
+Your diagnostic can become:
+
+std::cout
+    << "[STRETCH HELIX WRAP STEP]"
+    << " wrappedLength="
+    << debugStretchHelixWrappingState.wrappedLength
+    << " frontS="
+    << debugStretchHelixWrappingState.contactFrontS
+    << " progress="
+    << debugStretchHelixWrappingState.progress
+    << " complete="
+    << debugStretchHelixWrappingState.complete
+    << " profileGeometryValid="
+    << debugStretchHelixCurrentResult.valid
+    << " contactGeometryValid="
+    << contactGeometryValid
+    << std::endl;
+H5.12 — Update reset
+
+Inside:
+
+resetDebugStretchHelixWrapping()
+
+after rebuilding the state, call:
+
+rebuildDebugStretchHelixCurrentGeometry();
+
+rebuildDebugStretchHelixContactGeometry();
+
+Now J should immediately restore the straight tangent pipe.
+
+H5.13 — Render H5 instead of H4 orange geometry
+
+This is important.
+
+Keep the yellow H3 reference:
+
+drawStretchHelixReference();
+
+But for orange current pipe, render:
+
+debugStretchHelixContactGeometryNodes
+
+instead of:
+
+debugStretchHelixCurrentResult.nodes
+
+Update the current getter/render path accordingly.
+
+For example, in GLView::drawStretchHelixCurrent():
+
+const std::vector<PipeNode>& nodes =
+    app->getDebugStretchHelixContactGeometryNodes();
+
+if (nodes.size() < 2)
+    return;
+
+Then use the same orange rendering:
+
+shader->setVec3(
+    "pipeColor",
+    glm::vec3(
+        1.0f,
+        0.45f,
+        0.05f
+    )
+);
+
+LINE:
+
+drawStretchDebugLine(
+    nodes,
+    stretchHelixCurrentRenderer,
+    3.0f
+);
+
+MESH:
+
+drawStretchDebugTube(
+    nodes,
+    stretchHelixCurrentRenderer,
+    1.2,
+    16
+);
+
+This preserves your standard visualization infrastructure.
+
+H5.14 — Add a front marker later, not now
+
+Don't add another HUD section.
+
+If needed, later we can render one small marker:
+
+yellow = target
+orange = pipe
+red    = moving contact point
+
+But first verify the geometry itself.
+
+H5 acceptance test
+
+Press:
+
+J
+
+Expected:
+
+orange pipe:
+almost completely straight
+
+yellow:
+complete static helix
+
+Then:
+
+H
+H
+H
+...
+
+Expected physical progression:
+
+STEP 1
+
+  yellow target:
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+  orange:
+       ~*?????????????????????????
+        ?
+       tangent front
+
+
+STEP 2
+
+       ~~~~~~*????????????????????
+              ?
+
+
+STEP 3
+
+       ~~~~~~~~~~~~*??????????????
+                    ?
+
+
+COMPLETE
+
+       ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The critical acceptance conditions are:
+
+? wrapped orange section overlaps yellow reference
+
+? free orange section is perfectly straight
+
+? straight section starts exactly at contact front
+
+? straight section is tangent to yellow helix
+
+? there is no visible corner at the front
+
+? front travels along yellow reference
+
+? yellow reference never moves
+
+? orange total pipe length stays approximately 500 mm
+
+? completion makes orange and yellow coincide
+
+? LINE and MESH both work
+
+One subtle point: the straight free section will still change
+its spatial orientation as the contact front travels around the 
+cylinder, because the tangent of a helix rotates around the support. 
+That rotation is physically expected. What H5 fixes is that the free
+pipe is now explicitly tied to the reference-helix tangent at the
+contact point, instead of being an incidental consequence of integrating a
+piecewise curvature profile.
 

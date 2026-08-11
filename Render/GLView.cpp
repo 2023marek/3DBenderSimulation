@@ -2456,15 +2456,11 @@ void GLView::drawStretchHelixCurrent()
     if (!app || !shader)
         return;
 
-    const SpatialCurveIntegrationResult& result =
-        app->getDebugStretchHelixCurrentResult();
+    const std::vector<PipeNode>& nodes =
+        app->getDebugStretchHelixContactGeometryNodes();
      
-    if (!result.valid
-        || !result.isComplete()
-        || result.nodes.size() < 2)
-    {
+    if (nodes.size() < 2)
         return;
-    }
 
     // Orange = actual/current wrapping geometry.
     shader->setVec3(
@@ -2479,7 +2475,7 @@ void GLView::drawStretchHelixCurrent()
     if (renderMode == RenderMode::LINE)
     {
         drawStretchDebugLine(
-            result.nodes,
+            nodes,
             stretchHelixCurrentRenderer,
             1.0f
         );
@@ -2487,7 +2483,7 @@ void GLView::drawStretchHelixCurrent()
     else if (renderMode == RenderMode::MESH)
     {
         drawStretchDebugTube(
-            result.nodes,
+            nodes,
             stretchHelixCurrentRenderer,
             5.2,
             16
