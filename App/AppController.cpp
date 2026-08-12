@@ -4603,6 +4603,7 @@ debugTestStretchHelixWrappingKinematics()
 
     debugStretchHelixReferenceStartFrame =
         referenceStartFrame;
+
     // =====================================================
        // H3.7 comes after H3.6
        // Integrate referenceProfile
@@ -4616,6 +4617,7 @@ debugTestStretchHelixWrappingKinematics()
             referenceProfile,
             input.sampleStep
         );
+
     std::cout
         << "[STRETCH HELIX REFERENCE]"
         << " valid="
@@ -4628,6 +4630,48 @@ debugTestStretchHelixWrappingKinematics()
         << debugStretchHelixReferenceResult.integratedArcLength
         << std::endl;
 
+    if (!debugStretchHelixReferenceResult.valid
+        || !debugStretchHelixReferenceResult.isComplete())
+    {
+        return;
+    }
+
+    // =====================================================
+// H6A.11 — INITIALIZE NEW PROCESS
+//
+// At this point the old H3 reference path is known-good.
+// Now initialize the new process using exactly the same
+// input and exactly the same start frame.
+// =====================================================
+
+    const bool processInitialized =
+        debugStretchHelixProcess.initialize(
+            input,
+            referenceStartFrame
+        );
+
+    std::cout
+        << "[STRETCH HELIX PROCESS INIT]"
+        << " initialized="
+        << processInitialized
+        << " valid="
+        << debugStretchHelixProcess.isValid()
+        << " referenceNodes="
+        << debugStretchHelixProcess
+        .getReferenceResult()
+        .nodes.size()
+        << " currentNodes="
+        << debugStretchHelixProcess
+        .getCurrentNodes()
+        .size()
+        << std::endl;
+
+    if (!processInitialized)
+    {
+        return;
+    }
+
+    debugTestStretchHelixProcessAcceptance();
     debugStretchHelixWrappingState =
         StretchHelixWrappingStateBuilder::buildInitial(
             debugStretchHelixWrappingInput
@@ -5087,23 +5131,19 @@ advanceDebugStretchHelixWrapping(
 void AppController::
 resetDebugStretchHelixWrapping()
 {
-    debugStretchHelixWrappingState =
-        StretchHelixWrappingStateBuilder::buildInitial(
-            debugStretchHelixWrappingInput
-        );
-    rebuildDebugStretchHelixCurrentGeometry();
+    debugStretchHelixProcess.reset();
 
-    rebuildDebugStretchHelixContactGeometry();
-
+    const StretchHelixWrappingState& state =
+        debugStretchHelixProcess.getState();
 
     std::cout
         << "[STRETCH HELIX WRAP RESET]"
         << " wrappedLength="
-        << debugStretchHelixWrappingState.wrappedLength
+        << state.wrappedLength
         << " frontS="
-        << debugStretchHelixWrappingState.contactFrontS
+        << state.contactFrontS
         << " time="
-        << debugStretchHelixWrappingState.elapsedTime
+        << state.elapsedTime
         << std::endl;
 }
 
@@ -5112,6 +5152,97 @@ AppController::
 getDebugStretchHelixContactGeometryNodes() const
 {
     return debugStretchHelixContactGeometryNodes;
+}
+
+void AppController::
+debugTestStretchHelixProcessAcceptance()
+{
+    if (!debugStretchHelixProcess.isValid())
+    {
+        std::cout
+            << "[STRETCH HELIX PROCESS ACCEPTANCE]"
+            << " accepted=0"
+            << " reason=InvalidProcess"
+            << std::endl;
+
+        return;
+    }
+
+    // Start from a known initial condition.
+    debugStretchHelixProcess.reset();
+
+    const StretchHelixWrappingInput& input =
+        debugStretchHelixProcess.getInput();
+
+    const StretchHelixWrappingKinematics& kinematics =
+        debugStretchHelixProcess.getKinematics();
+
+    // Controlled one-second test.
+    constexpr double TEST_DT =
+        1.0;
+
+    debugStretchHelixProcess.advanceTime(
+        TEST_DT
+    );
+
+    const StretchHelixWrappingState& state =
+        debugStretchHelixProcess.getState();
+
+    const double expectedLength =
+        std::min(
+            input.pipeArcLength,
+            kinematics.centerlineSpeed
+            * TEST_DT
+        );
+
+    constexpr double tolerance =
+        1e-9;
+
+    const bool lengthAccepted =
+        std::abs(
+            state.wrappedLength
+            - expectedLength
+        ) <= tolerance;
+
+    const bool nodeCountAccepted =
+        debugStretchHelixProcess
+        .getCurrentNodes()
+        .size()
+        ==
+        debugStretchHelixProcess
+        .getReferenceResult()
+        .nodes.size();
+
+    const bool accepted =
+        debugStretchHelixProcess.isValid()
+        && lengthAccepted
+        && nodeCountAccepted;
+
+    std::cout
+        << "[STRETCH HELIX PROCESS ACCEPTANCE]"
+        << " wrappedLength="
+        << state.wrappedLength
+        << " expectedLength="
+        << expectedLength
+        << " currentNodes="
+        << debugStretchHelixProcess
+        .getCurrentNodes()
+        .size()
+        << " referenceNodes="
+        << debugStretchHelixProcess
+        .getReferenceResult()
+        .nodes.size()
+        << " lengthAccepted="
+        << lengthAccepted
+        << " nodeCountAccepted="
+        << nodeCountAccepted
+        << " accepted="
+        << accepted
+        << std::endl;
+
+    // Important:
+    // Return the real debug process to its normal startup state.
+    debugStretchHelixProcess.reset();
 }
 
 
@@ -5282,7 +5413,10 @@ void AppController::
 advanceDebugStretchHelixWrappingTime(
     double dt)
 {
-    if (debugStretchHelixWrappingState.complete)
+    if (!debugStretchHelixProcess.isValid())
+        return;
+
+    if (debugStretchHelixProcess.isComplete())
     {
         std::cout
             << "[STRETCH HELIX TIME STEP]"
@@ -5293,40 +5427,39 @@ advanceDebugStretchHelixWrappingTime(
         return;
     }
 
-    if (!debugStretchHelixWrappingState.valid)
-        return;
-
-    StretchHelixWrappingStateAdvancer::advance(
-        debugStretchHelixWrappingState,
-        dt,
-        debugStretchHelixWrappingInput,
-        debugStretchHelixWrappingKinematics
+    debugStretchHelixProcess.advanceTime(
+        dt
     );
 
-    const bool contactGeometryValid =
-        rebuildDebugStretchHelixContactGeometry();
+    const StretchHelixWrappingState& state =
+        debugStretchHelixProcess.getState();
 
     std::cout
         << "[STRETCH HELIX TIME STEP]"
         << " dt="
         << dt
         << " elapsedTime="
-        << debugStretchHelixWrappingState.elapsedTime
+        << state.elapsedTime
         << " wrappedLength="
-        << debugStretchHelixWrappingState.wrappedLength
+        << state.wrappedLength
         << " frontS="
-        << debugStretchHelixWrappingState.contactFrontS
+        << state.contactFrontS
         << " progress="
-        << debugStretchHelixWrappingState.progress
+        << state.progress
         << " complete="
-        << debugStretchHelixWrappingState.complete
+        << state.complete
         << " geometryValid="
-        << contactGeometryValid
+        << debugStretchHelixProcess.isValid()
         << std::endl;
-
-   
 }
 
+
+bool AppController::
+isDebugStretchHelixWrappingComplete() const
+{
+    return
+        debugStretchHelixProcess.isComplete();
+}
 void AppController::
 debugTestStretchHelixWrappingTimeProgression()
 {

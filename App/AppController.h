@@ -30,6 +30,7 @@
 #include "Core/Forming/StretchHelixWrappingState.h"
 #include "Core/Forming/StretchHelixWrappingStateBuilder.h"
 #include "Core/Forming/StretchHelixWrappingKinematics.h"
+#include "Core/Forming/StretchHelixFormingProcess.h"
 
 
 
@@ -323,6 +324,13 @@ public:
      void advanceDebugStretchHelixWrappingTime(
          double dt
      );
+
+     public:
+
+       
+
+     
+         bool isDebugStretchHelixWrappingComplete() const;
 private:
     
 
@@ -496,5 +504,8 @@ private:
        debugStretchHelixContactGeometryNodes;
    bool rebuildDebugStretchHelixContactGeometry();
    void debugTestStretchHelixWrappingTimeProgression();
+   StretchHelixFormingProcess   debugStretchHelixProcess;
+   private:
+       void debugTestStretchHelixProcessAcceptance();
 }; 
 

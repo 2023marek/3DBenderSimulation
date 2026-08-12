@@ -2467,3 +2467,777 @@ Proceed only when:
 After H6, the next logical phase is H7 — automatic timed
 playback using real frame dt, plus pause/resume and machine-speed controls
 for axial speed and rotation speed.
+
+=============================================================
+Yes. H6A should be a pure ownership refactor, not a behavior change. The goal is to take the working H1–H6 stretch-helix logic out of AppController and place it behind one dedicated Core process class.
+
+The target becomes:
+
+BEFORE
+
+AppController
+??? input
+??? kinematics
+??? wrapping state
+??? reference geometry
+??? contact geometry
+??? rebuild helpers
+??? time advance
+
+
+AFTER
+
+AppController
+        ?
+        ?
+StretchHelixFormingProcess
+??? input
+??? kinematics
+??? wrapping state
+??? reference geometry
+??? current/contact geometry
+??? reset()
+??? advanceTime(dt)
+??? rebuild...
+
+AppController should then mostly say:
+
+stretchHelixProcess.advanceTime(dt);
+
+instead of owning the mathematics.
+
+H6A.1 — Create the process class
+
+Create:
+
+Core/Forming/StretchHelixFormingProcess.h
+Core/Forming/StretchHelixFormingProcess.cpp
+
+Header:
+
+#pragma once
+
+#include <vector>
+
+#include "Core/Forming/StretchHelixWrappingInput.h"
+#include "Core/Forming/StretchHelixWrappingKinematics.h"
+#include "Core/Forming/StretchHelixWrappingState.h"
+
+#include "Core/Geometry/Frame.h"
+#include "Core/Geometry/CurvatureTorsionProfile.h"
+#include "Core/Geometry/SpatialCurveIntegrationResult.h"
+
+#include "Core/PipeNode.h"
+
+Adapt the PipeNode include path to your actual project.
+
+Then:
+
+class StretchHelixFormingProcess
+{
+public:
+    StretchHelixFormingProcess() = default;
+
+    // =====================================================
+    // CONFIGURATION
+    // =====================================================
+
+    bool initialize(
+        const StretchHelixWrappingInput& input,
+        const Frame& startFrame..........................
+H6A.2 — What moves from AppController
+
+These fields:
+
+debugStretchHelixWrappingInput
+debugStretchHelixWrappingKinematics
+debugStretchHelixWrappingState
+debugStretchHelixReferenceStartFrame
+debugStretchHelixReferenceResult
+debugStretchHelixContactGeometryNodes
+
+should conceptually move into:
+
+StretchHelixFormingProcess
+
+Do not delete the AppController versions immediately.
+
+First create the new process and make it work. Then remove duplicates after acceptance.
+
+H6A.3 — Implement initialize()
+
+In .cpp:
+
+#include "Core/Forming/StretchHelixFormingProcess.h"
+
+#include <cmath>
+
+#include "Core/Forming/StretchHelixWrappingKinematicsBuilder.h"
+#include "Core/Forming/StretchHelixWrappingStateBuilder.h"
+#include "Core/Forming/StretchHelixWrappingStateAdvancer.h"
+
+#include "Core/Geometry/ConstantCurvatureTorsionProfileBuilder.h"
+#include "Core/Geometry/SpatialCurveIntegrator.h"
+
+Then:
+
+bool StretchHelixFormingProcess::initialize(
+    const StretchHelixWrappingInput& newInput,
+    const Frame& newStartFrame)
+{
+    valid =
+        false;
+
+    input =
+        newInput;
+
+    startFrame =
+        newStartFrame;
+
+    referenceResult.clear();
+
+    currentNodes.clear();
+
+    if (!input.isValid())
+        return false;
+
+    if (!rebuildKinematics())
+        return false;
+
+    if (!rebuildReferenceGeometry())
+        return false;
+
+    state =
+        StretchHelixWrappingStateBuilder::buildInitial(
+            input
+        );
+
+    if (!state.isValidForLength(
+        input.pipeArcLength
+    ))
+    {
+        return false;
+    }
+
+    if (!rebuildCurrentGeometry())
+        return false;
+
+    valid =
+        true;
+
+    return true;
+}
+
+This replaces much of the startup orchestration currently inside AppController.
+
+H6A.4 — Move H2 kinematics rebuild
+bool StretchHelixFormingProcess::
+rebuildKinematics()
+{
+    kinematics =
+        StretchHelixWrappingKinematicsBuilder::build(....................
+
+The process owns the result because the process owns the current machine-forming configuration.
+
+H6A.5 — Move H3 reference geometry rebuild
+
+This should contain the exact logic you already proved in H3.
+
+bool StretchHelixFormingProcess::
+rebuildReferenceGeometry()
+{
+    referenceResult.clear();
+
+    if (!input.isValid())
+        return false;
+
+    if (!kinematics.valid)
+        return false;
+
+    const CurvatureTorsionProfile profile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            input.pipeArcLength,
+            kinematics.curvature,
+            kinematics.torsion
+        );..............................
+This should produce exactly the same yellow reference helix as before.
+
+H6A.6 — Move the H5 tangent-contact builder
+
+Now move your working H5 code from:
+
+AppController::
+rebuildDebugStretchHelixContactGeometry()
+
+into:
+
+StretchHelixFormingProcess::
+rebuildCurrentGeometry()
+
+Keep the same algorithm.
+
+Skeleton:
+
+bool StretchHelixFormingProcess::
+rebuildCurrentGeometry()
+{
+    currentNodes.clear();
+
+    if (!referenceResult.valid)
+        return false;
+
+    if (!referenceResult.isComplete())
+        return false;
+
+    const std::vector<PipeNode>& referenceNodes =
+        referenceResult.nodes;
+
+    if (referenceNodes.size() < 2)
+        return false;
+
+    if (!state.isValidForLength(
+        input.pipeArcLength
+    ))
+    {..............................
+
+    Adapt .normalized() to your actual Vec3D.
+
+Continue:
+
+    const Vec3D frontPosition =
+        referenceNodes[frontIndex].pos;
+
+    const double remainingLength =
+        totalLength - frontS;
+
+    const std::size_t remainingNodeCount =
+        lastIndex - frontIndex;
+
+    if (remainingNodeCount > 0)
+    {
+        for (std::size_t j = 1;
+             j <= remainingNodeCount;
+             ++j)
+        {
+            const double fraction =
+                static_cast<double>(j)
+                / static_cast<double>(
+                    remainingNodeCount
+                );
+
+            PipeNode node =
+                referenceNodes[frontIndex];
+
+            node.pos =
+                frontPosition
+                + tangent
+                * (
+                    remainingLength
+                    * fraction
+                );
+
+            currentNodes.push_back(
+                node
+            );
+        }
+    }
+
+    return
+        currentNodes.size()
+        == referenceNodes.size();
+}
+
+This is deliberately the same working H5 behavior.
+
+No physics change.
+
+H6A.7 — Move H6 time advancement
+void StretchHelixFormingProcess::
+advanceTime(
+    double dt)
+{
+    if (!valid)
+        return;
+
+    if (state.complete)
+        return;
+
+    StretchHelixWrappingStateAdvancer::advance(
+        state,
+        dt,
+        input,
+        kinematics
+    );
+
+    if (!rebuildCurrentGeometry())
+    {
+        valid =
+            false;
+    }
+}
+
+This is the important improvement.
+
+Previously:
+
+AppController
+    advances stretch-helix process
+
+Now:
+
+StretchHelixFormingProcess
+    advances itself
+
+Much cleaner.
+
+H6A.8 — Move reset
+void StretchHelixFormingProcess::reset()
+{
+    if (!input.isValid()
+        || !kinematics.valid)
+    {
+        valid =
+            false;
+
+        return;
+    }
+
+    state =
+        StretchHelixWrappingStateBuilder::buildInitial(
+            input
+        );
+
+    if (!state.isValidForLength(
+        input.pipeArcLength
+    ))
+    {
+        valid =
+            false;
+
+        return;
+    }
+
+    if (!rebuildCurrentGeometry())
+    {
+        valid =
+            false;
+
+        return;
+    }
+
+    valid =
+        true;
+}
+
+Reset no longer needs AppController to know how wrapping state is constructed.
+
+H6A.9 — Add getters
+bool StretchHelixFormingProcess::
+isValid() const
+{
+    return valid;
+}
+
+
+bool StretchHelixFormingProcess::
+isComplete() const
+{
+    return
+        valid
+        && state.complete;
+}
+
+
+const StretchHelixWrappingInput&
+StretchHelixFormingProcess::
+getInput() const
+{
+    return input;
+}
+
+
+const StretchHelixWrappingKinematics&
+StretchHelixFormingProcess::
+getKinematics() const
+{
+    return kinematics;
+}
+
+
+const StretchHelixWrappingState&
+StretchHelixFormingProcess::
+getState() const
+{
+    return state;
+}
+
+
+const SpatialCurveIntegrationResult&
+StretchHelixFormingProcess::
+getReferenceResult() const
+{
+    return referenceResult;
+}
+
+
+const std::vector<PipeNode>&
+StretchHelixFormingProcess::
+getCurrentNodes() const
+{
+    return currentNodes;
+}
+H6A.10 — Add one process member to AppController
+
+In AppController.h, include:
+
+#include "Core/Forming/StretchHelixFormingProcess.h"
+
+Private:
+
+StretchHelixFormingProcess
+    debugStretchHelixProcess;
+
+This replaces six or seven independent H1–H6 members eventually.
+
+H6A.11 — Initialize it from AppController
+
+Where you currently finish H3/H4 initialization, create the same frame as before:
+
+Frame startFrame;
+
+startFrame.P =
+    Vec3D{
+        0.0,
+        -500.0,
+        0.0
+    };
+
+startFrame.T =
+    Vec3D{
+        0.0,
+        1.0,
+        0.0
+    };
+
+startFrame.N =
+    Vec3D{
+        -1.0,
+        0.0,
+        0.0
+    };
+
+startFrame.B =
+    Vec3D{
+        0.0,
+        0.0,
+        1.0
+    };
+
+Then:
+
+const StretchHelixWrappingInput input =
+    buildTestStretchHelixWrappingInput();
+
+const bool initialized =
+    debugStretchHelixProcess.initialize(
+        input,
+        startFrame
+    );
+
+std::cout
+    << "[STRETCH HELIX PROCESS INIT]"
+    << " initialized="
+    << initialized
+    << " valid="
+    << debugStretchHelixProcess.isValid()
+    << " nodes="
+    << debugStretchHelixProcess
+        .getCurrentNodes()
+        .size()
+    << std::endl;
+
+Expected:
+
+initialized=1
+valid=1
+nodes=2001
+H6A.12 — Redirect AppController playback methods
+
+Your public method:
+
+advanceDebugStretchHelixWrappingTime(dt)
+
+should become much smaller:
+
+void AppController::
+advanceDebugStretchHelixWrappingTime(
+    double dt)
+{
+    if (!debugStretchHelixProcess.isValid())
+        return;
+
+    if (debugStretchHelixProcess.isComplete())
+    {
+        std::cout
+            << "[STRETCH HELIX TIME STEP]"
+            << " ignored=1"
+            << " reason=AlreadyComplete"
+            << std::endl;
+
+        return;
+    }
+
+    debugStretchHelixProcess.advanceTime(
+        dt
+    );
+
+    const StretchHelixWrappingState& state =
+        debugStretchHelixProcess.getState();
+
+    std::cout
+        << "[STRETCH HELIX TIME STEP]"
+        << " dt="
+        << dt
+        << " elapsedTime="
+        << state.elapsedTime
+        << " wrappedLength="
+        << state.wrappedLength
+        << " frontS="
+        << state.contactFrontS
+        << " progress="
+        << state.progress
+        << " complete="
+        << state.complete
+        << " geometryValid="
+        << debugStretchHelixProcess.isValid()
+        << std::endl;
+}
+
+Notice what disappeared:
+
+StateAdvancer
+rebuild geometry
+kinematics
+contact geometry internals
+
+AppController no longer needs to know them.
+
+H6A.13 — Redirect reset
+void AppController::
+resetDebugStretchHelixWrapping()
+{
+    debugStretchHelixProcess.reset();
+
+    const StretchHelixWrappingState& state =
+        debugStretchHelixProcess.getState();
+
+    std::cout
+        << "[STRETCH HELIX WRAP RESET]"
+        << " wrappedLength="
+        << state.wrappedLength
+        << " frontS="
+        << state.contactFrontS
+        << " time="
+        << state.elapsedTime
+        << std::endl;
+}
+
+Again, much cleaner.
+
+H6A.14 — Redirect completion query
+
+Replace:
+
+return     debugStretchHelixWrappingState.valid
+    && debugStretchHelixWrappingState.complete;
+
+with:
+
+return
+    debugStretchHelixProcess.isComplete();
+
+So:
+
+bool AppController::
+isDebugStretchHelixWrappingComplete() const
+{
+    return
+        debugStretchHelixProcess.isComplete();
+}
+H6A.15 — Redirect GLView getters
+
+Instead of exposing raw AppController fields, adapt the existing getters.
+
+Reference:
+
+const SpatialCurveIntegrationResult&
+AppController::
+getDebugStretchHelixReferenceResult() const
+{
+    return
+        debugStretchHelixProcess
+        .getReferenceResult();
+}
+
+Current:
+
+const std::vector<PipeNode>&
+AppController::
+getDebugStretchHelixContactGeometryNodes() const
+{
+    return
+        debugStretchHelixProcess
+        .getCurrentNodes();
+}
+
+This is excellent architecturally because GLView does not need to change at all.
+
+It still asks:
+
+AppController ? current nodes
+
+but AppController now delegates to the proper Core process.
+
+H6A.16 — Do not remove old debug members yet
+
+At this stage, keep the old H1–H6 fields temporarily until the new process passes.
+
+Mark them mentally as legacy/debug:
+
+debugStretchHelixWrappingInput;
+debugStretchHelixWrappingKinematics;
+...
+
+Once the new process reproduces the same behavior, delete them one by one.
+
+This makes the refactor safer.
+
+H6A.17 — Add process acceptance diagnostic
+
+Use one simple controlled test.
+
+After initialization:
+
+debugStretchHelixProcess.reset();
+
+debugStretchHelixProcess.advanceTime(
+    1.0
+);
+
+const StretchHelixWrappingState& processState =
+    debugStretchHelixProcess.getState();
+
+const StretchHelixWrappingKinematics& processKinematics =
+    debugStretchHelixProcess.getKinematics();
+
+const double expectedLength =
+    std::min(
+        input.pipeArcLength,
+        processKinematics.centerlineSpeed
+            * 1.0
+    );
+
+const bool accepted =
+    debugStretchHelixProcess.isValid()
+    && std::abs(
+        processState.wrappedLength
+        - expectedLength
+    ) <= 1e-9
+    && debugStretchHelixProcess
+        .getCurrentNodes()
+        .size()
+        == debugStretchHelixProcess
+            .getReferenceResult()
+            .nodes.size();
+
+std::cout
+    << "[STRETCH HELIX PROCESS ACCEPTANCE]"
+    << " wrappedLength="
+    << processState.wrappedLength
+    << " expectedLength="
+    << expectedLength
+    << " currentNodes="
+    << debugStretchHelixProcess
+        .getCurrentNodes()
+        .size()
+    << " referenceNodes="
+    << debugStretchHelixProcess
+        .getReferenceResult()
+        .nodes.size()
+    << " accepted="
+    << accepted
+    << std::endl;
+
+Then:
+
+debugStretchHelixProcess.reset();
+
+so startup still shows the straight orange pipe.
+
+Expected:
+
+accepted=1
+H6A final architecture
+
+After this refactor:
+
+MainWindow
+    ?
+    ? user/timer events
+    ?
+AppController
+    ?
+    ? orchestration
+    ?
+StretchHelixFormingProcess
+    ?
+    ??? StretchHelixWrappingInput
+    ?
+    ??? StretchHelixWrappingKinematics
+    ?
+    ??? StretchHelixWrappingState
+    ?
+    ??? reference helix
+    ?
+    ??? current tangent-contact curve
+    ?
+    ?
+PipeNode render representation
+    ?
+    ?
+GLView
+    ?
+    ?
+PipeRenderer
+
+And later we can replace the internal temporary:
+
+reference nodes
+? contact nodes
+
+with:
+
+PipeCurve
+??? HelixCurveSegment
+??? LineCurveSegment
+    ?
+PipeCurveSampler
+
+without changing MainWindow, GLView, or the process API.
+
+H6A acceptance
+
+Before starting H7, verify only these things:
+
+? StretchHelixFormingProcess initializes
+? reference stays identical
+? reset gives straight orange pipe
+? manual/time step gives same wrapped length as before
+? tangent tail behavior unchanged
+? LINE unchanged
+? MESH unchanged
+? completion unchanged
+? AppController delegates instead of calculating process internals
+? GLView still only reads geometry
+
+If those pass, H7 can be built on a much cleaner foundation.
