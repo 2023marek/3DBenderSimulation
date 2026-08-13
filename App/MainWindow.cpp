@@ -66,8 +66,19 @@ MainWindow::MainWindow()
         &QTimer::timeout,
         this,
         &MainWindow::updateStretchPlayback
+
     );
 
+    stretchHelixPlaybackTimer.setInterval(
+        16
+    );
+
+    connect(
+        &stretchHelixPlaybackTimer,
+        &QTimer::timeout,
+        this,
+        &MainWindow::updateStretchHelixPlayback
+    );
     // =========================
     // TIMER
     // =========================
@@ -301,11 +312,15 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
     case Qt::Key_H:
     {
         std::cout
-            << "[KEY] H - ADVANCE STRETCH HELIX WRAP\n";
+            << "[KEY] H - STEP STRETCH HELIX TIME\n";
 
-        controller.advanceDebugStretchHelixWrapping(
+        pauseStretchHelixPlayback();
+
+        controller.advanceDebugStretchHelixWrappingTime(
             0.25
         );
+
+        view->update();
 
         break;
     }
@@ -315,7 +330,22 @@ void MainWindow::keyPressEvent(QKeyEvent* event)
         std::cout
             << "[KEY] J - RESET STRETCH HELIX WRAP\n";
 
+        pauseStretchHelixPlayback();
+
         controller.resetDebugStretchHelixWrapping();
+
+        view->update();
+
+        break;
+    }
+
+
+    case Qt::Key_K:
+    {
+        std::cout
+            << "[KEY] K - TOGGLE STRETCH HELIX PLAYBACK\n";
+
+        toggleStretchHelixPlayback();
 
         break;
     }
@@ -563,4 +593,302 @@ double MainWindow::
 getStretchPlaybackSpeed() const
 {
     return stretchPlaybackSpeed;
+}
+
+void MainWindow::
+startStretchHelixPlayback()
+{
+    if (stretchHelixPlaybackRunning)
+        return;
+
+    if (
+        controller.
+        isDebugStretchHelixWrappingComplete()
+        )
+    {
+        std::cout
+            << "[STRETCH HELIX PLAYBACK]"
+            << " state=NOT_STARTED"
+            << " reason=AlreadyComplete"
+            << std::endl;
+
+        return;
+    }
+
+    stretchHelixPlaybackClock.restart();
+
+    stretchHelixPlaybackRunning =
+        true;
+
+    stretchHelixPlaybackTimer.start();
+
+    std::cout
+        << "[STRETCH HELIX PLAYBACK]"
+        << " state=PLAYING"
+        << " speed="
+        << stretchHelixPlaybackSpeed
+        << std::endl;
+}
+void MainWindow::
+pauseStretchHelixPlayback()
+{
+    if (!stretchHelixPlaybackRunning)
+        return;
+
+    stretchHelixPlaybackTimer.stop();
+
+    stretchHelixPlaybackRunning =
+        false;
+
+    std::cout
+        << "[STRETCH HELIX PLAYBACK]"
+        << " state=PAUSED"
+        << " speed="
+        << stretchHelixPlaybackSpeed
+        << std::endl;
+}
+
+void MainWindow::
+toggleStretchHelixPlayback()
+{
+    if (stretchHelixPlaybackRunning)
+    {
+        pauseStretchHelixPlayback();
+    }
+    else
+    {
+        startStretchHelixPlayback();
+    }
+}
+
+void MainWindow::
+updateStretchHelixPlayback()
+{
+    if (!stretchHelixPlaybackRunning)
+        return;
+
+    if (!stretchHelixPlaybackClock.isValid())
+    {
+        stretchHelixPlaybackClock.restart();
+        return;
+    }
+
+    const qint64 elapsedMilliseconds =
+        stretchHelixPlaybackClock.restart();
+
+    const double rawRealDeltaTime =
+        static_cast<double>(
+            elapsedMilliseconds
+            )
+        / 1000.0;
+
+    constexpr double MAX_REAL_DELTA_TIME =
+        0.1;
+
+    const double realDeltaTime =
+        std::clamp(
+            rawRealDeltaTime,
+            0.0,
+            MAX_REAL_DELTA_TIME
+        );
+
+    const double processDeltaTime =
+        realDeltaTime
+        * stretchHelixPlaybackSpeed;
+
+    if (!std::isfinite(processDeltaTime)
+        || processDeltaTime <= 0.0)
+    {
+        return;
+    }
+
+    controller.advanceDebugStretchHelixWrappingTime(
+        processDeltaTime
+    );
+
+    view->update();
+
+    if (
+        controller.
+        isDebugStretchHelixWrappingComplete()
+        )
+    {
+        pauseStretchHelixPlayback();
+
+        std::cout
+            << "[STRETCH HELIX PLAYBACK COMPLETE]"
+            << " speed="
+            << stretchHelixPlaybackSpeed
+            << std::endl;
+    }
+}
+
+void MainWindow::
+increaseStretchHelixPlaybackSpeed()
+{
+    stretchHelixPlaybackSpeed *=
+        2.0;
+
+    stretchHelixPlaybackSpeed =
+        std::min(
+            stretchHelixPlaybackSpeed,
+            8.0
+        );
+
+    if (stretchHelixPlaybackRunning)
+    {
+        stretchHelixPlaybackClock.restart();
+    }
+
+    std::cout
+        << "[STRETCH HELIX PLAYBACK SPEED]"
+        << " speed="
+        << stretchHelixPlaybackSpeed
+        << std::endl;
+}
+
+
+void MainWindow::
+decreaseStretchHelixPlaybackSpeed()
+{
+    stretchHelixPlaybackSpeed *=
+        0.5;
+
+    stretchHelixPlaybackSpeed =
+        std::max(
+            stretchHelixPlaybackSpeed,
+            0.125
+        );
+
+    if (stretchHelixPlaybackRunning)
+    {
+        stretchHelixPlaybackClock.restart();
+    }
+
+    std::cout
+        << "[STRETCH HELIX PLAYBACK SPEED]"
+        << " speed="
+        << stretchHelixPlaybackSpeed
+        << std::endl;
+}
+
+void MainWindow::
+increaseStretchHelixRotationSpeed()
+{
+    pauseStretchHelixPlayback();
+
+    const double currentSpeed =
+        controller.getDebugStretchHelixRotationSpeed();
+
+    const double newSpeed =
+        currentSpeed * 1.10;
+
+    const bool accepted =
+        controller.setDebugStretchHelixRotationSpeed(
+            newSpeed
+        );
+
+    std::cout
+        << "[STRETCH HELIX MACHINE COMMAND]"
+        << " type=Rotation"
+        << " old="
+        << currentSpeed
+        << " new="
+        << newSpeed
+        << " accepted="
+        << accepted
+        << std::endl;
+
+    view->update();
+}
+
+void MainWindow::
+decreaseStretchHelixRotationSpeed()
+{
+    pauseStretchHelixPlayback();
+
+    const double currentSpeed =
+        controller.getDebugStretchHelixRotationSpeed();
+
+    const double newSpeed =
+        currentSpeed / 1.10;
+
+    const bool accepted =
+        controller.setDebugStretchHelixRotationSpeed(
+            newSpeed
+        );
+
+    std::cout
+        << "[STRETCH HELIX MACHINE COMMAND]"
+        << " type=Rotation"
+        << " old="
+        << currentSpeed
+        << " new="
+        << newSpeed
+        << " accepted="
+        << accepted
+        << std::endl;
+
+    view->update();
+}
+
+void MainWindow::
+increaseStretchHelixAxialSpeed()
+{
+    pauseStretchHelixPlayback();
+
+    const double currentSpeed =
+        controller.getDebugStretchHelixAxialSpeed();
+
+    const double newSpeed =
+        currentSpeed * 1.10;
+
+    const bool accepted =
+        controller.setDebugStretchHelixAxialSpeed(
+            newSpeed
+        );
+
+    std::cout
+        << "[STRETCH HELIX MACHINE COMMAND]"
+        << " type=Axial"
+        << " old="
+        << currentSpeed
+        << " new="
+        << newSpeed
+        << " accepted="
+        << accepted
+        << std::endl;
+
+    view->update();
+}
+
+
+void MainWindow::
+decreaseStretchHelixAxialSpeed()
+{
+    pauseStretchHelixPlayback();
+
+    const double currentSpeed =
+        controller.getDebugStretchHelixAxialSpeed();
+
+    const double newSpeed =
+        currentSpeed / 1.10;
+
+    const bool accepted =
+        controller.setDebugStretchHelixAxialSpeed(
+            newSpeed
+        );
+
+    std::cout
+        << "[STRETCH HELIX MACHINE COMMAND]"
+        << " type=Axial"
+        << " old="
+        << currentSpeed
+        << " new="
+        << newSpeed
+        << " accepted="
+        << accepted
+        << std::endl;
+
+    view->update();
 }

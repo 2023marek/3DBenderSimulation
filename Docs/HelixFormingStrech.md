@@ -3241,3 +3241,1012 @@ Before starting H7, verify only these things:
 ? GLView still only reads geometry
 
 If those pass, H7 can be built on a much cleaner foundation.
+=================================================================
+==========================================================
+
+Yes. We should now implement H7 in a way that preserves the 
+new ownership boundary:
+
+MainWindow
+   ?
+   ? timer / keyboard only
+   ?
+AppController
+   ?
+   ? delegate
+   ?
+StretchHelixFormingProcess
+   ?
+   ??? advanceTime(dt)
+   ??? reset()
+   ??? isComplete()
+   ??? owns geometry/state
+H7.1 — Add dedicated playback members in MainWindow.h
+
+Put these in private::
+
+QTimer
+    stretchHelixPlaybackTimer;
+
+QElapsedTimer
+    stretchHelixPlaybackClock;
+
+bool
+    stretchHelixPlaybackRunning =
+        false;
+
+double
+    stretchHelixPlaybackSpeed =
+        1.0;
+
+Also declare:
+
+void startStretchHelixPlayback();
+
+void pauseStretchHelixPlayback();
+
+void toggleStretchHelixPlayback();
+
+void updateStretchHelixPlayback();
+
+void increaseStretchHelixPlaybackSpeed();
+
+void decreaseStretchHelixPlaybackSpeed();
+
+Why in MainWindow? Because these are UI/timer concerns, not 
+forming-process physics.
+
+
+H7.2 — Connect the timer in MainWindow::MainWindow()
+
+Near your existing timers:
+
+stretchHelixPlaybackTimer.setInterval(
+    16
+);
+
+connect(
+    &stretchHelixPlaybackTimer,
+    &QTimer::timeout,
+    this,
+    &MainWindow::updateStretchHelixPlayback
+);
+
+This only schedules updates.
+
+It does not calculate geometry
+
+H7.3 — Implement start / pause / toggle
+void MainWindow::
+startStretchHelixPlayback()
+{
+    if (stretchHelixPlaybackRunning)
+        return;
+
+    if (
+        controller.
+        isDebugStretchHelixWrappingComplete()
+    )
+    {
+        std::cout
+            << "[STRETCH HELIX PLAYBACK]"
+            << " state=NOT_STARTED"
+            << " reason=AlreadyComplete"
+            << std::endl;
+
+        return;
+    }
+
+    stretchHelixPlaybackClock.restart();
+
+    stretchHelixPlaybackRunning =
+        true;
+
+    stretchHelixPlaybackTimer.start();
+
+    std::cout
+        << "[STRETCH HELIX PLAYBACK]"
+        << " state=PLAYING"
+        << " speed="
+        << stretchHelixPlaybackSpeed
+        << std::endl;
+}
+
+Pause:
+
+void MainWindow::
+pauseStretchHelixPlayback()
+{
+    if (!stretchHelixPlaybackRunning)
+        return;
+
+    stretchHelixPlaybackTimer.stop();
+
+    stretchHelixPlaybackRunning =
+        false;
+
+    std::cout
+        << "[STRETCH HELIX PLAYBACK]"
+        << " state=PAUSED"
+        << " speed="
+        << stretchHelixPlaybackSpeed
+        << std::endl;
+}
+
+Toggle:
+
+void MainWindow::
+toggleStretchHelixPlayback()
+{
+    if (stretchHelixPlaybackRunning)
+    {
+        pauseStretchHelixPlayback();
+    }
+    else
+    {
+        startStretchHelixPlayback();
+    }
+}
+
+H7.4 — Implement automatic timer update
+
+This is the main function:
+
+void MainWindow::
+updateStretchHelixPlayback()
+{
+    if (!stretchHelixPlaybackRunning)
+        return;
+
+    if (!stretchHelixPlaybackClock.isValid())
+    {
+        stretchHelixPlaybackClock.restart();
+        return;
+    }
+
+    const qint64 elapsedMilliseconds =
+        stretchHelixPlaybackClock.restart();
+
+    const double rawRealDeltaTime =
+        static_cast<double>(
+            elapsedMilliseconds
+        )
+        / 1000.0;
+
+    constexpr double MAX_REAL_DELTA_TIME =
+        0.1;
+
+    const double realDeltaTime =
+        std::clamp(
+            rawRealDeltaTime,
+            0.0,
+            MAX_REAL_DELTA_TIME
+        );
+
+    const double processDeltaTime =
+        realDeltaTime
+        * stretchHelixPlaybackSpeed;
+
+    if (!std::isfinite(processDeltaTime)
+        || processDeltaTime <= 0.0)
+    {
+        return;
+    }
+
+    controller.advanceDebugStretchHelixWrappingTime(
+        processDeltaTime
+    );
+
+    view->update();
+
+    if (
+        controller.
+        isDebugStretchHelixWrappingComplete()
+    )
+    {
+        pauseStretchHelixPlayback();
+
+        std::cout
+            << "[STRETCH HELIX PLAYBACK COMPLETE]"
+            << " speed="
+            << stretchHelixPlaybackSpeed
+            << std::endl;
+    }
+}
+
+Your AppController function should now delegate to the process:
+
+void AppController::
+advanceDebugStretchHelixWrappingTime(
+    double dt)
+{
+    if (!debugStretchHelixProcess.isValid())
+        return;
+
+    if (debugStretchHelixProcess.isComplete())
+    {
+        std::cout
+            << "[STRETCH HELIX TIME STEP]"
+            << " ignored=1"
+            << " reason=AlreadyComplete"
+            << std::endl;
+
+        return;
+    }
+
+    debugStretchHelixProcess.advanceTime(
+        dt
+    );
+
+    const StretchHelixWrappingState& state =
+        debugStretchHelixProcess.getState();
+
+    std::cout
+        << "[STRETCH HELIX TIME STEP]"
+        << " dt="
+        << dt
+        << " elapsedTime="
+        << state.elapsedTime
+        << " wrappedLength="
+        << state.wrappedLength
+        << " frontS="
+        << state.contactFrontS
+        << " progress="
+        << state.progress
+        << " complete="
+        << state.complete
+        << " valid="
+        << debugStretchHelixProcess.isValid()
+        << std::endl;
+}
+
+Notice the architectural improvement:
+
+AppController no longer calls
+StretchHelixWrappingStateAdvancer
+or rebuildDebugStretchHelixContactGeometry()
+
+The process owns both.
+
+H7.5 — Keep J reset and H manual step
+
+Update the keys like this:
+
+case Qt::Key_J:
+{
+    std::cout
+        << "[KEY] J - RESET STRETCH HELIX WRAP\n";
+
+    pauseStretchHelixPlayback();
+
+    controller.resetDebugStretchHelixWrapping();
+
+    view->update();
+
+    break;
+}......................
+
+H7.6 — Add automatic Play/Pause key
+
+Use an unused key, for example K:
+
+case Qt::Key_K:
+{
+    std::cout
+        << "[KEY] K - TOGGLE STRETCH HELIX PLAYBACK\n";
+
+    toggleStretchHelixPlayback();
+
+    break;
+    Expected behavior:
+
+K ? PLAY
+K ? PAUSE
+K ? RESUME
+
+H7.7 — Add playback-speed controls
+
+These affect only simulation-time scaling.
+
+void MainWindow::
+increaseStretchHelixPlaybackSpeed()
+{
+    stretchHelixPlaybackSpeed *=
+        2.0;
+
+    stretchHelixPlaybackSpeed =
+        std::min(
+            stretchHelixPlaybackSpeed,
+            8.0
+        );.......................
+
+Decrease:
+
+void MainWindow::
+decreaseStretchHelixPlaybackSpeed()
+{
+    stretchHelixPlaybackSpeed *=
+        0.5;
+
+    stretchHelixPlaybackSpeed =
+        std::max(
+            stretchHelixPlaybackSpeed,
+            0.125..........................
+
+Choose temporary unused keys.
+
+The important distinction is:
+
+playback speed
+    = how fast simulation time runs
+
+machine axial/rotation speed
+    = actual forming parameters
+
+Do not combine those.
+
+H7.8 — Machine-speed controls should go through the process
+
+This part should now not directly edit AppController fields.
+
+Add to StretchHelixFormingProcess.h, public:
+
+bool setRotationSpeed(
+    double rotationSpeed
+);
+
+bool setAxialSpeed(
+    double axialSpeed
+);
+
+These should internally:
+
+copy/update input
+? rebuild kinematics
+? rebuild reference geometry
+? reset/rebuild current geometry
+
+For example:
+
+bool StretchHelixFormingProcess::
+setRotationSpeed(
+    double rotationSpeed)
+{
+    StretchHelixWrappingInput updatedInput =
+        input;
+
+    updatedInput.rotationSpeed =
+        rotationSpeed;.................
+Same concept for axial speed.
+
+Then AppController only delegates:
+
+bool AppController::
+setDebugStretchHelixRotationSpeed(
+    double speed)
+{
+    return
+        debugStretchHelixProcess
+        .setRotationSpeed(
+            speed
+        );
+}
+
+and:
+
+bool AppController::
+setDebugStretchHelixAxialSpeed(
+    double speed)
+{
+    return
+        debugStretchHelixProcess
+        .setAxialSpeed(
+            speed
+        );
+}
+
+In MainWindow, always pause first:
+
+pauseStretchHelixPlayback();
+
+controller.setDebugStretchHelixRotationSpeed(
+    newSpeed
+);
+
+Why reset on machine-speed change for now? Because
+changing ? or axial speed halfway through a run would 
+create a piecewise helix with old geometry behind the
+front and new geometry after the front. That is a later feature.
+
+For H7, machine-command change means:
+
+pause
+
+pause
+? update machine parameter
+? rebuild target helix
+? reset wrapping
+? user starts again
+
+At the end of these eight steps, the architecture remains:
+
+MainWindow
+    timer / keyboard
+         ?
+         ?
+AppController
+    delegation only
+         ?
+         ?
+StretchHelixFormingProcess
+    ??? input
+    ??? kinematics
+    ??? state
+    ??? reference geometry
+    ??? current geometry
+
+The first acceptance test should focus only on automatic
+playback: K starts, pauses and resumes; J resets; H gives 
+one 0.25 s step; completion stops the timer automatically;
+and the orange/yellow geometry behaves
+exactly as it did before H7.
+=======================================================================
+
+Phase H8 — Stretch/Tension Feasibility Inside StretchHelixFormingProcess
+
+H8 should add the mechanical feasibility layer without
+changing the H7 wrapping geometry.
+
+The process becomes:
+
+machine commands
+      ?
+H2 kinematics
+?, ?
+      ?
+H8 stretch mechanics
+      ??? bending strain
+      ??? axial strain
+      ??? inner-wall strain
+      ??? outer-wall strain
+      ??? tension
+      ??? feasibility
+      ?
+H5/H7 wrapping geometry
+
+Important: H8 does not yet modify the geometry based on springback. 
+It only decides whether the requested helix + axial 
+stretch are mechanically acceptable.
+
+
+H8.1 — Reuse your existing stretch mechanics
+
+You already have tested types:
+
+StretchBendingProcessInput
+StretchBendingEvaluator
+StretchBendingEvaluationResult
+
+Do not create a second strain/tension solver for the helix.
+
+Instead:
+
+StretchHelixWrappingInput
++
+StretchHelixWrappingKinematics
+        ?
+convert
+        ?
+StretchBendingProcessInput
+        ?
+StretchBendingEvaluator
+
+That keeps one mechanical model.
+
+H8.2 — Add an evaluation result to the process
+
+In StretchHelixFormingProcess.h, include:
+
+#include "Core/Forming/StretchBendingEvaluationResult.h"
+
+Add under private::
+
+StretchBendingEvaluationResult
+    stretchEvaluation;
+
+Add public getter:
+
+const StretchBendingEvaluationResult&
+getStretchEvaluation() const;
+
+Implementation:
+
+const StretchBendingEvaluationResult&
+StretchHelixFormingProcess::
+getStretchEvaluation() const
+{
+    return stretchEvaluation;
+}
+H8.3 — Add a mechanical evaluation helper
+
+In StretchHelixFormingProcess.h, private:
+
+bool rebuildStretchEvaluation();
+
+This is where H8 belongs.
+
+The process flow will become:
+
+initialize()
+    ?
+rebuildKinematics()
+    ?
+rebuildStretchEvaluation()
+    ?
+rebuildReferenceGeometry()
+    ?
+build initial state
+    ?
+rebuildCurrentGeometry()..
+
+H8.4 — Convert helix input into StretchBendingProcessInput
+
+Inside StretchHelixFormingProcess.cpp, include:
+
+#include "Core/Forming/StretchBendingProcessInput.h"
+#include "Core/Forming/StretchBendingEvaluator.h"
+
+Then implement:
+
+bool StretchHelixFormingProcess::
+rebuildStretchEvaluation()
+{
+    if (!input.isValid())
+        return false;
+
+    if (!kinematics.valid)
+        return false;
+
+    StretchBendingProcessInput mechanicalInput;
+
+    // =====================================================
+    // PIPE / MATERIAL
+    // =====================================================
+
+    mechanicalInput.pipeSection =
+        input.pipeSection;
+
+    mechanicalInput.material =
+        input.material;
+
+    // =====================================================
+    // HELIX GEOMETRY
+    //
+    // H2 derived these from the machine commands.
+    // =====================================================
+
+    mechanicalInput.geometry.targetArcLength =
+        input.pipeArcLength;
+
+    mechanicalInput.geometry.targetCurvature =
+        kinematics.curvature;
+
+    mechanicalInput.geometry.targetTorsion =
+        kinematics.torsion;
+
+    // =====================================================
+    // STRETCH COMMAND
+    // =====================================================
+
+    mechanicalInput.axialStretchStrain =
+        input.axialStretchStrain;
+
+    // =====================================================
+    // NUMERICS / PROCESS
+    // =====================================================
+
+    mechanicalInput.feedSpeed =
+        input.axialSpeed;
+
+    mechanicalInput.sampleStep =
+        input.sampleStep;
+
+    // H8 does not yet model springback.
+    mechanicalInput.springbackRatio =
+        0.0;
+
+    mechanicalInput.compensateSpringback =
+        false;
+
+    mechanicalInput.enabled =
+        true;
+
+    if (!mechanicalInput.isValid())
+        return false;
+
+    StretchBendingEvaluator evaluator;
+
+    stretchEvaluation =
+        evaluator.evaluate(
+            mechanicalInput
+        );
+
+    return
+        stretchEvaluation.valid;
+}
+Important
+
+Your actual StretchBendingProcessInput may still use:
+
+mechanicalInput.geometry.targetCurvature
+
+as above.
+
+If your current version was refactored to direct fields such as:
+
+mechanicalInput.targetFinalCurvature
+
+use the real current structure. Do not introduce duplicate fields.
+
+H8.5 — Call it during initialization
+
+In:
+
+StretchHelixFormingProcess::initialize(...)
+
+you currently have approximately:
+
+if (!rebuildKinematics())
+    return false;
+
+if (!rebuildReferenceGeometry())
+    return false;
+
+Change to:
+
+if (!rebuildKinematics())
+    return false;
+
+if (!rebuildStretchEvaluation())
+    return false;
+
+if (!rebuildReferenceGeometry())
+    return false;
+
+So now:
+
+invalid mechanics
+? process initialization rejected
+
+This is deliberate for the first H8 version.
+
+H8.6 — Potential issue with your current test geometry
+
+This is important.
+
+Your current helix has:
+
+centerlineRadius = 60 mm
+? = 0.0162162 1/mm
+pipe OD = 20 mm
+axialStretchStrain = 0.03
+
+The approximate bending strain at the outer fiber is:
+
+?
+b
+	?
+
+=?
+2
+D
+	?
+
+
+So here:
+
+?
+b
+	?
+
+?0.0162162×10?0.162
+
+That means about 16.2% bending strain before axial stretch is even added.
+
+Your earlier stretch-bending test used approximately:
+
+? = 0.002
+D = 20
+
+giving only:
+
+?b ? 0.02 = 2%
+
+So your current H1/H2 debug helix is dramatically tighter.
+
+This means H8 may correctly reject the current debug geometry depending on:
+
+material.allowableStrain
+
+That would not indicate a software error.
+
+
+H8.7 — Add a diagnostic before rejecting
+
+Inside rebuildStretchEvaluation() after evaluation:
+
+std::cout
+    << "[STRETCH HELIX MECHANICS]"
+    << " valid="
+    << stretchEvaluation.valid
+    << " status="
+    << stretchBendingEvaluationStatusToString(
+        stretchEvaluation.status
+    )
+    << " kappa="
+    << kinematics.curvature
+    << " torsion="
+    << kinematics.torsion
+    << " axialStrain="
+    << input.axialStretchStrain
+    << " bendingStrain="
+    << stretchEvaluation.bendingStrain
+    << " innerStrain="
+    << stretchEvaluation.innerStrain
+    << " outerStrain="
+    << stretchEvaluation.outerStrain
+    << " tension="
+    << stretchEvaluation.commandedTension
+    << std::endl;
+
+Use your actual field names from StretchBendingEvaluationResult.
+
+From your previous logs, you likely have equivalents for:
+
+bendingStrain
+inner strain
+outer strain
+recommended tension
+commanded tension
+
+H8.8 — Do not immediately kill rendering for an infeasible debug case
+
+Architecturally, a mechanically infeasible process should eventually not execute.
+
+But while debugging H8, it is more useful to distinguish:
+
+geometry valid
+mechanics invalid
+
+Therefore I recommend a slightly softer first implementation.
+
+Instead of:
+
+if (!rebuildStretchEvaluation())
+    return false;
+
+use:
+
+const bool mechanicsValid =
+    rebuildStretchEvaluation();
+
+if (!mechanicsValid)
+{
+    std::cout
+        << "[STRETCH HELIX PROCESS]"
+        << " mechanicsValid=0"
+        << " geometryWillRemainAvailable=1"
+        << std::endl;
+}
+
+Then continue building reference/current geometry.
+
+This lets the yellow/orange visualization remain while you see:
+
+MECHANICALLY NOT FEASIBLE
+
+That is very useful for engineering simulation.
+
+So I would actually define two concepts:
+
+bool geometryValid;
+bool mechanicsValid;
+
+rather than one global valid.
+
+H8.9 — Add mechanicsValid to process
+
+In StretchHelixFormingProcess.h, private:
+
+bool mechanicsValid =
+    false;
+
+Public:
+
+bool isMechanicallyFeasible() const;
+
+Implementation:
+
+bool StretchHelixFormingProcess::
+isMechanicallyFeasible() const
+{
+    return mechanicsValid;
+}
+
+During initialization:
+
+mechanicsValid =
+    rebuildStretchEvaluation();
+
+But geometry initialization can still continue.
+
+This is better than making:
+
+valid = geometry AND mechanics
+
+because those are genuinely different questions.
+
+H8.10 — Add the first acceptance test
+
+After process initialization, print:
+
+const StretchBendingEvaluationResult& mechanics =
+    debugStretchHelixProcess.getStretchEvaluation();
+
+std::cout
+    << "[STRETCH HELIX MECHANICS ACCEPTANCE]"
+    << " processValid="
+    << debugStretchHelixProcess.isValid()
+    << " mechanicsFeasible="
+    << debugStretchHelixProcess.isMechanicallyFeasible()
+    << " evaluationValid="
+    << mechanics.valid
+    << std::endl;
+
+For the current tight test helix, do not assume this must print:
+
+mechanicsFeasible=1
+
+We should first see what the evaluator says.
+
+H8.11 — Add a known-valid mechanics test case
+
+Because the current R=60 mm helix may be too severe, create a second debug input just for mechanical acceptance.
+
+For example:
+
+StretchHelixWrappingInput mildInput =
+    buildTestStretchHelixWrappingInput();
+
+mildInput.supportOuterRadius =
+    500.0;
+
+With pipe radius 10 mm:
+
+centerline radius ? 510 mm
+
+which makes curvature much lower.
+
+Build:
+
+const StretchHelixWrappingKinematics mildKinematics =
+    StretchHelixWrappingKinematicsBuilder::build(
+        mildInput
+    );
+
+Then evaluate it.
+
+The purpose is to prove both branches:
+
+Mild helix
+? mechanics feasible
+
+Tight helix
+? mechanics potentially rejected
+
+H8.12 — Add result categories
+
+At minimum, H8 should expose:
+
+geometryValid
+mechanicsValid
+
+Later we can expose detailed states:
+
+Valid
+InnerWallCompressionRisk
+OuterWallStrainExceeded
+BelowYield
+GeometryNotFeasible
+
+You already have those through:
+
+StretchBendingEvaluationStatus
+
+so reuse them.
+
+H8.13 — Keep torsion out of the strain formula for now
+
+Your existing stretch evaluator is primarily curvature-based:
+
+?(y) = ?0 + ? y
+
+For H8, that is acceptable as the first approximation.
+
+Torsion:
+
+?
+
+currently controls the centerline spatial geometry but does not add torsional shear strain to the pipe-wall failure model.
+
+That is a known limitation.
+
+Later we can add:
+
+bending normal strain
++
+torsional shear strain
+? combined equivalent strain/stress
+
+but not in H8.
+
+H8.14 — Expected architecture after H8
+StretchHelixFormingProcess
+?
+??? StretchHelixWrappingInput
+?
+??? StretchHelixWrappingKinematics
+?       ?
+?       ?
+?
+??? StretchBendingEvaluationResult
+?       tension
+?       bending strain
+?       inner strain
+?       outer strain
+?       feasibility
+?
+??? StretchHelixWrappingState
+?       time
+?       wrapped length
+?       contact front
+?
+??? reference geometry
+?
+??? current geometry
+
+That is the correct separation:
+
+KINEMATICS
+    what shape the machine commands
+
+MECHANICS
+    whether the pipe can tolerate it
+
+STATE
+    how far forming has progressed
+
+GEOMETRY
+    what we display
+H8 acceptance
+
+Before H9, confirm:
+
+? H2 ?/? feed directly into stretch evaluation
+? axialStretchStrain comes from StretchHelixWrappingInput
+? tension is calculated
+? bending strain is calculated
+? inner-wall strain is calculated
+? outer-wall strain is calculated
+? evaluator status is available
+? mechanics validity is separate from geometry validity
+? infeasible mechanics do not corrupt geometry
+? current orange wrapping continues unchanged
+? yellow reference continues unchanged
+? known mild case produces a valid mechanical evaluation
+? tight case produces a meaningful acceptance/rejection status
+
+Once we see the first [STRETCH HELIX MECHANICS] output, we should
+analyze it before adding springback, because your current 60 mm
+centerline radius is likely to be mechanically 
+aggressive for a 20 mm OD pipe.

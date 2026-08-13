@@ -64,5 +64,38 @@ private:
     void increaseStretchPlaybackSpeed();
 
     void decreaseStretchPlaybackSpeed();
+
+    QTimer
+        stretchHelixPlaybackTimer;
+
+    QElapsedTimer
+        stretchHelixPlaybackClock;
+
+    bool
+        stretchHelixPlaybackRunning =
+        false;
+
+    double
+        stretchHelixPlaybackSpeed =
+        1.0;
+
+    void startStretchHelixPlayback();
+
+    void pauseStretchHelixPlayback();
+
+    void toggleStretchHelixPlayback();
+
+    void updateStretchHelixPlayback();
+
+    void increaseStretchHelixPlaybackSpeed();
+
+    void decreaseStretchHelixPlaybackSpeed();
+
+
+    void increaseStretchHelixRotationSpeed();
+    void decreaseStretchHelixRotationSpeed();
+
+    void increaseStretchHelixAxialSpeed();
+    void decreaseStretchHelixAxialSpeed();
 };
   

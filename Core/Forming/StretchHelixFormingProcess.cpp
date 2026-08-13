@@ -1,5 +1,5 @@
 #include "Core/Forming/StretchHelixFormingProcess.h"
-
+#include <iostream>
 #include <cmath>
 #include <algorithm>
 #include "Core/Forming/StretchHelixWrappingKinematicsBuilder.h"
@@ -8,6 +8,8 @@
 
 #include "Core/Geometry/ConstantCurvatureTorsionProfileBuilder.h"
 #include "Core/Geometry/SpatialCurveIntegrator.h"
+#include "Core/Forming/StretchBendingProcessInput.h"
+#include "Core/Forming/StretchBendingEvaluator.h"
 
 bool StretchHelixFormingProcess::initialize(
     const StretchHelixWrappingInput& newInput,
@@ -23,7 +25,6 @@ bool StretchHelixFormingProcess::initialize(
         newStartFrame;
 
     referenceResult.clear();
-
     currentNodes.clear();
 
     if (!input.isValid())
@@ -31,6 +32,9 @@ bool StretchHelixFormingProcess::initialize(
 
     if (!rebuildKinematics())
         return false;
+
+    mechanicsValid =
+        rebuildStretchEvaluation();
 
     if (!rebuildReferenceGeometry())
         return false;
@@ -349,4 +353,177 @@ StretchHelixFormingProcess::
 getCurrentNodes() const
 {
     return currentNodes;
+}
+
+bool StretchHelixFormingProcess::
+setRotationSpeed(
+    double rotationSpeed)
+{
+    StretchHelixWrappingInput updatedInput =
+        input;
+
+    updatedInput.rotationSpeed =
+        rotationSpeed;
+
+    if (!updatedInput.isValid())
+        return false;
+
+    input =
+        updatedInput;
+
+    if (!rebuildKinematics())
+        return false;
+
+    if (!rebuildReferenceGeometry())
+        return false;
+
+    reset();
+
+    return
+        valid;
+}
+
+//
+
+bool StretchHelixFormingProcess::
+setAxialSpeed(
+    double axialSpeed)
+{
+    StretchHelixWrappingInput updatedInput =
+        input;
+
+    updatedInput.rotationSpeed =
+        axialSpeed;
+
+    if (!updatedInput.isValid())
+        return false;
+
+    input =
+        updatedInput;
+
+    if (!rebuildKinematics())
+        return false;
+
+    if (!rebuildReferenceGeometry())
+        return false;
+
+    reset();
+
+    return
+        valid;
+}
+
+
+const StretchBendingEvaluationResult&
+StretchHelixFormingProcess::
+getStretchEvaluation() const
+{
+    return stretchEvaluation;
+}
+
+bool StretchHelixFormingProcess::
+rebuildStretchEvaluation()
+{
+    if (!input.isValid())
+        return false;
+
+    if (!kinematics.valid)
+        return false;
+
+    StretchBendingProcessInput mechanicalInput;
+
+    // =====================================================
+    // PIPE / MATERIAL
+    // =====================================================
+
+    mechanicalInput.pipeSection =
+        input.pipeSection;
+
+    mechanicalInput.material =
+        input.material;
+
+    // =====================================================
+    // HELIX GEOMETRY
+    //
+    // H2 derived these from the machine commands.
+    // =====================================================
+
+    mechanicalInput.geometry.targetArcLength =
+        input.pipeArcLength;
+
+    mechanicalInput.geometry.targetCurvature =
+        kinematics.curvature;
+
+    mechanicalInput.geometry.targetTorsion =
+        kinematics.torsion;
+
+    // =====================================================
+    // STRETCH COMMAND
+    // =====================================================
+
+    mechanicalInput.axialStretchStrain =
+        input.axialStretchStrain;
+
+    // =====================================================
+    // NUMERICS / PROCESS
+    // =====================================================
+
+    mechanicalInput.feedSpeed =
+        input.axialSpeed;
+
+    mechanicalInput.sampleStep =
+        input.sampleStep;
+
+    // H8 does not yet model springback.
+    mechanicalInput.springbackRatio =
+        0.0;
+
+    mechanicalInput.compensateSpringback =
+        false;
+
+    mechanicalInput.enabled =
+        true;
+
+    if (!mechanicalInput.isValid())
+        return false;
+
+    StretchBendingEvaluator evaluator;
+
+    stretchEvaluation =
+        evaluator.evaluate(
+            mechanicalInput
+        );
+
+    return
+        stretchEvaluation.valid;
+    std::cout
+        << "[STRETCH HELIX MECHANICS]"
+        << " valid="
+        << stretchEvaluation.valid
+        << " status="
+        << stretchBendingEvaluationStatusToString(
+            stretchEvaluation.status
+        )
+        << " kappa="
+        << kinematics.curvature
+        << " torsion="
+        << kinematics.torsion
+        << " axialStrain="
+        << input.axialStretchStrain
+        << " bendingStrain="
+        << stretchEvaluation.bendingStrain
+        << " innerStrain="
+        << stretchEvaluation.innerWallStrain
+        << " outerStrain="
+        << stretchEvaluation.outerWallStrain
+        << " tension="
+        << stretchEvaluation.commandedTension
+        << std::endl;
+
+}
+
+bool StretchHelixFormingProcess::
+isMechanicallyFeasible() const
+{
+    return mechanicsValid;
 }

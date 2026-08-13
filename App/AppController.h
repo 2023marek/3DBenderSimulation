@@ -327,10 +327,21 @@ public:
 
      public:
 
-       
-
-     
+           
          bool isDebugStretchHelixWrappingComplete() const;
+
+
+         bool setDebugStretchHelixRotationSpeed(
+             double speed
+         );
+
+         bool setDebugStretchHelixAxialSpeed(
+             double speed
+         );
+
+         double getDebugStretchHelixRotationSpeed() const;
+
+         double getDebugStretchHelixAxialSpeed() const;
 private:
     
 
@@ -507,5 +518,6 @@ private:
    StretchHelixFormingProcess   debugStretchHelixProcess;
    private:
        void debugTestStretchHelixProcessAcceptance();
+       void debugTestStretchHelixMechanicsMildCase();
 }; 
 

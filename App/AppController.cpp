@@ -250,6 +250,7 @@ AppController::AppController()
     debugTestStretchBendingOperationValidation();
     debugTestStretchHelixWrappingInput();
     debugTestStretchHelixWrappingKinematics();
+    debugTestStretchHelixMechanicsMildCase();
     debugTestStretchHelixContactProgression();
     debugTestStretchHelixWrappingTimeProgression();
 
@@ -4337,7 +4338,7 @@ AppController::buildTestStretchHelixWrappingInput() const
 
     input.supportOuterRadius =
         50.0;
-
+    
     // =================================================
     // MACHINE MOTION
     // =================================================
@@ -4376,6 +4377,7 @@ debugTestStretchHelixWrappingInput() const
 {
     const StretchHelixWrappingInput valid =
         buildTestStretchHelixWrappingInput();
+   
 
     StretchHelixWrappingInput invalidRadius =
         valid;
@@ -4383,6 +4385,7 @@ debugTestStretchHelixWrappingInput() const
     invalidRadius.supportOuterRadius =
         0.0;
 
+    
     StretchHelixWrappingInput invalidRotation =
         valid;
 
@@ -4448,6 +4451,8 @@ debugTestStretchHelixWrappingKinematics()
         StretchHelixWrappingKinematicsBuilder::build(
             input
         );
+
+
 
     const double expectedCenterlineSpeed =
         std::sqrt(
@@ -4670,7 +4675,22 @@ debugTestStretchHelixWrappingKinematics()
     {
         return;
     }
+    const StretchBendingEvaluationResult& mechanics =
+        debugStretchHelixProcess.getStretchEvaluation();
 
+    std::cout
+        << "[STRETCH HELIX MECHANICS ACCEPTANCE]"
+        << " processValid="
+        << debugStretchHelixProcess.isValid()
+        << " mechanicsFeasible="
+        << debugStretchHelixProcess.isMechanicallyFeasible()
+        << " evaluationValid="
+        << mechanics.valid
+        << " status="
+        << stretchBendingEvaluationStatusToString(
+            mechanics.status
+        )
+        << std::endl;
     debugTestStretchHelixProcessAcceptance();
     debugStretchHelixWrappingState =
         StretchHelixWrappingStateBuilder::buildInitial(
@@ -4772,6 +4792,124 @@ debugTestStretchHelixWrappingKinematics()
 
 }
 
+
+void AppController::
+debugTestStretchHelixMechanicsMildCase()
+{
+    // =====================================================
+    // H8.11 — KNOWN-MILD MECHANICS CASE
+    //
+    // Purpose:
+    // prove that the mechanical evaluator can accept
+    // a much gentler helix than the current R=60 mm case.
+    // =====================================================
+
+    StretchHelixWrappingInput mildInput =
+        buildTestStretchHelixWrappingInput();
+
+    mildInput.supportOuterRadius =
+        500.0;
+
+    if (!mildInput.isValid())
+    {
+        std::cout
+            << "[STRETCH HELIX MILD MECHANICS]"
+            << " accepted=0"
+            << " reason=InvalidInput"
+            << std::endl;
+
+        return;
+    }
+
+    const StretchHelixWrappingKinematics mildKinematics =
+        StretchHelixWrappingKinematicsBuilder::build(
+            mildInput
+        );
+
+    if (!mildKinematics.valid)
+    {
+        std::cout
+            << "[STRETCH HELIX MILD MECHANICS]"
+            << " accepted=0"
+            << " reason=InvalidKinematics"
+            << std::endl;
+
+        return;
+    }
+
+    StretchBendingProcessInput mechanicalInput;
+
+    mechanicalInput.pipeSection =
+        mildInput.pipeSection;
+
+    mechanicalInput.material =
+        mildInput.material;
+
+    mechanicalInput.geometry.targetArcLength =
+        mildInput.pipeArcLength;
+
+    mechanicalInput.geometry.targetCurvature =
+        mildKinematics.curvature;
+
+    mechanicalInput.geometry.targetTorsion =
+        mildKinematics.torsion;
+
+    mechanicalInput.axialStretchStrain =
+        mildInput.axialStretchStrain;
+
+    mechanicalInput.feedSpeed =
+        mildInput.axialSpeed;
+
+    mechanicalInput.sampleStep =
+        mildInput.sampleStep;
+
+    mechanicalInput.springbackRatio =
+        0.0;
+
+    mechanicalInput.compensateSpringback =
+        false;
+
+    mechanicalInput.enabled =
+        true;
+
+    if (!mechanicalInput.isValid())
+    {
+        std::cout
+            << "[STRETCH HELIX MILD MECHANICS]"
+            << " accepted=0"
+            << " reason=InvalidMechanicalInput"
+            << std::endl;
+
+        return;
+    }
+
+    StretchBendingEvaluator evaluator;
+
+    const StretchBendingEvaluationResult evaluation =
+        evaluator.evaluate(
+            mechanicalInput
+        );
+
+    std::cout
+        << "[STRETCH HELIX MILD MECHANICS]"
+        << " supportRadius="
+        << mildInput.supportOuterRadius
+        << " centerlineRadius="
+        << mildKinematics.centerlineRadius
+        << " curvature="
+        << mildKinematics.curvature
+        << " torsion="
+        << mildKinematics.torsion
+        << " evaluationValid="
+        << evaluation.valid
+        << " status="
+        << stretchBendingEvaluationStatusToString(
+            evaluation.status
+        )
+        << " accepted="
+        << evaluation.valid
+        << std::endl;
+}
 //getters implemention
 const StretchHelixWrappingInput&
 AppController::
@@ -4787,12 +4925,7 @@ getDebugStretchHelixWrappingKinematics() const
     return debugStretchHelixWrappingKinematics;
 }
 
-const SpatialCurveIntegrationResult&
-AppController::
-getDebugStretchHelixReferenceResult() const
-{
-    return debugStretchHelixReferenceResult;
-}
+
 
 
 
@@ -5147,11 +5280,13 @@ resetDebugStretchHelixWrapping()
         << std::endl;
 }
 
-const std::vector<PipeNode>&
+const SpatialCurveIntegrationResult&
 AppController::
-getDebugStretchHelixContactGeometryNodes() const
+  getDebugStretchHelixReferenceResult() const
 {
-    return debugStretchHelixContactGeometryNodes;
+    return
+        debugStretchHelixProcess
+        .getReferenceResult();
 }
 
 void AppController::
@@ -5431,6 +5566,23 @@ advanceDebugStretchHelixWrappingTime(
         dt
     );
 
+    // Temporary I didn't see current orangegeometry
+    const auto& currentNodes =
+        debugStretchHelixProcess.getCurrentNodes();
+
+    const auto& referenceNodes =
+        debugStretchHelixProcess
+        .getReferenceResult()
+        .nodes;
+
+    std::cout
+        << "[STRETCH HELIX PROCESS GEOMETRY]"
+        << " currentNodes="
+        << currentNodes.size()
+        << " referenceNodes="
+        << referenceNodes.size()
+        << std::endl;
+
     const StretchHelixWrappingState& state =
         debugStretchHelixProcess.getState();
 
@@ -5460,6 +5612,34 @@ isDebugStretchHelixWrappingComplete() const
     return
         debugStretchHelixProcess.isComplete();
 }
+
+
+bool AppController::
+setDebugStretchHelixRotationSpeed(
+    double speed)
+{
+    return
+        debugStretchHelixProcess
+        .setRotationSpeed(
+            speed
+        );
+}
+
+
+bool AppController::
+setDebugStretchHelixAxialSpeed(
+    double speed)
+{
+    return
+        debugStretchHelixProcess
+        .setAxialSpeed(
+            speed
+        );
+}
+
+
+
+
 void AppController::
 debugTestStretchHelixWrappingTimeProgression()
 {
@@ -5611,3 +5791,30 @@ debugTestStretchHelixWrappingTimeProgression()
         << std::endl;
 }
 
+double AppController::
+getDebugStretchHelixRotationSpeed() const
+{
+    return
+        debugStretchHelixProcess
+        .getInput()
+        .rotationSpeed;
+}
+
+
+double AppController::
+getDebugStretchHelixAxialSpeed() const
+{
+    return
+        debugStretchHelixProcess
+        .getInput()
+        .axialSpeed;
+}
+
+const std::vector<PipeNode>&
+AppController::
+getDebugStretchHelixContactGeometryNodes() const
+{
+    return
+        debugStretchHelixProcess
+        .getCurrentNodes();
+}

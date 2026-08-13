@@ -11,6 +11,8 @@
 #include "Core/Geometry/SpatialCurveIntegrationResult.h"
 
 #include "Core/Geometry/PipeNode.h"
+#include "Core/Forming/StretchBendingEvaluationResult.h"
+
 
 class StretchHelixFormingProcess
 {
@@ -59,6 +61,18 @@ public:
     const std::vector<PipeNode>&
         getCurrentNodes() const;
 
+    bool setRotationSpeed(
+        double rotationSpeed
+    );
+
+    bool setAxialSpeed(
+        double axialSpeed
+    );
+    bool isMechanicallyFeasible() const;
+    // getters
+    const StretchBendingEvaluationResult&
+        getStretchEvaluation() const;
+
 private:
     bool rebuildKinematics();
 
@@ -66,6 +80,10 @@ private:
 
     bool rebuildCurrentGeometry();
 
+    bool rebuildStretchEvaluation();
+
+    bool mechanicsValid =
+        false;
 private:
     StretchHelixWrappingInput
         input;
@@ -87,6 +105,9 @@ private:
 
     bool valid =
         false;
+
+    StretchBendingEvaluationResult
+        stretchEvaluation;
 };
 
 
