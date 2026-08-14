@@ -102,7 +102,22 @@ struct StretchHelixWrappingInput
 
     bool enabled =
         true;
+    // =====================================================
+// SPRINGBACK
+// =====================================================
 
+// Fraction of loaded curvature elastically recovered
+// during unloading.
+//
+// Range:
+//     0 <= ratio < 1
+    double springbackRatio =
+        0.10;
+
+    // If true, commanded loaded curvature is increased so
+    // the predicted unloaded geometry approaches the target.
+    bool compensateSpringback =
+        true;
     // =================================================
     // VALIDATION
     // =================================================
@@ -151,7 +166,14 @@ struct StretchHelixWrappingInput
 
         if (sampleStep <= 1e-9)
             return false;
+        if (!std::isfinite(springbackRatio))
+            return false;
 
+        if (springbackRatio < 0.0
+            || springbackRatio >= 1.0)
+        {
+            return false;
+        }
         return true;
     }
 };

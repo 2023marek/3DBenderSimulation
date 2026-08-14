@@ -4250,3 +4250,783 @@ Once we see the first [STRETCH HELIX MECHANICS] output, we should
 analyze it before adding springback, because your current 60 mm
 centerline radius is likely to be mechanically 
 aggressive for a 20 mm OD pipe.
+
+
+
+
+
+
+H8.14 — Expected architecture after H8
+StretchHelixFormingProcess
+?
+??? StretchHelixWrappingInput
+?
+??? StretchHelixWrappingKinematics
+?       ?
+?       ?
+?
+??? StretchBendingEvaluationResult
+?       tension
+?       bending strain
+?       inner strain
+?       outer strain
+?       feasibility
+?
+??? StretchHelixWrappingState
+?       time
+?       wrapped length
+?       contact front
+?
+??? reference geometry
+?
+??? current geometry
+
+That is the correct separation:
+
+KINEMATICS
+    what shape the machine commands
+
+MECHANICS
+    whether the pipe can tolerate it
+
+STATE
+    how far forming has progressed
+
+GEOMETRY
+    what we display
+======================================================================
+    =====================================================================
+    Phase H9
+The next phase should be H9 — add springback/plastic unloading to
+the stretch-helix process, so the process can distinguish:
+
+loaded helix
+    ? unloading
+final helix
+
+rather than assuming the commanded/reference helix is also 
+the final unloaded shape.
+
+
+=============================================================
+
+Phase H9 — Springback / Plastic Unloading for StretchHelixFormingProcess
+
+H9 should extend the process from:
+
+machine command
+    ?
+loaded helix
+
+to:
+
+machine command
+    ?
+loaded helix
+    ?
+unloading / springback
+    ?
+final unloaded helix
+
+The important architectural rule is that springback modifies 
+curvature/torsion before sampling, not nodes afterward.
+
+WRONG
+loaded PipeNodes
+    ?
+move nodes to fake springback
+
+RIGHT
+loaded ?, ?
+    ?
+springback model
+    ?
+final ?, ?
+    ?
+SpatialCurveIntegrator
+    ?
+final PipeNodes
+H9.1 — Reuse the existing stretch-bending springback result
+
+You already have a tested result from the earlier stretch-bending model:
+
+targetFinalKappa
+loadedKappa
+predictedFinalKappa
+springbackRatio
+
+and logs such as:
+
+targetKappa=0.002
+loadedKappa=0.00222222
+predictedFinalKappa=0.002
+ratio=0.1
+
+So do not create a separate curvature-recovery formula for helix forming.
+
+H9 should reuse StretchBendingEvaluator.
+
+For now:
+
+curvature springback  ? modeled
+torsion springback    ? not yet modeled
+
+That limitation is acceptable for the first H9 version.
+
+H9.2 — Extend StretchHelixWrappingInput
+
+In StretchHelixWrappingInput.h, add:
+
+// =====================================================
+// SPRINGBACK
+// =====================================================
+
+// Fraction of loaded curvature elastically recovered
+// during unloading.
+//
+// Range:
+//     0 <= ratio < 1
+double springbackRatio =
+    0.10;
+
+// If true, commanded loaded curvature is increased so
+// the predicted unloaded geometry approaches the target.
+bool compensateSpringback =
+    true;
+
+And validation:
+
+if (!std::isfinite(springbackRatio))
+    return false;
+
+if (springbackRatio < 0.0
+    || springbackRatio >= 1.0)
+{
+    return false;
+}
+
+For your H1 test builder, set:
+
+input.springbackRatio =
+    0.10;
+
+input.compensateSpringback =
+    true;
+H9.3 — Change H8 mechanical conversion
+
+In:
+
+StretchHelixFormingProcess::
+rebuildStretchEvaluation()
+
+you currently deliberately set:
+
+mechanicalInput.springbackRatio =
+    0.0;
+
+mechanicalInput.compensateSpringback =
+    false;
+
+Replace them with:
+
+mechanicalInput.springbackRatio =
+    input.springbackRatio;
+
+mechanicalInput.compensateSpringback =
+    input.compensateSpringback;
+
+Now the stretch evaluator can calculate the loaded curvature 
+necessary to reach the desired final curvature.
+
+
+H9.4 — Understand which curvature is which
+
+This is critical.
+
+H2 currently calculates:
+
+kinematics.curvature
+
+from:
+
+support radius
+axial speed
+rotation speed
+
+Until now we treated that as the actual helix curvature.
+
+In H9 we need to distinguish:
+
+targetFinalCurvature
+    desired curvature after unloading
+
+loadedCurvature
+    curvature while the pipe is still under load
+
+predictedFinalCurvature
+    model prediction after unloading
+
+For a springback ratio of 0.1:
+
+target final ? = 0.002
+
+loaded ?
+= target / (1 - 0.1)
+? 0.00222222
+
+So H9 introduces:
+
+target helix
+?
+loaded helix
+
+H9.5 — Add explicit process curvature values
+
+In StretchHelixFormingProcess.h, private:
+
+double targetFinalCurvature =
+    0.0;
+
+double loadedCurvature =
+    0.0;
+
+double predictedFinalCurvature =
+    0.0;
+
+Public getters:
+
+double getTargetFinalCurvature() const;
+
+double getLoadedCurvature() const;
+
+double getPredictedFinalCurvature() const;
+
+Implementation:
+
+double StretchHelixFormingProcess::
+getTargetFinalCurvature() const
+{
+    return targetFinalCurvature;
+}
+
+double StretchHelixFormingProcess::
+getLoadedCurvature() const
+{
+    return loadedCurvature;
+}
+
+double StretchHelixFormingProcess::
+getPredictedFinalCurvature() const
+{
+    return predictedFinalCurvature;
+}
+H9.6 — Fill those values during mechanical evaluation
+
+After:
+
+stretchEvaluation =
+    evaluator.evaluate(
+        mechanicalInput
+    );
+
+store the result.
+
+Use the actual field names from your StretchBendingEvaluationResult.
+
+Conceptually:
+
+targetFinalCurvature =
+    kinematics.curvature;
+
+loadedCurvature =
+    stretchEvaluation.loadedCurvatureCommand;
+
+predictedFinalCurvature =
+    stretchEvaluation.predictedFinalCurvature;
+
+Based on your previous logs, names similar to these already exist.
+
+If your actual struct fields differ, use the exact names from StretchBendingEvaluationResult.h.
+
+Add a diagnostic:
+
+std::cout
+    << "[STRETCH HELIX SPRINGBACK]"
+    << " targetKappa="
+    << targetFinalCurvature
+    << " loadedKappa="
+    << loadedCurvature
+    << " predictedFinalKappa="
+    << predictedFinalCurvature
+    << " ratio="
+    << input.springbackRatio
+    << " compensation="
+    << input.compensateSpringback
+    << " valid="
+    << stretchEvaluation.valid
+    << std::endl;
+
+    H9.7 — Do not replace the H2 kinematics object
+
+Keep:
+
+kinematics.curvature
+
+as the target final geometry dictated by machine/desired helix parameters.
+
+Then the process owns:
+
+kinematics.curvature
+    = target final ?
+
+loadedCurvature
+    = mechanically compensated forming ?
+
+predictedFinalCurvature
+    = after unloading
+
+This distinction is cleaner than overwriting kinematics.curvature.
+
+
+H9.8 — Add loaded reference geometry
+
+Currently:
+
+referenceResult
+
+represents your yellow target reference.
+
+Keep it that way.
+
+Add another result in StretchHelixFormingProcess.h:
+
+SpatialCurveIntegrationResult
+    loadedReferenceResult;
+
+Public getter:
+
+const SpatialCurveIntegrationResult&
+getLoadedReferenceResult() const;
+
+Implementation:
+
+const SpatialCurveIntegrationResult&
+StretchHelixFormingProcess::
+getLoadedReferenceResult() const
+{
+    return loadedReferenceResult;
+}
+
+Now:
+
+yellow
+= desired final target
+
+purple
+= fully loaded compensated shape
+
+orange
+= current progressively wrapped shape
+
+
+H9.9 — Build loaded reference geometry
+
+Add private helper:
+
+bool rebuildLoadedReferenceGeometry();
+
+Implementation:
+
+bool StretchHelixFormingProcess::
+rebuildLoadedReferenceGeometry()
+{
+    loadedReferenceResult.clear();
+
+    if (!input.isValid())
+        return false;
+
+    if (!kinematics.valid)
+        return false;
+
+    if (!std::isfinite(loadedCurvature)
+        || loadedCurvature <= 0.0)
+    {
+        return false;
+    }
+
+    const CurvatureTorsionProfile loadedProfile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            input.pipeArcLength,
+            loadedCurvature,
+            kinematics.torsion
+        );
+
+    if (!loadedProfile.valid)
+        return false;
+
+    SpatialCurveIntegrator integrator;
+
+    loadedReferenceResult =
+        integrator.integrate(
+            startFrame,
+            loadedProfile,
+            input.sampleStep
+        );
+
+    return
+        loadedReferenceResult.valid
+        && loadedReferenceResult.isComplete()
+        && loadedReferenceResult.nodes.size() >= 2;
+}
+
+For now we preserve:
+
+kinematics.torsion
+
+unchanged during springback.
+
+That is an explicit first-order approximation.
+
+H9.10 — Initialization order
+
+Update:
+
+StretchHelixFormingProcess::initialize(...)
+
+to approximately:
+
+if (!rebuildKinematics())
+    return false;
+
+mechanicsValid =
+    rebuildStretchEvaluation();
+
+// Keep geometry available even if mechanics rejects
+// the aggressive debug case.
+
+if (!rebuildReferenceGeometry())
+    return false;
+
+// Only build loaded mechanically compensated reference
+// when the evaluation produced usable loaded curvature.
+if (mechanicsValid)
+{
+    if (!rebuildLoadedReferenceGeometry())
+        return false;
+}
+
+state =
+    StretchHelixWrappingStateBuilder::buildInitial(
+        input
+    );
+
+if (!state.isValidForLength(
+    input.pipeArcLength
+))
+{
+    return false;
+}
+
+if (!rebuildCurrentGeometry())
+    return false;
+
+valid =
+    true;
+
+return true;
+
+But for your current R=60 case, mechanics is already invalid.
+
+Therefore we need to be careful: do not require loadedReferenceResult
+for the aggressive main debug case yet.
+
+The mild case will be the H9 acceptance geometry.
+
+H9.11 — Current wrapping should follow the loaded helix when mechanics is valid
+
+This is the major physical change.
+
+Before H9:
+
+orange current
+? follows yellow target reference
+
+After H9, for a mechanically feasible compensated process:
+
+orange current during forming
+? follows purple loaded reference
+
+after unloading
+? green/final geometry approaches yellow target
+
+So rebuildCurrentGeometry() should choose:
+
+const SpatialCurveIntegrationResult* formingReference =
+    &referenceResult;
+
+if (mechanicsValid
+    && loadedReferenceResult.valid
+    && loadedReferenceResult.isComplete())
+{
+    formingReference =
+        &loadedReferenceResult;
+}
+
+Then instead of:
+
+const std::vector<PipeNode>& referenceNodes =
+    referenceResult.nodes;
+
+use:
+
+const std::vector<PipeNode>& referenceNodes =
+    formingReference->nodes;
+
+Now the orange pipe forms onto the compensated loaded shape.
+
+H9.12 — Add unloaded/final geometry
+
+Add another result:
+
+SpatialCurveIntegrationResult
+    finalResult;
+
+Public getter:
+
+const SpatialCurveIntegrationResult&
+getFinalResult() const;
+
+Private builder:
+
+bool rebuildFinalGeometry();
+
+Implementation:
+
+bool StretchHelixFormingProcess::
+rebuildFinalGeometry()
+{
+    finalResult.clear();
+
+    if (!input.isValid())
+        return false;
+
+    if (!kinematics.valid)
+        return false;
+
+    if (!std::isfinite(predictedFinalCurvature)
+        || predictedFinalCurvature <= 0.0)
+    {
+        return false;
+    }
+
+    const CurvatureTorsionProfile finalProfile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            input.pipeArcLength,
+            predictedFinalCurvature,
+            kinematics.torsion
+        );
+
+    if (!finalProfile.valid)
+        return false;
+
+    SpatialCurveIntegrator integrator;
+
+    finalResult =
+        integrator.integrate(
+            startFrame,
+            finalProfile,
+            input.sampleStep
+        );
+
+    return
+        finalResult.valid
+        && finalResult.isComplete();
+}
+
+So:
+
+yellow = target
+purple = loaded
+green  = predicted final after unloading
+
+For a compensated model, yellow and green should nearly overlap.
+
+H9.13 — Add a process stage
+
+We now need to distinguish forming from unloading.
+
+Create:
+
+enum class StretchHelixFormingStage
+{
+    Ready,
+    Wrapping,
+    Loaded,
+    Unloading,
+    Complete
+};
+
+For the first H9 version, do not animate unloading yet.
+
+Use:
+
+Ready
+? Wrapping
+? Loaded
+? Complete
+
+and at completion simply expose finalResult.
+
+Animated unloading can become H10.
+
+H9.14 — Minimum state behavior
+
+During progression:
+
+progress < 1
+? orange current loaded geometry
+
+progress = 1
+? fully loaded orange/purple shape exists
+? final green shape can also be shown
+
+This gives us immediate visual evidence of springback without yet creating an unloading timer.
+
+H9.15 — Mild-case acceptance test
+
+Because the main R=60 geometry is mechanically infeasible, run H9 acceptance on your already-proven mild case:
+
+StretchHelixWrappingInput mildInput =
+    buildTestStretchHelixWrappingInput();
+
+mildInput.supportOuterRadius =
+    500.0;
+
+mildInput.springbackRatio =
+    0.10;
+
+mildInput.compensateSpringback =
+    true;
+
+Initialize a temporary process:
+
+StretchHelixFormingProcess mildProcess;
+
+const bool initialized =
+    mildProcess.initialize(
+        mildInput,
+        referenceStartFrame
+    );
+
+Then diagnostic:
+
+std::cout
+    << "[STRETCH HELIX SPRINGBACK ACCEPTANCE]"
+    << " initialized="
+    << initialized
+    << " mechanicsValid="
+    << mildProcess.isMechanicallyFeasible()
+    << " targetKappa="
+    << mildProcess.getTargetFinalCurvature()
+    << " loadedKappa="
+    << mildProcess.getLoadedCurvature()
+    << " predictedFinalKappa="
+    << mildProcess.getPredictedFinalCurvature()
+    << std::endl;
+
+Expected relationship:
+
+loadedKappa > targetKappa
+
+predictedFinalKappa ? targetKappa
+
+H9.16 — Add numerical acceptance
+
+Use:
+
+const double error =
+    std::abs(
+        mildProcess.getPredictedFinalCurvature()
+        - mildProcess.getTargetFinalCurvature()
+    );
+
+constexpr double tolerance =
+    1e-9;
+
+const bool accepted =
+    initialized
+    && mildProcess.isMechanicallyFeasible()
+    && mildProcess.getLoadedCurvature()
+        > mildProcess.getTargetFinalCurvature()
+    && error <= tolerance;
+
+Print:
+
+std::cout
+    << "[STRETCH HELIX SPRINGBACK ACCEPTANCE]"
+    << " error="
+    << error
+    << " accepted="
+    << accepted
+    << std::endl;
+
+H9.17 — Rendering
+
+Do not flood HUD.
+
+Add only optional debug geometry:
+
+yellow = target final reference
+purple = loaded compensated reference
+orange = current wrapping
+green  = predicted unloaded final
+
+This is the same color ownership philosophy that already worked for stretch bending.
+
+You can initially render loaded/final only for the mild debug case if needed.
+
+H9.18 — Important limitation
+
+H9 models:
+
+curvature springback
+
+but still assumes:
+
+torsion_loaded = torsion_final
+
+Real helical tube forming can recover both bending and twist.
+
+Eventually:
+
+(?_loaded, ?_loaded)
+        ? unloading
+(?_final, ?_final)
+
+should both be material-dependent.
+
+But that belongs after the curvature springback path is proven.
+
+H9 acceptance
+
+Before moving on, confirm:
+
+? springbackRatio comes from StretchHelixWrappingInput
+? compensation flag comes from StretchHelixWrappingInput
+? H8 evaluator computes loaded curvature
+? target curvature remains separate from loaded curvature
+? predicted final curvature is stored
+? mild case has loadedKappa > targetKappa
+? predictedFinalKappa ? targetKappa
+? loaded reference can be integrated
+? final reference can be integrated
+? current forming geometry can use loaded reference
+? target geometry remains unchanged
+? current aggressive R=60 case still reports mechanics invalid
+rather than corrupting geometry
+? no PipeNode-based springback correction is introduced
+
+Once these pass, the next logical phase is H10 — animate
+unloading/springback as a process stage, so the orange loaded helix 
+progressively relaxes toward the 
+final green/yellow geometry.

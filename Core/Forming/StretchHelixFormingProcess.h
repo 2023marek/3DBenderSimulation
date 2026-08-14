@@ -73,6 +73,16 @@ public:
     const StretchBendingEvaluationResult&
         getStretchEvaluation() const;
 
+    double getTargetFinalCurvature() const;
+
+    double getLoadedCurvature() const;
+
+    double getPredictedFinalCurvature() const;
+
+    const SpatialCurveIntegrationResult&
+        getLoadedReferenceResult() const;
+    const SpatialCurveIntegrationResult&
+        getFinalResult() const;
 private:
     bool rebuildKinematics();
 
@@ -108,6 +118,25 @@ private:
 
     StretchBendingEvaluationResult
         stretchEvaluation;
+
+    double targetFinalCurvature =
+        0.0;
+
+    double loadedCurvature =
+        0.0;
+
+    double predictedFinalCurvature =
+        0.0;
+
+    SpatialCurveIntegrationResult
+        loadedReferenceResult;
+
+    bool rebuildLoadedReferenceGeometry();
+
+    SpatialCurveIntegrationResult
+        finalResult;
+
+    bool rebuildFinalGeometry();
 };
 
 

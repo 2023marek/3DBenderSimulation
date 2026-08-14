@@ -253,6 +253,10 @@ AppController::AppController()
     debugTestStretchHelixMechanicsMildCase();
     debugTestStretchHelixContactProgression();
     debugTestStretchHelixWrappingTimeProgression();
+    debugStretchHelixProcess.getReferenceResult();
+    debugStretchHelixProcess.getLoadedReferenceResult();
+    debugStretchHelixProcess.getFinalResult();
+    debugStretchHelixProcess.getCurrentNodes();
 
 }
 
@@ -4337,7 +4341,7 @@ AppController::buildTestStretchHelixWrappingInput() const
     // =================================================
 
     input.supportOuterRadius =
-        50.0;
+        500.0;
     
     // =================================================
     // MACHINE MOTION
@@ -4438,6 +4442,8 @@ debugTestStretchHelixWrappingInput() const
         << " accepted="
         << !invalidLength.isValid()
         << std::endl;
+
+
 }
 
 void AppController::
@@ -4670,7 +4676,32 @@ debugTestStretchHelixWrappingKinematics()
         .getCurrentNodes()
         .size()
         << std::endl;
+    // =====================================================
+// H9 — GEOMETRY DIAGNOSTIC
+// =====================================================
 
+    std::cout
+        << "[STRETCH HELIX H9 GEOMETRY]"
+        << " mechanicsValid="
+        << debugStretchHelixProcess
+        .isMechanicallyFeasible()
+        << " targetNodes="
+        << debugStretchHelixProcess
+        .getReferenceResult()
+        .nodes.size()
+        << " loadedNodes="
+        << debugStretchHelixProcess
+        .getLoadedReferenceResult()
+        .nodes.size()
+        << " finalNodes="
+        << debugStretchHelixProcess
+        .getFinalResult()
+        .nodes.size()
+        << " currentNodes="
+        << debugStretchHelixProcess
+        .getCurrentNodes()
+        .size()
+        << std::endl;
     if (!processInitialized)
     {
         return;

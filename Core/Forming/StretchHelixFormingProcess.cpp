@@ -18,6 +18,9 @@ bool StretchHelixFormingProcess::initialize(
     valid =
         false;
 
+    mechanicsValid =
+        false;
+
     input =
         newInput;
 
@@ -25,19 +28,89 @@ bool StretchHelixFormingProcess::initialize(
         newStartFrame;
 
     referenceResult.clear();
+    loadedReferenceResult.clear();
+    finalResult.clear();
     currentNodes.clear();
 
     if (!input.isValid())
         return false;
 
+    // =====================================================
+    // H2 — KINEMATICS
+    // =====================================================
+
     if (!rebuildKinematics())
+    {
+        std::cout
+            << "[STRETCH HELIX PROCESS INIT FAIL]"
+            << " reason=Kinematics"
+            << std::endl;
+
         return false;
+    }
+
+    // =====================================================
+    // H8/H9 — MECHANICS
+    //
+    // Mechanical rejection must NOT destroy the geometric
+    // preview. Tight debug geometry is intentionally allowed
+    // to remain visible.
+    // =====================================================
 
     mechanicsValid =
         rebuildStretchEvaluation();
 
+    // =====================================================
+    // TARGET REFERENCE GEOMETRY
+    //
+    // Always build if the geometry itself is valid.
+    // =====================================================
+
     if (!rebuildReferenceGeometry())
+    {
+        std::cout
+            << "[STRETCH HELIX PROCESS INIT FAIL]"
+            << " reason=ReferenceGeometry"
+            << std::endl;
+
         return false;
+    }
+
+    // =====================================================
+    // H9 — LOADED / FINAL PHYSICAL REFERENCES
+    //
+    // Build only when the mechanical evaluation succeeded.
+    // =====================================================
+
+    if (mechanicsValid)
+    {
+        if (!rebuildLoadedReferenceGeometry())
+        {
+            std::cout
+                << "[STRETCH HELIX PROCESS INIT FAIL]"
+                << " reason=LoadedGeometry"
+                << std::endl;
+
+            return false;
+        }
+
+        if (!rebuildFinalGeometry())
+        {
+            std::cout
+                << "[STRETCH HELIX PROCESS INIT FAIL]"
+                << " reason=FinalGeometry"
+                << std::endl;
+
+            return false;
+        }
+
+
+
+    }
+
+    // =====================================================
+    // WRAPPING STATE
+    // =====================================================
 
     state =
         StretchHelixWrappingStateBuilder::buildInitial(
@@ -51,8 +124,19 @@ bool StretchHelixFormingProcess::initialize(
         return false;
     }
 
+    // =====================================================
+    // CURRENT GEOMETRY
+    // =====================================================
+
     if (!rebuildCurrentGeometry())
+    {
+        std::cout
+            << "[STRETCH HELIX PROCESS INIT FAIL]"
+            << " reason=CurrentGeometry"
+            << std::endl;
+
         return false;
+    }
 
     valid =
         true;
@@ -119,8 +203,18 @@ rebuildCurrentGeometry()
     if (!referenceResult.isComplete())
         return false;
 
+    const SpatialCurveIntegrationResult* formingReference =
+        &referenceResult;
+
+    if (mechanicsValid
+        && loadedReferenceResult.valid
+        && loadedReferenceResult.isComplete())
+    {
+        formingReference =
+            &loadedReferenceResult;
+    }
     const std::vector<PipeNode>& referenceNodes =
-        referenceResult.nodes;
+        formingReference->nodes;
 
     if (referenceNodes.size() < 2)
         return false;
@@ -476,10 +570,10 @@ rebuildStretchEvaluation()
 
     // H8 does not yet model springback.
     mechanicalInput.springbackRatio =
-        0.0;
+        input.springbackRatio;
 
     mechanicalInput.compensateSpringback =
-        false;
+        input.compensateSpringback; 
 
     mechanicalInput.enabled =
         true;
@@ -494,8 +588,43 @@ rebuildStretchEvaluation()
             mechanicalInput
         );
 
+
+    // =================================================
+   // H9 — COPY SPRINGBACK RESULT INTO PROCESS STATE
+   // =================================================
+
+    targetFinalCurvature =
+        stretchEvaluation.finalTargetCurvature;
+
+    loadedCurvature =
+        stretchEvaluation.loadedCurvatureCommand;
+
+    predictedFinalCurvature =
+        stretchEvaluation.predictedFinalCurvature;
+
+    std::cout
+        << "[STRETCH HELIX SPRINGBACK]"
+        << " evaluationValid="
+        << stretchEvaluation.valid
+        << " predictionValid="
+        << stretchEvaluation.springbackPredictionValid
+        << " compensationApplied="
+        << stretchEvaluation.springbackCompensationApplied
+        << " targetKappa="
+        << targetFinalCurvature
+        << " loadedKappa="
+        << loadedCurvature
+        << " predictedFinalKappa="
+        << predictedFinalCurvature
+        << " finalError="
+        << stretchEvaluation.finalCurvatureError
+        << " ratio="
+        << stretchEvaluation.springbackRatio
+        << std::endl;
     return
         stretchEvaluation.valid;
+
+
     std::cout
         << "[STRETCH HELIX MECHANICS]"
         << " valid="
@@ -520,10 +649,233 @@ rebuildStretchEvaluation()
         << stretchEvaluation.commandedTension
         << std::endl;
 
+    
 }
 
 bool StretchHelixFormingProcess::
 isMechanicallyFeasible() const
 {
     return mechanicsValid;
+}
+
+double StretchHelixFormingProcess::
+getTargetFinalCurvature() const
+{
+    return targetFinalCurvature;
+}
+
+double StretchHelixFormingProcess::
+getLoadedCurvature() const
+{
+    return loadedCurvature;
+}
+
+double StretchHelixFormingProcess::
+getPredictedFinalCurvature() const
+{
+    return predictedFinalCurvature;
+}
+
+const SpatialCurveIntegrationResult&
+StretchHelixFormingProcess::
+getLoadedReferenceResult() const
+{
+    return loadedReferenceResult;
+}
+
+bool StretchHelixFormingProcess::
+rebuildLoadedReferenceGeometry()
+{
+    loadedReferenceResult.clear();
+
+    std::cout
+        << "[STRETCH HELIX LOADED BUILD INPUT]"
+        << " mechanicsValid="
+        << mechanicsValid
+        << " targetKappa="
+        << targetFinalCurvature
+        << " loadedKappa="
+        << loadedCurvature
+        << " predictedFinalKappa="
+        << predictedFinalCurvature
+        << " torsion="
+        << kinematics.torsion
+        << " length="
+        << input.pipeArcLength
+        << " sampleStep="
+        << input.sampleStep
+        << std::endl;
+
+    if (!input.isValid())
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=InvalidInput"
+            << std::endl;
+
+        return false;
+    }
+
+    if (!kinematics.valid)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=InvalidKinematics"
+            << std::endl;
+
+        return false;
+    }
+
+    if (!std::isfinite(loadedCurvature))
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=LoadedCurvatureNotFinite"
+            << std::endl;
+
+        return false;
+    }
+
+    if (loadedCurvature <= 0.0)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=LoadedCurvatureNotPositive"
+            << " loadedKappa="
+            << loadedCurvature
+            << std::endl;
+
+        return false;
+    }
+
+    const CurvatureTorsionProfile loadedProfile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            input.pipeArcLength,
+            loadedCurvature,
+            kinematics.torsion
+        );
+
+    std::cout
+        << "[STRETCH HELIX LOADED PROFILE]"
+        << " valid="
+        << loadedProfile.valid
+        << " samples="
+        << loadedProfile.samples.size()
+        << " length="
+        << loadedProfile.totalArcLength
+        << std::endl;
+
+    if (!loadedProfile.valid)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=InvalidLoadedProfile"
+            << std::endl;
+
+        return false;
+    }
+
+    SpatialCurveIntegrator integrator;
+
+    loadedReferenceResult =
+        integrator.integrate(
+            startFrame,
+            loadedProfile,
+            input.sampleStep
+        );
+
+    std::cout
+        << "[STRETCH HELIX LOADED RESULT]"
+        << " valid="
+        << loadedReferenceResult.valid
+        << " complete="
+        << loadedReferenceResult.isComplete()
+        << " nodes="
+        << loadedReferenceResult.nodes.size()
+        << " length="
+        << loadedReferenceResult.integratedArcLength
+        << std::endl;
+
+    if (!loadedReferenceResult.valid)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=IntegrationInvalid"
+            << std::endl;
+
+        return false;
+    }
+
+    if (!loadedReferenceResult.isComplete())
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=IntegrationIncomplete"
+            << std::endl;
+
+        return false;
+    }
+
+    if (loadedReferenceResult.nodes.size() < 2)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=TooFewNodes"
+            << std::endl;
+
+        return false;
+    }
+
+    return true;
+}
+const SpatialCurveIntegrationResult&
+StretchHelixFormingProcess::
+getFinalResult() const
+{
+    return finalResult;
+}
+
+bool StretchHelixFormingProcess::
+rebuildFinalGeometry()
+{
+    finalResult.clear();
+
+    if (!input.isValid())
+        return false;
+
+    if (!kinematics.valid)
+        return false;
+
+    if (!std::isfinite(
+        predictedFinalCurvature
+    ))
+    {
+        return false;
+    }
+
+    if (predictedFinalCurvature <= 0.0)
+        return false;
+
+    const CurvatureTorsionProfile finalProfile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            input.pipeArcLength,
+            predictedFinalCurvature,
+            kinematics.torsion
+        );
+
+    if (!finalProfile.valid)
+        return false;
+
+    SpatialCurveIntegrator integrator;
+
+    finalResult =
+        integrator.integrate(
+            startFrame,
+            finalProfile,
+            input.sampleStep
+        );
+
+    return
+        finalResult.valid
+        && finalResult.isComplete();
 }

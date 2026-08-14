@@ -1,0 +1,41 @@
+bool StretchHelixFormingProcess::
+rebuildLoadedReferenceGeometry()
+{
+    loadedReferenceResult.clear();
+
+    if (!input.isValid())
+        return false;
+
+    if (!kinematics.valid)
+        return false;
+
+    if (!std::isfinite(loadedCurvature)
+        || loadedCurvature <= 0.0)
+    {
+        return false;
+    }
+
+    const CurvatureTorsionProfile loadedProfile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            input.pipeArcLength,
+            loadedCurvature,
+            kinematics.torsion
+        );
+
+    if (!loadedProfile.valid)
+        return false;
+
+    SpatialCurveIntegrator integrator;
+
+    loadedReferenceResult =
+        integrator.integrate(
+            startFrame,
+            loadedProfile,
+            input.sampleStep
+        );
+
+    return
+        loadedReferenceResult.valid
+        && loadedReferenceResult.isComplete()
+        && loadedReferenceResult.nodes.size() >= 2;
+}
