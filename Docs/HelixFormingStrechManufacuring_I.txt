@@ -1,0 +1,1307 @@
+﻿DOTYCHCZAS
+
+contact front porusza się po helisie
+        ↓
+straight tail obraca się razem z frontem
+
+
+NOWY MODEL
+
+straight incoming pipe
+ma STAŁY kierunek w przestrzeni
+        ↓
+krótka ACTIVE ZONE
+ma STAŁE położenie przy maszynie
+        ↓
+support tube obraca się
+        ↓
+uformowana część helisy
+rośnie po drugiej stronie active zone
+
+
+1. Najważniejsza zmiana w rebuildCurrentGeometry()
+
+Obecnie robimy:
+
+wrapped helix prefix
++
+straight line starting at moving contactFrontS
+
+To właśnie powoduje obracanie prostego odcinka.
+
+Fragment:
+
+const Vec3D frontPosition =
+    referenceNodes[frontIndex].pos;
+
+
+// ...
+
+
+node.pos =
+    frontPosition
+    + tangent
+    * (
+        remainingLength
+        * fraction
+    );
+
+powinien docelowo zniknąć z Manufacturing Stretch Helix.
+
+Nie będziemy już budować prostej części z:
+
+tangent(reference helix at front)
+2. Dodaj stałą ramę strefy aktywnej
+
+StretchHelixFormingProcess powinien mieć coś w rodzaju:
+
+private:
+
+
+    Frame activeFormingFrame;
+
+To jest nieruchoma rama maszyny.
+
+Na przykład:
+
+activeFormingFrame.P
+    = miejsce styku rury z procesem formowania
+
+
+activeFormingFrame.T
+    = stały kierunek wejściowej prostej rury
+
+
+activeFormingFrame.N/B
+    = orientacja lokalnej strefy formowania
+
+Na początku możemy ustawić ją równą dotychczasowemu:
+
+startFrame
+
+czyli w initialize():
+
+activeFormingFrame =
+    newStartFrame;
+
+Później to powinno pochodzić z MachineModel/MachineRuntimeState.
+
+
+3. Incoming pipe budujemy zawsze od tej samej osi
+
+Załóżmy:
+
+const double formedLength =
+    state.wrappedLength;
+
+
+const double incomingLength =
+    std::max(
+        0.0,
+        input.pipeArcLength
+        - formedLength
+    );
+
+Czyli:
+
+Ltotal = Lincoming + Lformed
+
+Na przykład:
+
+Ltotal = 500
+
+
+start:
+incoming = 500
+formed   =   0
+
+
+middle:
+incoming = 250
+formed   = 250
+
+
+end:
+incoming =   0
+formed   = 500
+
+Ale kierunek incoming zawsze:
+
+activeFormingFrame.T
+
+Nie helix tangent.
+
+4. Incoming powinien kończyć się w active zone
+
+Jeżeli activeFormingFrame.P jest punktem wejścia do procesu:
+
+incoming start                           active
+      ●------------------------------------●
+                                            \
+                                             )))))
+
+to punkt rury dla odległości s od active zone można liczyć:
+
+P =
+    activeFormingFrame.P
+    - activeFormingFrame.T * s;
+
+Czyli:
+
+for (...)
+{
+    const double distanceFromActive =
+        ...;
+
+
+    node.pos =
+        activeFormingFrame.P
+        - activeFormingFrame.T
+        * distanceFromActive;
+}
+
+Ta geometria:
+
+skraca się,
+nie obraca się,
+nie zmienia kierunku.
+
+To odpowiada Twojemu opisowi.
+
+5. Active zone powinna być krótka i nieruchoma
+
+To jest bardzo ważne.
+
+Nie chcemy:
+
+ACTIVE ZONE travelling around helix
+
+tylko:
+
+                     FIXED ACTIVE WINDOW
+                              |
+                              v
+incoming -------------------[###] ))))))))))
+                              ^
+                              |
+                         always here
+
+Dodajmy do procesu:
+
+double activeZoneLength =
+    20.0;
+
+Na razie testowo np. 20 mm.
+
+Docelowo będzie to parametr maszyny.
+
+6. Cztery strefy
+
+W Manufacturing Mode proponuję teraz jawnie myśleć o czterech strefach:
+
+                    material flow →
+
+
+┌────────────────────┐
+│ 1. INCOMING        │
+│                    │
+│ straight           │
+│ not rotating       │
+└─────────┬──────────┘
+          │
+          ▼
+┌────────────────────┐
+│ 2. ACTIVE          │
+│                    │
+│ short window       │
+│ fixed in machine   │
+│ actual deformation │
+└─────────┬──────────┘
+          │
+          ▼
+┌────────────────────┐
+│ 3. LOADED/FROZEN   │
+│                    │
+│ formed helix       │
+│ attached to support│
+│ rotates with it    │
+└─────────┬──────────┘
+          │
+          ▼
+┌────────────────────┐
+│ 4. UNLOADED/FINAL  │
+│                    │
+│ after springback   │
+│ final product      │
+└────────────────────┘
+
+W czasie samego owijania główne trzy to:
+
+INCOMING → ACTIVE → FROZEN
+
+Czwarta strefa staje się istotna przy zwalnianiu naprężenia /
+opuszczaniu narzędzia.
+
+7. Support rotation musi stać się osobnym stanem
+
+Obecnie wrappedLength wystarczało do animacji.
+
+Teraz potrzebujemy także:
+
+double supportRotationAngle =
+    0.0;
+
+Najlepiej w StretchHelixWrappingState.
+
+Aktualizacja:
+
+supportRotationAngle +=
+    input.rotationDirection
+    * input.rotationSpeed
+    * dt;
+
+Czyli:
+
+θ(t) = ωt
+
+To jest rzeczywisty kąt maszyny.
+
+8. Nie używaj wrappedLength jako kąta obrotu
+
+Trzymaj je osobno:
+
+wrappedLength
+    = ile materiału zostało uformowane
+
+
+supportRotationAngle
+    = aktualne położenie obrotowe podpory
+
+
+axialPosition
+    = aktualne przesunięcie osiowe maszyny
+
+Czyli:
+
+state.wrappedLength
+state.supportRotationAngle
+state.supportAxialPosition
+
+To będzie później bardzo przydatne również dla CNC.
+
+9. Nowy przepływ geometrii
+
+Dotychczas:
+
+wrappedLength
+      ↓
+frontIndex on yellow reference
+      ↓
+helix prefix + tangent tail
+
+Nowy:
+
+MachineRuntimeState
+│
+├── rotation angle
+├── axial position
+└── feed
+      │
+      ▼
+StretchHelixFormingProcess
+│
+├── incomingLength
+├── active zone
+└── formedLength
+      │
+      ├───────────────┐
+      ▼               ▼
+straight incoming   formed helix
+fixed world frame   support frame
+      │               │
+      └──────┬────────┘
+             ▼
+        currentNodes
+
+10. Pierwsza implementacja — nie zmieniaj jeszcze springback
+
+Teraz proponuję zawiesić H10 unloading, tak jak powiedziałeś.
+
+Nie usuwaj go. Po prostu nie rozwijaj go dalej.
+
+Najpierw poprawmy manufacturing geometry.
+
+Czyli:
+
+CURRENT PRIORITY
+
+
+Manufacturing Stretch Helix:
+
+
+incoming
+    ↓
+fixed active zone
+    ↓
+rotating/growing loaded helix
+
+Springback pozostaje istniejącym późniejszym etapem.
+
+11. Dodaj stan obrotu
+
+W StretchHelixWrappingState.h:
+
+double supportRotationAngle =
+    0.0;
+
+
+double supportAxialPosition =
+    0.0;
+
+W clear() / initial builder:
+
+state.supportRotationAngle =
+    0.0;
+
+
+state.supportAxialPosition =
+    0.0;
+12. Aktualizuj go w StretchHelixWrappingStateAdvancer
+
+Obok aktualizacji wrappedLength:
+
+state.supportRotationAngle +=
+    input.rotationDirection
+    * input.rotationSpeed
+    * dt;
+
+
+state.supportAxialPosition +=
+    input.axialSpeed
+    * dt;
+
+To daje nam prawdziwy machine state.
+
+13. Dodaj fixed active frame do StretchHelixFormingProcess
+
+W .h, private::
+
+Frame activeFormingFrame;
+
+W initialize():
+
+activeFormingFrame =
+    newStartFrame;
+
+Na razie wystarczy.
+
+14. Rozdziel rebuildCurrentGeometry()
+
+Nie próbowałbym dalej rozbudowywać jednej wielkiej funkcji.
+
+Zróbmy:
+
+bool rebuildCurrentGeometry();
+
+
+bool appendIncomingGeometry(
+    std::vector<PipeNode>& nodes
+) const;
+
+
+bool appendActiveZoneGeometry(
+    std::vector<PipeNode>& nodes
+) const;
+
+
+bool appendFormedHelixGeometry(
+    std::vector<PipeNode>& nodes
+) const;
+
+Wtedy:
+
+bool StretchHelixFormingProcess::
+rebuildCurrentGeometry()
+{
+    currentNodes.clear();
+
+
+    if (!appendIncomingGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
+
+
+    if (!appendActiveZoneGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
+
+
+    if (!appendFormedHelixGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
+
+
+    return
+        currentNodes.size() >= 2;
+}
+
+To już zaczyna przypominać prawdziwy ManufacturingPipeSimulator.
+
+15. Najpierw zaimplementuj tylko Incoming
+
+Pierwszy test powinien być bardzo prosty.
+
+Dodaj:
+
+bool StretchHelixFormingProcess::
+appendIncomingGeometry(
+    std::vector<PipeNode>& nodes) const
+{
+    const double incomingLength =
+        std::max(
+            0.0,
+            input.pipeArcLength
+            - state.wrappedLength
+        );
+
+
+    if (incomingLength <= 0.0)
+        return true;
+
+
+    const double ds =
+        input.sampleStep;
+
+
+    const int count =
+        std::max(
+            1,
+            static_cast<int>(
+                std::ceil(
+                    incomingLength / ds
+                )
+            )
+        );
+
+
+    for (int i = count; i >= 0; --i)
+    {
+        const double s =
+            incomingLength
+            * static_cast<double>(i)
+            / static_cast<double>(
+                count
+            );
+
+
+        PipeNode node;
+
+
+        node.pos =
+            activeFormingFrame.P
+            - activeFormingFrame.T
+            * s;
+
+
+        nodes.push_back(
+            node
+        );
+    }
+
+
+    return true;
+}
+
+Dostosuj oczywiście pozostałe pola PipeNode, jeżeli wymagają inicjalizacji.
+
+16. Test tylko Incoming
+
+Na tym etapie tymczasowo nie dokładaj jeszcze helisy.
+
+Sprawdź:
+
+J
+
+
+straight pipe length = 500
+
+
+
+
+K
+
+
+straight pipe length decreases
+
+
+
+
+middle
+
+
+straight pipe length ≈ 250
+
+
+
+
+end
+
+
+straight pipe length ≈ 0
+
+I najważniejsze:
+
+✔ kierunek straight pipe nigdy się nie zmienia
+✔ active endpoint nigdy się nie przesuwa
+✔ straight pipe nigdy się nie obraca
+
+Dopiero kiedy to jest idealne, dokładamy obracającą się część helisy.
+17. Potem Formed Helix
+
+Uformowanej części nie budujemy z moving front + tangent tail.
+
+Będziemy ją budować względem:
+
+support local frame
+
+a następnie zastosujemy:
+
+supportRotationAngle
+supportAxialPosition
+
+To jest ważne, ponieważ wtedy faktycznie zobaczysz:
+
+support rotates
+      ↓
+formed spring rotates with support
+
+podczas gdy:
+
+incoming straight pipe
+does not rotate
+18. CAD Mode vs Manufacturing Mode
+
+I tak — potwierdzam Twoje rozdzielenie.
+
+Powinniśmy je teraz traktować jako twardą zasadę projektu:
+
+CAD GEOMETRY MODE
+=================
+
+
+user program
+    ↓
+Operations
+    ↓
+PipeCurveSegments
+    ↓
+Sampler
+    ↓
+ideal finished geometry
+
+
+
+
+MANUFACTURING MODE
+==================
+
+
+user/CNC program
+    ↓
+ManufacturingPlan
+    ↓
+ManufacturingPass
+    ↓
+MachineRuntimeState
+    ↓
+ManufacturingPipeSimulator / FormingProcess
+    ↓
+INCOMING
+ACTIVE
+FROZEN
+FINAL
+    ↓
+render
+
+W CAD Mode nie interesuje nas:
+
+który fragment właśnie wchodzi do maszyny
+gdzie jest active zone
+jak obraca się support
+
+Proponowany następny krok
+
+Nie zmieniałbym teraz wszystkiego naraz.
+
+Zróbmy małą fazę MH1 — Fixed Incoming / Fixed Active Zone:
+
+MH1.1 add supportRotationAngle
+MH1.2 add supportAxialPosition
+MH1.3 add activeFormingFrame
+MH1.4 split rebuildCurrentGeometry()
+MH1.5 implement fixed straight incoming
+MH1.6 verify shortening without rotation
+MH1.7 then add rotating formed helix
+
+Najważniejszy pierwszy cel wizualny:
+
+               fixed active point
+                       *
+-----------------------* )))))))))
+straight incoming        spring
+
+
+straight:
+shortens only
+
+
+spring:
+grows + rotates
+
+
+*:
+does not move
+
+To jest teraz właściwa baza dla Twojego rzeczywistego
+procesu Manufacturing Stretch Helix.
+
+dzisiaj
+
+MH1.1 — Add fixed active frame to StretchHelixFormingProcess
+
+In StretchHelixFormingProcess.h, private::
+
+Frame activeFormingFrame;
+
+You already have:
+
+Frame startFrame;
+
+Keep both for now.
+
+Use them conceptually as:
+
+startFrame
+    = reference/integration frame
+
+
+activeFormingFrame
+    = fixed machine-space forming location
+
+Inside:
+
+bool StretchHelixFormingProcess::initialize(
+    const StretchHelixWrappingInput& newInput,
+    const Frame& newStartFrame)
+
+after:
+
+startFrame =
+    newStartFrame;
+
+add:
+
+activeFormingFrame =
+    newStartFrame;
+
+So for now they begin identical.
+
+MH1.2 — Add support-machine motion state
+
+In StretchHelixWrappingState.h, add:
+
+double supportRotationAngle =
+    0.0;
+
+
+double supportAxialPosition =
+    0.0;
+
+These are manufacturing-state quantities, not CAD geometry.
+
+Meaning:
+
+supportRotationAngle
+    = actual support rotation from start
+
+
+supportAxialPosition
+    = actual support axial travel from start
+MH1.3 — Initialize those values
+
+Wherever you build the initial wrapping state, probably:
+
+StretchHelixWrappingStateBuilder::buildInitial(...)
+
+add:
+
+state.supportRotationAngle =
+    0.0;
+
+
+state.supportAxialPosition =
+    0.0;
+
+If your state has clear() or reset logic, also set:
+
+supportRotationAngle =
+    0.0;
+
+
+supportAxialPosition =
+    0.0;
+
+Reset must produce:
+
+wrappedLength=0
+supportRotationAngle=0
+supportAxialPosition=0
+MH1.4 — Advance real machine motion
+
+Inside:
+
+StretchHelixWrappingStateAdvancer::advance(...)
+
+where you already update:
+
+wrappedLength
+contactFrontS
+elapsedTime
+progress
+
+add:
+
+state.supportRotationAngle +=
+    static_cast<double>(
+        input.rotationDirection
+    )
+    * input.rotationSpeed
+    * dt;
+
+
+state.supportAxialPosition +=
+    input.axialSpeed
+    * dt;
+
+However, when the pipe reaches the end, avoid allowing these values to advance indefinitely beyond the forming completion.
+
+If your advancer already computes a clamped effective step time, use that clamped time instead of raw dt.
+
+For example, if it currently does something like:
+
+const double previousLength =
+    state.wrappedLength;
+
+
+state.wrappedLength =
+    std::min(
+        input.pipeArcLength,
+        state.wrappedLength
+            + kinematics.centerlineSpeed * dt
+    );
+
+then a cleaner version is:
+
+const double remainingLength =
+    input.pipeArcLength
+    - state.wrappedLength;
+
+
+const double requestedAdvance =
+    kinematics.centerlineSpeed
+    * dt;
+
+
+const double actualAdvance =
+    std::min(
+        remainingLength,
+        requestedAdvance
+    );
+
+
+const double actualDt =
+    actualAdvance
+    / kinematics.centerlineSpeed;
+
+Then use:
+
+state.supportRotationAngle +=
+    input.rotationDirection
+    * input.rotationSpeed
+    * actualDt;
+
+
+state.supportAxialPosition +=
+    input.axialSpeed
+    * actualDt;
+
+This keeps machine motion synchronized exactly with consumed pipe length.
+
+MH1.5 — Add temporary diagnostics
+
+In your existing time-step diagnostic, add:
+
+std::cout
+    << "[STRETCH HELIX MACHINE STATE]"
+    << " wrappedLength="
+    << state.wrappedLength
+    << " rotationAngle="
+    << state.supportRotationAngle
+    << " axialPosition="
+    << state.supportAxialPosition
+    << std::endl;
+
+At this stage we only need to prove that the state is coherent.
+
+For your kinematics:
+
+rotationSpeed = 2 rad/s
+axialSpeed    = 20 mm/s
+
+after approximately 0.25 s you should see roughly:
+
+rotationAngle ≈ 0.5 rad
+axialPosition ≈ 5 mm
+
+provided the process has not already reached completion.
+
+MH1.6 — Separate current-geometry construction
+
+Your existing rebuildCurrentGeometry() currently combines:
+
+formed reference prefix
++
+moving tangent straight tail
+
+We need to retire that structure.
+
+In StretchHelixFormingProcess.h, add private::
+
+bool appendIncomingGeometry(
+    std::vector<PipeNode>& nodes
+) const;
+
+
+bool appendActiveZoneGeometry(
+    std::vector<PipeNode>& nodes
+) const;
+
+
+bool appendFormedGeometry(
+    std::vector<PipeNode>& nodes
+) const;
+
+For the first MH1 build, implement only appendIncomingGeometry() properly.
+
+The other two can temporarily return true.
+
+bool StretchHelixFormingProcess::
+appendActiveZoneGeometry(
+    std::vector<PipeNode>& nodes) const
+{
+    return true;
+}
+
+
+
+
+bool StretchHelixFormingProcess::
+appendFormedGeometry(
+    std::vector<PipeNode>& nodes) const
+{
+    return true;
+}
+
+This lets us isolate the incoming behavior.
+
+MH1.7 — Replace rebuildCurrentGeometry() temporarily
+
+For the MH1 incoming test:
+
+bool StretchHelixFormingProcess::
+rebuildCurrentGeometry()
+{
+    currentNodes.clear();
+
+
+    if (!input.isValid())
+        return false;
+
+
+    if (!state.isValidForLength(
+        input.pipeArcLength
+    ))
+    {
+        return false;
+    }
+
+
+    if (!appendIncomingGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
+
+
+    if (!appendActiveZoneGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
+
+
+    if (!appendFormedGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
+
+
+    return
+        !currentNodes.empty();
+}
+
+This will temporarily remove the spring from current orange rendering.
+
+That is intentional.
+
+We are testing the incoming region by itself.
+
+MH1.8 — Implement fixed incoming geometry
+
+The incoming section length is:
+
+const double incomingLength =
+    std::max(
+        0.0,
+        input.pipeArcLength
+        - state.wrappedLength
+    );
+
+Then build the pipe in the fixed active-frame direction.
+
+Use:
+
+bool StretchHelixFormingProcess::
+        || input.sampleStep <= 0.0)
+    {
+        return false;
+    }
+
+
+    const std::size_t segmentCount =
+        std::max<std::size_t>(
+            1,
+            static_cast<std::size_t>(
+                std::ceil(
+                    incomingLength
+                    / input.sampleStep
+                )
+            )
+        );
+
+
+    nodes.reserve(
+        nodes.size()
+        + segmentCount
+        + 1
+    );
+
+
+    // Start at the far/free end of the incoming stock
+    // and finish exactly at the fixed active point.
+    for (std::size_t i = 0;
+         i <= segmentCount;
+         ++i)
+    {
+        const double fraction =
+            static_cast<double>(i)
+            / static_cast<double>(
+                segmentCount
+            );
+
+
+        const double distanceFromActive =
+            incomingLength
+            * (
+                1.0
+                - fraction
+            );
+
+
+        PipeNode node;
+
+
+        node.pos =
+            activeFormingFrame.P
+            - activeFormingFrame.T
+            * distanceFromActive;
+
+
+        nodes.push_back(
+            node
+        );
+    }
+
+
+    return true;
+}
+
+The geometry therefore always ends at:
+
+activeFormingFrame.P
+
+while its far end approaches the active point as forming progresses.
+
+MH1.9 — Preserve orientation fields in PipeNode
+
+If PipeNode contains more than:
+
+pos
+
+for example:
+
+tangent
+normal
+binormal
+
+populate them from the fixed active frame.
+
+Conceptually:
+
+node.tangent =
+    activeFormingFrame.T;
+
+
+node.normal =
+    activeFormingFrame.N;
+
+
+node.binormal =
+    activeFormingFrame.B;
+
+Use your actual PipeNode field names.
+
+This matters especially for MESH mode because tube generation
+may require a complete frame.
+
+If your renderer derives frames from neighboring positions, 
+pos alone may currently be enough. Don't invent fields that your actual 
+PipeNode does not have.
+
+MH1.10 — Add incoming diagnostic
+
+At the end of appendIncomingGeometry() temporarily print only when useful, not every node:
+
+std::cout
+    << "[STRETCH HELIX INCOMING]"
+    << " incomingLength="
+    << incomingLength
+    << " nodes="
+    << nodes.size();
+
+
+if (!nodes.empty())
+{
+    std::cout
+        << " farP=("
+        << nodes.front().pos.x
+        << ", "
+        << nodes.front().pos.y
+        << ", "
+        << nodes.front().pos.z
+        << ")"
+        << " activeP=("
+        << nodes.back().pos.x
+        << ", "
+        << nodes.back().pos.y
+        << ", "
+        << nodes.back().pos.z
+        << ")";
+}
+
+
+std::cout
+    << std::endl;
+MH1.11 — First visual acceptance test
+
+Now compile and test only:
+
+J
+H
+H
+H
+...
+
+or slow automatic playback.
+
+What we want:
+
+RESET
+
+
+far end
+●--------------------------------● ACTIVE
+       500 mm
+
+
+
+
+25%
+
+
+far end
+       ●-------------------------● ACTIVE
+             ~375 mm
+
+
+
+
+50%
+
+
+far end
+              ●------------------● ACTIVE
+                    ~250 mm
+
+
+
+
+75%
+
+
+far end
+                     ●-----------● ACTIVE
+                          ~125 mm
+
+
+
+
+100%
+
+
+                              ● ACTIVE
+incoming ≈ 0
+
+Critically:
+
+ACTIVE point:
+never moves
+
+
+incoming axis:
+never changes direction
+
+
+incoming:
+never rotates
+
+The straight section should simply retract/shorten toward the fixed active point.
+
+MH1.12 — Do not yet apply support rotation to incoming
+
+Even though we've now added:
+
+state.supportRotationAngle
+state.supportAxialPosition
+
+do not use either one inside appendIncomingGeometry().
+
+That's the point of the new model.
+
+Incorrect:
+
+rotate(
+    incoming,
+    state.supportRotationAngle
+);
+
+Correct:
+
+node.pos =
+    activeFormingFrame.P
+    - activeFormingFrame.T * distance;
+
+Support motion must affect the formed side, not incoming stock.
+
+MH1.13 — Active zone placeholder
+
+After incoming works, we'll put a short segment just after:
+
+activeFormingFrame.P
+
+Conceptually:
+
+incoming             active                 formed
+----------------------[####]------------------->
+                       20 mm
+
+But don't implement active-zone deformation yet.
+
+For MH1 first acceptance, the active zone can be just the fixed point:
+
+ACTIVE length = 0
+
+That gives us an unambiguous test.
+
+MH1.14 — Important interaction with H10
+
+During springback/unloading, the complete pipe is already formed:
+
+incomingLength = 0
+
+So the incoming builder naturally produces nothing.
+
+Later H10 can continue to use its full-helix unloading geometry.
+
+Therefore we should eventually branch:
+
+switch (stage)
+{
+case Ready:
+case Forming:
+case LoadedHold:
+    rebuild manufacturing zones;
+    break;
+
+
+case Unloading:
+case Complete:
+    rebuild full formed/unloaded geometry;
+    break;
+}
+
+But don't change that yet. First validate fixed incoming behavior.
+
+MH1 first checkpoint
+
+Before we restore the spring side, confirm only:
+
+✔ reset produces one straight 500 mm incoming pipe
+✔ active endpoint remains fixed
+✔ incoming direction remains constant
+✔ H/manual stepping shortens it progressively
+✔ K playback shortens it progressively
+✔ supportRotationAngle changes
+✔ supportAxialPosition changes
+✔ neither affects incoming orientation
+✔ incoming reaches approximately zero at full wrap
+✔ LINE mode works
+✔ MESH mode works
+
+Once this passes, MH1.15 will add the formed helix
+on the other side of the same fixed active zone, using 
+the support rotation/axial state while keeping incoming
+completely stationary in orientation.

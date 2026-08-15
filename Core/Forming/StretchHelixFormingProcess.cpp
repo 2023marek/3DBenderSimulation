@@ -26,7 +26,8 @@ bool StretchHelixFormingProcess::initialize(
 
     startFrame =
         newStartFrame;
-
+    activeFormingFrame =
+        newStartFrame;
     referenceResult.clear();
     loadedReferenceResult.clear();
     finalResult.clear();
@@ -197,26 +198,7 @@ rebuildCurrentGeometry()
 {
     currentNodes.clear();
 
-    if (!referenceResult.valid)
-        return false;
-
-    if (!referenceResult.isComplete())
-        return false;
-
-    const SpatialCurveIntegrationResult* formingReference =
-        &referenceResult;
-
-    if (mechanicsValid
-        && loadedReferenceResult.valid
-        && loadedReferenceResult.isComplete())
-    {
-        formingReference =
-            &loadedReferenceResult;
-    }
-    const std::vector<PipeNode>& referenceNodes =
-        formingReference->nodes;
-
-    if (referenceNodes.size() < 2)
+    if (!input.isValid())
         return false;
 
     if (!state.isValidForLength(
@@ -226,111 +208,34 @@ rebuildCurrentGeometry()
         return false;
     }
 
-    const double totalLength =
-        input.pipeArcLength;
+    if (!appendIncomingGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
 
-    const double frontS =
-        state.contactFrontS;
-
-    const double normalizedFront =
-        std::clamp(
-            frontS / totalLength,
+    const double incomingLength =
+        std::max(
             0.0,
-            1.0
+            input.pipeArcLength
+            - state.wrappedLength
         );
 
-    const std::size_t lastIndex =
-        referenceNodes.size() - 1;
+    // =====================================================
+    // MH1 TEMPORARY INCOMING-ONLY TEST
+    //
+    // At full wrapping the incoming region legitimately
+    // disappears. Zero nodes therefore means success.
+    // =====================================================
 
-    const std::size_t frontIndex =
-        static_cast<std::size_t>(
-            std::llround(
-                normalizedFront
-                * static_cast<double>(
-                    lastIndex
-                    )
-            )
-            );
-
-    currentNodes.reserve(
-        referenceNodes.size()
-    );
-
-    // Copy wrapped region.
-    for (std::size_t i = 0;
-        i <= frontIndex;
-        ++i)
+    if (incomingLength <= 1e-12)
     {
-        currentNodes.push_back(
-            referenceNodes[i]
-        );
-    }
-
-    // Find tangent.
-    Vec3D tangent;
-
-    if (frontIndex == 0)
-    {
-        tangent =
-            referenceNodes[1].pos
-            - referenceNodes[0].pos;
-    }
-    else if (frontIndex >= lastIndex)
-    {
-        tangent =
-            referenceNodes[lastIndex].pos
-            - referenceNodes[lastIndex - 1].pos;
-    }
-    else
-    {
-        tangent =
-            referenceNodes[frontIndex + 1].pos
-            - referenceNodes[frontIndex - 1].pos;
-    }
-
-    tangent =
-        tangent.normalized();
-    const Vec3D frontPosition =
-        referenceNodes[frontIndex].pos;
-
-    const double remainingLength =
-        totalLength - frontS;
-
-    const std::size_t remainingNodeCount =
-        lastIndex - frontIndex;
-
-    if (remainingNodeCount > 0)
-    {
-        for (std::size_t j = 1;
-            j <= remainingNodeCount;
-            ++j)
-        {
-            const double fraction =
-                static_cast<double>(j)
-                / static_cast<double>(
-                    remainingNodeCount
-                    );
-
-            PipeNode node =
-                referenceNodes[frontIndex];
-
-            node.pos =
-                frontPosition
-                + tangent
-                * (
-                    remainingLength
-                    * fraction
-                    );
-
-            currentNodes.push_back(
-                node
-            );
-        }
+        return true;
     }
 
     return
-        currentNodes.size()
-        == referenceNodes.size();
+        currentNodes.size() >= 2;
 }
 
 void StretchHelixFormingProcess::
@@ -340,23 +245,63 @@ advanceTime(
     if (!valid)
         return;
 
-    if (state.complete)
-        return;
-
-    StretchHelixWrappingStateAdvancer::advance(
-        state,
-        dt,
-        input,
-        kinematics
-    );
-
-    if (!rebuildCurrentGeometry())
+    if (!std::isfinite(dt)
+        || dt <= 0.0)
     {
-        valid =
-            false;
+        return;
+    }
+
+    switch (stage)
+    {
+    case StretchBendingManufacturingStage::Ready:
+    {
+        stage =
+            StretchBendingManufacturingStage::Forming;
+
+        advanceWrapping(
+            dt
+        );
+
+        break;
+    }
+
+    case StretchBendingManufacturingStage::Forming:
+    {
+        advanceWrapping(
+            dt
+        );
+
+        break;
+    }
+
+    case StretchBendingManufacturingStage::LoadedHold:
+    {
+        stage =
+            StretchBendingManufacturingStage::Unloading;
+
+        advanceUnloading(
+            dt
+        );
+
+        break;
+    }
+
+    case StretchBendingManufacturingStage::Unloading:
+    {
+        advanceUnloading(
+            dt
+        );
+
+        break;
+    }
+
+    case StretchBendingManufacturingStage::Complete:
+    case StretchBendingManufacturingStage::Invalid:
+    case StretchBendingManufacturingStage::ApplyingTension:
+    default:
+        break;
     }
 }
-
 void StretchHelixFormingProcess::reset()
 {
     if (!input.isValid()
@@ -393,6 +338,15 @@ void StretchHelixFormingProcess::reset()
 
     valid =
         true;
+
+    stage =
+        StretchBendingManufacturingStage::Ready;
+
+    unloadingElapsedTime =
+        0.0;
+
+    unloadingFraction =
+        0.0;
 }
 bool StretchHelixFormingProcess::
 isValid() const
@@ -406,7 +360,8 @@ isComplete() const
 {
     return
         valid
-        && state.complete;
+        && stage ==
+        StretchBendingManufacturingStage::Complete;
 }
 
 
@@ -878,4 +833,329 @@ rebuildFinalGeometry()
     return
         finalResult.valid
         && finalResult.isComplete();
+}
+
+StretchBendingManufacturingStage
+StretchHelixFormingProcess::
+getStage() const
+{
+    return stage;
+}
+
+
+double StretchHelixFormingProcess::
+getUnloadingFraction() const
+{
+    return unloadingFraction;
+}
+
+void StretchHelixFormingProcess::
+advanceWrapping(
+    double dt)
+{
+    if (state.complete)
+    {
+        stage =
+            StretchBendingManufacturingStage::LoadedHold;
+
+        unloadingElapsedTime =
+            0.0;
+
+        unloadingFraction =
+            0.0;
+        std::cout
+            << "[STRETCH HELIX STAGE]"
+            << " stage="
+            << stretchBendingManufacturingStageToString(
+                stage
+            )
+            << std::endl;
+        return;
+    }
+
+    StretchHelixWrappingStateAdvancer::advance(
+        state,
+        dt,
+        input,
+        kinematics
+    );
+
+    if (!rebuildCurrentGeometry())
+    {
+        valid =
+            false;
+
+        return;
+    }
+
+    if (state.complete)
+    {
+        stage =
+            StretchBendingManufacturingStage::LoadedHold;
+
+        unloadingElapsedTime =
+            0.0;
+
+        unloadingFraction =
+            0.0;
+
+        std::cout
+            << "[STRETCH HELIX STAGE]"
+            << " stage="
+            << stretchBendingManufacturingStageToString(
+                stage
+            )
+            << std::endl;
+    }
+}
+
+void StretchHelixFormingProcess::
+advanceUnloading(
+    double dt)
+{
+    if (!mechanicsValid)
+    {
+        stage =
+            StretchBendingManufacturingStage::Complete;
+
+        return;
+    }
+
+    if (!std::isfinite(unloadingDuration)
+        || unloadingDuration <= 0.0)
+    {
+        stage =
+            StretchBendingManufacturingStage::Complete;
+
+        return;
+    }
+
+    unloadingElapsedTime +=
+        dt;
+
+    unloadingFraction =
+        std::clamp(
+            unloadingElapsedTime
+            / unloadingDuration,
+            0.0,
+            1.0
+        );
+
+    if (!rebuildUnloadingGeometry())
+    {
+        valid =
+            false;
+
+        return;
+    }
+
+    if (unloadingFraction >= 1.0)
+    {
+        unloadingFraction =
+            1.0;
+
+        stage =
+            StretchBendingManufacturingStage::Complete;
+
+        std::cout
+            << "[STRETCH HELIX STAGE]"
+            << " stage="
+            << stretchBendingManufacturingStageToString(
+                stage
+            )
+            << std::endl;
+    }
+}
+
+bool StretchHelixFormingProcess::
+rebuildUnloadingGeometry()
+{
+    currentNodes.clear();
+
+    if (!mechanicsValid)
+        return false;
+
+    const double fraction =
+        std::clamp(
+            unloadingFraction,
+            0.0,
+            1.0
+        );
+
+    const double currentCurvature =
+        loadedCurvature
+        + fraction
+        * (
+            predictedFinalCurvature
+            - loadedCurvature
+            );
+
+    if (!std::isfinite(currentCurvature)
+        || currentCurvature <= 0.0)
+    {
+        return false;
+    }
+
+    const CurvatureTorsionProfile profile =
+        ConstantCurvatureTorsionProfileBuilder::build(
+            input.pipeArcLength,
+            currentCurvature,
+            kinematics.torsion
+        );
+
+    if (!profile.valid)
+        return false;
+
+    SpatialCurveIntegrator integrator;
+
+    const SpatialCurveIntegrationResult result =
+        integrator.integrate(
+            startFrame,
+            profile,
+            input.sampleStep
+        );
+
+    if (!result.valid
+        || !result.isComplete()
+        || result.nodes.size() < 2)
+    {
+        return false;
+    }
+
+    currentNodes =
+        result.nodes;
+
+    std::cout
+        << "[STRETCH HELIX UNLOADING]"
+        << " fraction="
+        << fraction
+        << " currentKappa="
+        << currentCurvature
+        << " loadedKappa="
+        << loadedCurvature
+        << " finalKappa="
+        << predictedFinalCurvature
+        << " nodes="
+        << currentNodes.size()
+        << std::endl;
+
+    return true;
+}
+
+bool StretchHelixFormingProcess::
+appendActiveZoneGeometry(
+    std::vector<PipeNode>& nodes) const
+{
+    return true;
+}
+
+
+bool StretchHelixFormingProcess::
+appendFormedGeometry(
+    std::vector<PipeNode>& nodes) const
+{
+    return true;
+}
+
+
+bool StretchHelixFormingProcess::
+appendIncomingGeometry(
+    std::vector<PipeNode>& nodes) const
+{
+    const double incomingLength =
+        std::max(
+            0.0,
+            input.pipeArcLength
+            - state.wrappedLength
+        );
+
+    if (incomingLength <= 0.0)
+    {
+        return true;
+    }
+
+    if (!std::isfinite(input.sampleStep)
+        || input.sampleStep <= 0.0)
+    {
+        return false;
+    }
+
+    const std::size_t segmentCount =
+        std::max<std::size_t>(
+            1,
+            static_cast<std::size_t>(
+                std::ceil(
+                    incomingLength
+                    / input.sampleStep
+                )
+                )
+        );
+
+    nodes.reserve(
+        nodes.size()
+        + segmentCount
+        + 1
+    );
+
+    // Start at the far/free end of the incoming stock
+    // and finish exactly at the fixed active point.
+    for (std::size_t i = 0;
+        i <= segmentCount;
+        ++i)
+    {
+        const double fraction =
+            static_cast<double>(i)
+            / static_cast<double>(
+                segmentCount
+                );
+
+        const double distanceFromActive =
+            incomingLength
+            * (
+                1.0
+                - fraction
+                );
+
+        PipeNode node;
+
+        node.pos =
+            activeFormingFrame.P
+            - activeFormingFrame.T
+            * distanceFromActive;
+
+        nodes.push_back(
+            node
+        );
+    }
+
+    std::cout
+        << "[MH1 INCOMING CHECK]"
+        << " wrappedLength="
+        << state.wrappedLength
+        << " incomingLength="
+        << incomingLength
+        << " activeP=("
+        << activeFormingFrame.P.x
+        << ", "
+        << activeFormingFrame.P.y
+        << ", "
+        << activeFormingFrame.P.z
+        << ")";
+
+    if (!nodes.empty())
+    {
+        const Vec3D delta =
+            nodes.back().pos
+            - nodes.front().pos;
+
+        std::cout
+            << " geometricLength="
+            << delta.length();
+    }
+
+    std::cout
+        << std::endl;
+
+
+    return true;
 }

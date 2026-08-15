@@ -26,5 +26,13 @@ StretchHelixWrappingStateBuilder::buildInitial(
     state.valid =
         true;
 
+    state.supportRotationAngle =
+        0.0;
+
+    state.supportAxialPosition =
+        0.0;
+
+   
+
     return state;
 }

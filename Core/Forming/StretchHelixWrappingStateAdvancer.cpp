@@ -1,5 +1,5 @@
 #include "Core/Forming/StretchHelixWrappingStateAdvancer.h"
-
+#include <iostream>
 #include <algorithm>
 #include <cmath>
 
@@ -27,31 +27,124 @@ void StretchHelixWrappingStateAdvancer::advance(
     if (state.complete)
         return;
 
+    if (!std::isfinite(kinematics.centerlineSpeed)
+        || kinematics.centerlineSpeed <= 0.0)
+    {
+        return;
+    }
+
     const double totalLength =
         input.pipeArcLength;
 
-    const double deltaWrappedLength =
+    const double remainingLength =
+        std::max(
+            0.0,
+            totalLength
+            - state.wrappedLength
+        );
+
+    const double requestedAdvance =
         kinematics.centerlineSpeed
         * dt;
 
-    state.elapsedTime +=
-        dt;
+    const double actualAdvance =
+        std::min(
+            remainingLength,
+            requestedAdvance
+        );
+
+    const double actualDt =
+        actualAdvance
+        / kinematics.centerlineSpeed;
+
+    // =====================================================
+    // ADVANCE WRAPPED PIPE
+    // =====================================================
+
+    state.wrappedLength +=
+        actualAdvance;
 
     state.wrappedLength =
         std::min(
-            totalLength,
-            state.wrappedLength
-            + deltaWrappedLength
+            state.wrappedLength,
+            totalLength
         );
 
     state.contactFrontS =
         state.wrappedLength;
 
     state.progress =
-        state.wrappedLength
-        / totalLength;
+        totalLength > 0.0
+        ? state.wrappedLength / totalLength
+        : 0.0;
+
+    state.progress =
+        std::clamp(
+            state.progress,
+            0.0,
+            1.0
+        );
+
+    // =====================================================
+    // ADVANCE MACHINE MOTION
+    //
+    // IMPORTANT:
+    // Use actualDt, not requested dt.
+    //
+    // If only 5 mm of pipe remains, machine rotation and
+    // axial motion should advance only for the time needed
+    // to consume those final 5 mm.
+    // =====================================================
+
+    state.supportRotationAngle +=
+        static_cast<double>(
+            input.rotationDirection
+            )
+        * input.rotationSpeed
+        * actualDt;
+
+    state.supportAxialPosition +=
+        input.axialSpeed
+        * actualDt;
+
+    state.elapsedTime +=
+        actualDt;
+
+    // =====================================================
+    // COMPLETION
+    // =====================================================
 
     state.complete =
         state.wrappedLength
         >= totalLength - 1e-12;
+
+    if (state.complete)
+    {
+        state.wrappedLength =
+            totalLength;
+
+        state.contactFrontS =
+            totalLength;
+
+        state.progress =
+            1.0;
+    }
+
+    std::cout
+        << "[STRETCH HELIX MACHINE STATE]"
+        << " dtRequested="
+        << dt
+        << " dtActual="
+        << actualDt
+        << " wrappedLength="
+        << state.wrappedLength
+        << " rotationAngle="
+        << state.supportRotationAngle
+        << " axialPosition="
+        << state.supportAxialPosition
+        << " progress="
+        << state.progress
+        << " complete="
+        << state.complete
+        << std::endl;
 }

@@ -53,6 +53,12 @@ struct StretchHelixWrappingState
     bool complete =
         false;
 
+    double supportRotationAngle =
+        0.0;
+
+    double supportAxialPosition =
+        0.0;
+
     bool valid =
         false;
     // Process time since wrapping started.
@@ -75,6 +81,12 @@ struct StretchHelixWrappingState
         complete =
             false;
         elapsedTime =
+            0.0;
+
+        supportRotationAngle =
+            0.0;
+
+        supportAxialPosition =
             0.0;
         valid =
             false;
@@ -122,6 +134,8 @@ struct StretchHelixWrappingState
         {
             return false;
         }
+
+
         return true;
     }
 };

@@ -1,0 +1,140 @@
+bool StretchHelixFormingProcess::
+rebuildCurrentGeometry()
+{
+    currentNodes.clear();
+
+    if (!referenceResult.valid)
+        return false;
+
+    if (!referenceResult.isComplete())
+        return false;
+
+    const SpatialCurveIntegrationResult* formingReference =
+        &referenceResult;
+
+    if (mechanicsValid
+        && loadedReferenceResult.valid
+        && loadedReferenceResult.isComplete())
+    {
+        formingReference =
+            &loadedReferenceResult;
+    }
+    const std::vector<PipeNode>& referenceNodes =
+        formingReference->nodes;
+
+    if (referenceNodes.size() < 2)
+        return false;
+
+    if (!state.isValidForLength(
+        input.pipeArcLength
+    ))
+    {
+        return false;
+    }
+
+    const double totalLength =
+        input.pipeArcLength;
+
+    const double frontS =
+        state.contactFrontS;
+
+    const double normalizedFront =
+        std::clamp(
+            frontS / totalLength,
+            0.0,
+            1.0
+        );
+
+    const std::size_t lastIndex =
+        referenceNodes.size() - 1;
+
+    const std::size_t frontIndex =
+        static_cast<std::size_t>(
+            std::llround(
+                normalizedFront
+                * static_cast<double>(
+                    lastIndex
+                    )
+            )
+            );
+
+    currentNodes.reserve(
+        referenceNodes.size()
+    );
+
+    // Copy wrapped region.
+    for (std::size_t i = 0;
+        i <= frontIndex;
+        ++i)
+    {
+        currentNodes.push_back(
+            referenceNodes[i]
+        );
+    }
+
+    // Find tangent.
+    Vec3D tangent;
+
+    if (frontIndex == 0)
+    {
+        tangent =
+            referenceNodes[1].pos
+            - referenceNodes[0].pos;
+    }
+    else if (frontIndex >= lastIndex)
+    {
+        tangent =
+            referenceNodes[lastIndex].pos
+            - referenceNodes[lastIndex - 1].pos;
+    }
+    else
+    {
+        tangent =
+            referenceNodes[frontIndex + 1].pos
+            - referenceNodes[frontIndex - 1].pos;
+    }
+
+    tangent =
+        tangent.normalized();
+    const Vec3D frontPosition =
+        referenceNodes[frontIndex].pos;
+
+    const double remainingLength =
+        totalLength - frontS;
+
+    const std::size_t remainingNodeCount =
+        lastIndex - frontIndex;
+
+    if (remainingNodeCount > 0)
+    {
+        for (std::size_t j = 1;
+            j <= remainingNodeCount;
+            ++j)
+        {
+            const double fraction =
+                static_cast<double>(j)
+                / static_cast<double>(
+                    remainingNodeCount
+                    );
+
+            PipeNode node =
+                referenceNodes[frontIndex];
+
+            node.pos =
+                frontPosition
+                + tangent
+                * (
+                    remainingLength
+                    * fraction
+                    );
+
+            currentNodes.push_back(
+                node
+            );
+        }
+    }
+
+    return
+        currentNodes.size()
+        == referenceNodes.size();
+}

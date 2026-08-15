@@ -13,6 +13,8 @@
 #include "Core/Geometry/PipeNode.h"
 #include "Core/Forming/StretchBendingEvaluationResult.h"
 
+#include "Core/Forming/StretchBendingManufacturingStage.h"
+
 
 class StretchHelixFormingProcess
 {
@@ -83,6 +85,11 @@ public:
         getLoadedReferenceResult() const;
     const SpatialCurveIntegrationResult&
         getFinalResult() const;
+
+    StretchBendingManufacturingStage
+        getStage() const;
+
+    double getUnloadingFraction() const;
 private:
     bool rebuildKinematics();
 
@@ -105,7 +112,9 @@ private:
         state;
 
     Frame
-        startFrame;
+        activeFormingFrame;
+
+    Frame startFrame;
 
     SpatialCurveIntegrationResult
         referenceResult;
@@ -137,6 +146,40 @@ private:
         finalResult;
 
     bool rebuildFinalGeometry();
+
+    bool appendIncomingGeometry(
+        std::vector<PipeNode>& nodes
+    ) const;
+
+    bool appendActiveZoneGeometry(
+        std::vector<PipeNode>& nodes
+    ) const;
+
+    bool appendFormedGeometry(
+        std::vector<PipeNode>& nodes
+    ) const;
+
+    StretchBendingManufacturingStage stage =
+        StretchBendingManufacturingStage::Ready;
+
+    double unloadingFraction =
+        0.0;
+
+    double unloadingElapsedTime =
+        0.0;
+
+    double unloadingDuration =
+        1.0;
+
+    void advanceWrapping(
+        double dt
+    );
+
+    void advanceUnloading(
+        double dt
+    );
+
+    bool rebuildUnloadingGeometry();
 };
 
 
