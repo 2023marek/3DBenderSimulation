@@ -140,6 +140,8 @@ private:
     SpatialCurveIntegrationResult
         loadedReferenceResult;
 
+    double activeZoneLength =
+        20.0;
     bool rebuildLoadedReferenceGeometry();
 
     SpatialCurveIntegrationResult

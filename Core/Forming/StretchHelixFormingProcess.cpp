@@ -215,27 +215,74 @@ rebuildCurrentGeometry()
         return false;
     }
 
+    if (!appendActiveZoneGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
+
+    if (!appendFormedGeometry(
+        currentNodes
+    ))
+    {
+        return false;
+    }
+
+    // Empty geometry is allowed only when all manufacturing
+    // zones have momentarily collapsed, but normally we
+    // should now have either incoming or formed geometry.
+    if (state.wrappedLength <= 1e-12)
+    {
+        return
+            currentNodes.size() >= 2;
+    }
+
+    const double totalFormedLength =
+        state.wrappedLength;
+
+    const double activeLength =
+        std::min(
+            activeZoneLength,
+            totalFormedLength
+        );
+
+    const double frozenLength =
+        std::max(
+            0.0,
+            totalFormedLength
+            - activeLength
+        );
+
     const double incomingLength =
         std::max(
             0.0,
             input.pipeArcLength
-            - state.wrappedLength
+            - totalFormedLength
         );
 
-    // =====================================================
-    // MH1 TEMPORARY INCOMING-ONLY TEST
-    //
-    // At full wrapping the incoming region legitimately
-    // disappears. Zero nodes therefore means success.
-    // =====================================================
-
-    if (incomingLength <= 1e-12)
-    {
-        return true;
-    }
+    std::cout
+        << "[MH1 ZONES]"
+        << " incoming="
+        << incomingLength
+        << " active="
+        << activeLength
+        << " frozen="
+        << frozenLength
+        << " sum="
+        << (
+            incomingLength
+            + activeLength
+            + frozenLength
+            )
+        << " total="
+        << input.pipeArcLength
+        << " nodes="
+        << currentNodes.size()
+        << std::endl;
 
     return
-        currentNodes.size() >= 2;
+        !currentNodes.empty();
 }
 
 void StretchHelixFormingProcess::
@@ -1046,6 +1093,70 @@ bool StretchHelixFormingProcess::
 appendActiveZoneGeometry(
     std::vector<PipeNode>& nodes) const
 {
+    if (!std::isfinite(activeZoneLength)
+        || activeZoneLength <= 0.0)
+    {
+        return true;
+    }
+
+    if (!std::isfinite(input.sampleStep)
+        || input.sampleStep <= 0.0)
+    {
+        return false;
+    }
+
+    const double formedLength =
+        std::max(
+            0.0,
+            state.wrappedLength
+        );
+
+    const double activeLength =
+        std::min(
+            activeZoneLength,
+            formedLength
+        );
+
+    if (activeLength <= 1e-12)
+        return true;
+//
+
+    const std::size_t segmentCount =
+        std::max<std::size_t>(
+            1,
+            static_cast<std::size_t>(
+                std::ceil(
+                    activeLength
+                    / input.sampleStep
+                )
+                )
+        );
+
+    for (std::size_t i = 1;
+        i <= segmentCount;
+        ++i)
+    {
+        const double fraction =
+            static_cast<double>(i)
+            / static_cast<double>(
+                segmentCount
+                );
+
+        PipeNode node;
+
+        node.pos =
+            activeFormingFrame.P
+            + activeFormingFrame.T
+            * (
+                activeLength
+                * fraction
+                );
+
+        nodes.push_back(
+            node
+        );
+    }
+
     return true;
 }
 
@@ -1054,6 +1165,127 @@ bool StretchHelixFormingProcess::
 appendFormedGeometry(
     std::vector<PipeNode>& nodes) const
 {
+    const SpatialCurveIntegrationResult* formingReference =
+        &referenceResult;
+
+    if (
+        mechanicsValid
+        && loadedReferenceResult.valid
+        && loadedReferenceResult.isComplete()
+        )
+    {
+        formingReference =
+            &loadedReferenceResult;
+    }
+
+    if (!formingReference->valid
+        || !formingReference->isComplete())
+    {
+        return false;
+    }
+
+    const std::vector<PipeNode>& referenceNodes =
+        formingReference->nodes;
+
+    if (referenceNodes.size() < 2)
+        return false;
+
+    const double totalFormedLength =
+        std::clamp(
+            state.wrappedLength,
+            0.0,
+            input.pipeArcLength
+        );
+
+    const double activeLength =
+        std::min(
+            activeZoneLength,
+            totalFormedLength
+        );
+
+    const double frozenLength =
+        std::max(
+            0.0,
+            totalFormedLength
+            - activeLength
+        );
+
+    if (frozenLength <= 1e-12)
+        return true;
+
+    const double normalizedLength =
+        frozenLength
+        / input.pipeArcLength;
+
+    const std::size_t lastIndex =
+        referenceNodes.size() - 1;
+
+    const std::size_t formedLastIndex =
+        std::min(
+            lastIndex,
+            static_cast<std::size_t>(
+                std::llround(
+                    normalizedLength
+                    * static_cast<double>(
+                        lastIndex
+                        )
+                )
+                )
+        );
+
+    std::cout
+        << "[MH1 FORMED CHECK]"
+        << " totalFormed="
+        << totalFormedLength
+        << " active="
+        << activeLength
+        << " frozen="
+        << frozenLength
+        << " referenceNodes="
+        << referenceNodes.size()
+        << " formedLastIndex="
+        << formedLastIndex
+        << std::endl;
+
+    if (formedLastIndex < 1)
+        return true;
+
+    const Vec3D activeExit =
+        activeFormingFrame.P
+        + activeFormingFrame.T
+        * activeLength;
+
+    const Vec3D referenceOrigin =
+        referenceNodes.front().pos;
+
+    for (std::size_t i = 1;
+        i <= formedLastIndex;
+        ++i)
+    {
+        PipeNode node =
+            referenceNodes[i];
+
+        const Vec3D localPosition =
+            referenceNodes[i].pos
+            - referenceOrigin;
+
+        node.pos =
+            activeExit
+            + localPosition;
+
+        nodes.push_back(
+            node
+        );
+    }
+
+    std::cout
+        << "[MH1 FORMED APPEND]"
+        << " appended="
+        << formedLastIndex
+        << " totalCurrentNodes="
+        << nodes.size()
+        << std::endl;
+
     return true;
 }
 
