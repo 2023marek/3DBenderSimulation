@@ -20,12 +20,24 @@
 struct MachineModel
 {
     Frame machineEntryFrame;
-
+    Frame supportAxisFrame;
     Vec3D bendDieCenter = { 0.0, 0.0, 0.0 };
 
     double defaultBendRadius = 20.0;
     double pipeOuterRadius = 5.0;
     std::vector<MachinePart> parts;
+
+
+    // helix
+    double supportOuterRadius =
+        50.0;
+
+    Vec3D supportAxisPoint =
+    { 0.0, 0.0, 0.0 };
+
+    Vec3D supportAxisDirection =
+    { 0.0, 0.0, 1.0 };
+
     void reset()
     {
         machineEntryFrame.P = { 0.0, 0.0, 0.0 };
@@ -37,6 +49,23 @@ struct MachineModel
 
         defaultBendRadius = 20.0;
         pipeOuterRadius = 5.0;
+
+		// Helix support axis
+
+        supportAxisFrame.P =
+        { 0.0, -500.0, 0.0 };
+
+        supportAxisFrame.T =
+        { 0.0, 0.0, 1.0 };
+
+        supportAxisFrame.N =
+        { 1.0, 0.0, 0.0 };
+
+        supportAxisFrame.B =
+        { 0.0, 1.0, 0.0 };
+
+        supportOuterRadius =
+            50.0;
 
         parts.clear();
 

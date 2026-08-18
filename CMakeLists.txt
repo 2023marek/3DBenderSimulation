@@ -170,6 +170,7 @@ set(CORE_HEADERS
     Core/Geometry/CurvatureTorsionProfile.h
     Core/Geometry/ConstantCurvatureTorsionProfileBuilder.h
     Core/Geometry/ConstantCurvatureTorsionProfileBuilder.cpp
+    Core/Geometry/RigidTransformUtils.h
     Core/Manufacturing/ManufacturingPipeSimulator.h
     Core/Manufacturing/RotationKinematicMode.h
     Core/Manufacturing/ManufacturingTypes.h

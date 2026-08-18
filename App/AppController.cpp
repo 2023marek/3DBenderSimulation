@@ -34,6 +34,7 @@
 #include "Core/Forming/StretchBendingOperation.h"
 #include "Core/Forming/StretchHelixCurrentProfileBuilder.h"
 #include "Core/Forming/StretchHelixWrappingStateAdvancer.h"
+#include "Core/Machine/MachineModel.h"
 
 
 
@@ -4334,7 +4335,7 @@ AppController::buildTestStretchHelixWrappingInput() const
         TEST_STRETCH_ALLOWABLE_STRAIN;
 
     input.pipeArcLength =
-        500.0;
+        6500.0;
 
     // =================================================
     // SUPPORT
@@ -4654,13 +4655,52 @@ debugTestStretchHelixWrappingKinematics()
 // Now initialize the new process using exactly the same
 // input and exactly the same start frame.
 // =====================================================
+    const MachineModel& machineModel =
+        sim.getMachineSystem().getModel();
+
+    Frame supportAxisFrame =
+        machineModel.supportAxisFrame;
+
+    supportAxisFrame.T =
+        Vec3D{
+            0.0,
+            0.0,
+            1.0
+    };
+
+    const Vec3D radialDirection =
+        cross(
+            referenceStartFrame.T,
+            supportAxisFrame.T
+        ).normalized();
+
+    supportAxisFrame.P =
+        referenceStartFrame.P
+        - radialDirection
+        * kinematics.centerlineRadius;
+   
+
+
 
     const bool processInitialized =
         debugStretchHelixProcess.initialize(
             input,
-            referenceStartFrame
+            referenceStartFrame,
+            supportAxisFrame
         );
-
+    std::cout
+        << "[STRETCH HELIX SUPPORT AXIS]"
+        << " formingPoint=("
+        << referenceStartFrame.P.x << ", "
+        << referenceStartFrame.P.y << ", "
+        << referenceStartFrame.P.z << ")"
+        << " axisPoint=("
+        << supportAxisFrame.P.x << ", "
+        << supportAxisFrame.P.y << ", "
+        << supportAxisFrame.P.z << ")"
+        << " radius="
+        << kinematics.centerlineRadius
+        << std::endl;
     std::cout
         << "[STRETCH HELIX PROCESS INIT]"
         << " initialized="

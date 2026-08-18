@@ -1305,3 +1305,1542 @@ Once this passes, MH1.15 will add the formed helix
 on the other side of the same fixed active zone, using 
 the support rotation/axial state while keeping incoming
 completely stationary in orientation.
+
+=================================================
+
+MH115B
+The next step is now the important one: MH1.15B — make only the
+formed/frozen helix follow the support rotation and axial motion,
+while keeping incoming and active fixed.
+
+That should give the machine behavior you originally described:
+
+incoming:
+fixed in world space
+
+
+active:
+fixed in world space
+
+
+formed:
+grows
+rotates with support
+moves axially with support
+
+So yes, you can proceed to MH1.15B now.
+
+OK. We start MH1.15B using the existing, proven rotation
+logic from ManufacturingPipeSimulator, but extract only the
+genuinely generic geometry operations into Core/Geometry.
+
+The ownership becomes:
+
+Core/Geometry/RigidTransformUtils
+        │
+        ├── rotateAroundAxis(Vec3D)
+        ├── rotatePointAroundAxis(...)
+        └── rotateNodeAroundAxis(...)
+                 │
+          ┌──────┴────────┐
+          ▼               ▼
+ManufacturingPipe   StretchHelix
+Simulator           FormingProcess
+
+And MH1 manufacturing remains:
+
+                    FIXED MACHINE SPACE
+
+
+incoming ────────────[ ACTIVE ]
+  fixed                 fixed
+  shortens                │
+                          │
+                          ▼
+                         ))))
+                       )))
+                     )))
+                  FORMED/FROZEN
+                  grows + rotates
+MH1.15B.1 — Create shared geometry helper
+
+Create:
+
+Core/Geometry/RigidTransformUtils.h
+
+For now I recommend making these small functions inline.
+Then you don't need another .cpp or CMake source entry.
+
+#pragma once
+        point - axisPoint;
+
+
+    const Vec3D rotated =
+        rotateAroundAxis(
+            relative,
+            axisDirection,
+            angle
+        );
+
+
+    return
+        axisPoint
+        + rotated;
+}
+
+
+
+
+inline void rotateNodeAroundAxis(
+    PipeNode& node,
+    const Vec3D& axisPoint,
+    const Vec3D& axisDirection,
+    double angle)
+{
+    const Vec3D axis =
+        axisDirection.normalized();
+
+
+    if (axis.lengthSquared() < 1e-12)
+        return;
+
+
+    node.pos =
+        rotatePointAroundAxis(
+            node.pos,
+            axisPoint,
+            axis,
+            angle
+        );
+
+
+    node.T =
+        rotateAroundAxis(
+            node.T,
+            axis,
+            angle
+        ).normalized();
+
+
+    node.N =
+        rotateAroundAxis(
+            node.N,
+            axis,
+            angle
+        ).normalized();
+
+
+    node.B =
+        rotateAroundAxis(
+            node.B,
+            axis,
+            angle
+        ).normalized();
+}
+
+
+}
+
+Use the actual include path for PipeNode in your project if it differs.
+
+Because we now know your actual PipeNode has:
+
+pos
+T
+N
+B
+
+it is correct to transform all four.
+
+========================================================
+MH1.16 — Smooth fixed ACTIVE zone between incoming pipe and rotating formed helix
+
+The purpose of MH1.16 is very specific: keep ACTIVE fixed in machine space, but let its local tangent/frame transition smoothly from the stationary incoming pipe to the rotating formed helix.
+
+We are not changing the established material bookkeeping:
+
+incomingLength + activeLength + frozenLength = totalLength
+
+and we are not changing the machine-state model:
+
+supportRotationAngle
+supportAxialPosition
+wrappedLength
+
+MH1.16 workflow
+                    MANUFACTURING FLOW
+
+
+ straight stock
+ fixed direction
+      │
+      ▼
+┌──────────────┐
+│   INCOMING   │
+│   κ = 0      │
+└──────┬───────┘
+       │
+       │ fixed entry tangent
+       ▼
+┌─────────────────────────┐
+│       ACTIVE ZONE       │
+│                         │
+│  tangent/frame changes  │
+│  smoothly across ~20mm  │
+│                         │
+│ T_in  ─────────► T_out  │
+└────────────┬────────────┘
+             │
+             │ matches formed tangent
+             ▼
+┌─────────────────────────┐
+│     FORMED / FROZEN     │
+│                         │
+│ growing loaded helix    │
+│ support phase rotation  │
+└─────────────────────────┘
+
+Data flow:
+
+activeFormingFrame.T
+        │
+        │ incoming tangent
+        ▼
+   ACTIVE ENTRY
+        │
+        │ interpolate frame
+        │ across activeLength
+        ▼
+   ACTIVE EXIT
+        ▲
+        │
+formed first-node tangent/frame
+after support rotation
+        │
+        │
+supportRotationAngle
+        +
+loadedReferenceResult
+
+
+BEFORE MH1.16
+
+incoming ----------------[ACTIVE] \
+                                  )))
+                                     )))
+                         visible corner
+
+
+AFTER MH1.16
+
+incoming -------------------\
+                             \
+                              ))
+                                )))
+                                   )))
+                       smooth transition
+
+
+During manufacturing:
+
+START
+-------------------------------------------------
+
+
+PARTIAL
+
+------------------------\
+                         \
+                          ))))
+                             ))))
+                                ))
+
+
+LATER
+
+-----------\
+            \
+             )))))
+                 )))))
+                     ))))
+
+
+COMPLETE
+
+     smooth entry → )))))))))))))))))))))))
+
+
+MH1.16.1 — First architectural correction
+
+Your current appendActiveZoneGeometry() is built before appendFormedGeometry().
+
+But now ACTIVE needs to know the actual formed-side exit frame.
+
+Therefore it is cleaner to calculate a small shared object first.
+
+In StretchHelixFormingProcess.h, add under private::
+
+struct ActiveZoneBoundaryFrames
+{
+    Frame entry;
+    Frame exit;
+
+
+    bool valid =
+        false;
+};
+
+Then add:
+
+bool resolveActiveZoneBoundaryFrames(
+    ActiveZoneBoundaryFrames& boundaries
+) const;
+
+Do not store these permanently yet. They are derived from current state.
+
+MH1.16.2 — Entry frame is simple
+
+Inside:
+
+resolveActiveZoneBoundaryFrames(...)
+
+the entry side is exactly your fixed incoming frame:
+
+boundaries.entry =
+    activeFormingFrame;
+
+So:
+
+entry.P = fixed active point
+entry.T = fixed incoming direction
+
+No rotation.
+
+MH1.16.3 — Resolve the forming reference exactly as before
+
+Inside the same function:
+
+const SpatialCurveIntegrationResult* formingReference =
+    &referenceResult;
+
+
+if (
+    mechanicsValid
+    && loadedReferenceResult.valid
+    && loadedReferenceResult.isComplete()
+)
+{
+    formingReference =
+        &loadedReferenceResult;
+}
+
+Then:
+
+if (!formingReference->valid
+    || !formingReference->isComplete()
+    || formingReference->nodes.size() < 2)
+{
+    return false;
+}
+
+MH1.16.4 — Compute ACTIVE length
+const double totalFormedLength =
+    std::clamp(
+        state.wrappedLength,
+        0.0,
+        input.pipeArcLength
+    );
+
+
+const double activeLength =
+    std::min(
+        activeZoneLength,
+        totalFormedLength
+    );
+
+If nothing has yet entered ACTIVE:
+
+if (activeLength <= 1e-12)
+{
+    boundaries.exit =
+        boundaries.entry;
+
+
+    boundaries.valid =
+        true;
+
+
+    return true;
+}
+
+MH1.16.5 — Define fixed ACTIVE exit position
+
+Keep the positional definition from MH1.15:
+
+boundaries.exit.P =
+    activeFormingFrame.P
+    + activeFormingFrame.T
+    * activeLength;
+
+For MH1.16, entry and exit positions remain fixed along the machine window.
+
+We are changing the tangent/orientation inside that window, not translating the window
+.
+
+MH1.16.6 — Obtain the formed-side frame
+
+Use the first useful reference node after the origin:
+
+const std::vector<PipeNode>& referenceNodes =
+    formingReference->nodes;
+
+
+const PipeNode& formedReferenceNode =
+    referenceNodes[1];
+
+Start with:
+
+boundaries.exit.T =
+    formedReferenceNode.T;
+
+
+boundaries.exit.N =
+    formedReferenceNode.N;
+
+
+boundaries.exit.B =
+    formedReferenceNode.B;
+
+But this frame must undergo the same support rotation as formed geometry.
+
+MH1.16.7 — Compute support axis
+
+Use the same logic as MH1.15B:
+
+Vec3D supportAxisDirection =
+    activeFormingFrame.T
+        * kinematics.torsion
+    + activeFormingFrame.B
+        * kinematics.curvature;
+
+
+if (supportAxisDirection.lengthSquared() < 1e-12)
+    return false;
+
+
+supportAxisDirection =
+    supportAxisDirection.normalized();
+
+Then rotate exit orientation:
+
+boundaries.exit.T =
+    RigidTransformUtils::rotateAroundAxis(
+        boundaries.exit.T,
+        supportAxisDirection,
+        state.supportRotationAngle
+    ).normalized();
+
+
+boundaries.exit.N =
+    RigidTransformUtils::rotateAroundAxis(
+        boundaries.exit.N,
+        supportAxisDirection,
+        state.supportRotationAngle
+    ).normalized();
+
+
+boundaries.exit.B =
+    RigidTransformUtils::rotateAroundAxis(
+        boundaries.exit.B,
+        supportAxisDirection,
+        state.supportRotationAngle
+    ).normalized();
+
+Notice: we rotate orientation vectors, not exit.P.
+
+ACTIVE exit position stays fixed.
+
+Finish:
+
+boundaries.valid =
+    true;
+
+
+return true;
+
+MH1.16.8 — Full boundary resolver
+
+So the first version is approximately:
+
+
+bool StretchHelixFormingProcess::
+resolveActiveZoneBoundaryFrames(
+    ActiveZoneBoundaryFrames& boundaries) const
+{
+    boundaries =
+        ActiveZoneBoundaryFrames{};
+
+    boundaries.entry =
+        activeFormingFrame;
+
+    const double totalFormedLength =
+        std::clamp(
+            state.wrappedLength,
+            0.0,
+            input.pipeArcLength
+        );
+
+    const double activeLength =
+        std::min(
+            activeZoneLength,
+            totalFormedLength
+        );
+
+    if (activeLength <= 1e-12)
+    {
+        boundaries.exit =
+            boundaries.entry;
+
+        boundaries.valid =
+            true;
+
+        return true;
+    }
+
+    const SpatialCurveIntegrationResult* formingReference =
+        &referenceResult;
+
+    if (
+        mechanicsValid
+        && loadedReferenceResult.valid
+        && loadedReferenceResult.isComplete()
+    )
+    {
+        formingReference =
+            &loadedReferenceResult;
+    }
+
+    if (!formingReference->valid
+        || !formingReference->isComplete()
+        || formingReference->nodes.size() < 2)
+    {
+        return false;
+    }
+
+    boundaries.exit =
+        boundaries.entry;
+
+    boundaries.exit.P =
+        activeFormingFrame.P
+        + activeFormingFrame.T
+        * activeLength;
+
+    const PipeNode& formedReferenceNode =
+        formingReference->nodes[1];
+
+    boundaries.exit.T =
+        formedReferenceNode.T;
+
+    boundaries.exit.N =
+        formedReferenceNode.N;
+
+    boundaries.exit.B =
+        formedReferenceNode.B;
+
+    Vec3D supportAxisDirection =
+        activeFormingFrame.T
+            * kinematics.torsion
+        + activeFormingFrame.B
+            * kinematics.curvature;
+
+    if (supportAxisDirection.lengthSquared() < 1e-12)
+        return false;
+
+    supportAxisDirection =
+        supportAxisDirection.normalized();
+
+    boundaries.exit.T =
+        RigidTransformUtils::rotateAroundAxis(
+            boundaries.exit.T,
+            supportAxisDirection,
+            state.supportRotationAngle
+        ).normalized();
+
+    boundaries.exit.N =
+        RigidTransformUtils::rotateAroundAxis(
+            boundaries.exit.N,
+            supportAxisDirection,
+            state.supportRotationAngle
+        ).normalized();
+
+    boundaries.exit.B =
+        RigidTransformUtils::rotateAroundAxis(
+            boundaries.exit.B,
+            supportAxisDirection,
+            state.supportRotationAngle
+        ).normalized();
+
+    boundaries.valid =
+        true;
+
+    return true;
+}
+
+MH1.16.9 — Replace straight ACTIVE geometry
+
+Your existing ACTIVE builder currently does essentially:
+
+node.pos =
+    activeFormingFrame.P
+    + activeFormingFrame.T
+    * distance;
+
+That must now become a smooth curve.
+
+For the first implementation, use a cubic Hermite curve.
+
+This is appropriate because we know exactly:
+
+start position
+start tangent
+end position
+end tangent
+
+The Hermite curve naturally connects those four constraints.
+
+MH1.16.10 — Hermite equation
+
+For normalized position:
+
+u ∈ [0,1]
+
+use:
+
+P(u) =
+    h00 P0
+  + h10 M0
+  + h01 P1
+  + h11 M1
+
+where:
+
+h00 =  2u³ - 3u² + 1
+h10 =    u³ - 2u² + u
+h01 = -2u³ + 3u²
+h11 =    u³ -   u²
+
+And:
+
+P0 = ACTIVE entry
+P1 = ACTIVE exit
+
+
+M0 = T_entry * tangentScale
+M1 = T_exit  * tangentScale
+
+For the first test:
+
+tangentScale =
+    activeLength;
+
+    MH1.16.11 — Add local Hermite helper
+
+Inside StretchHelixFormingProcess.cpp, anonymous namespace:
+
+Vec3D evaluateHermitePosition(
+    const Vec3D& p0,
+    const Vec3D& p1,
+    const Vec3D& m0,
+    const Vec3D& m1,
+    double u)
+{
+    const double u2 =
+        u * u;
+
+
+    const double u3 =
+        u2 * u;
+
+
+    const double h00 =
+        2.0 * u3
+        - 3.0 * u2
+        + 1.0;
+
+
+    const double h10 =
+        u3
+        - 2.0 * u2
+        + u;
+
+
+    const double h01 =
+        -2.0 * u3
+        + 3.0 * u2;
+
+
+    const double h11 =
+        u3
+        - u2;
+
+
+    return
+        p0 * h00
+        + m0 * h10
+        + p1 * h01
+        + m1 * h11;
+}
+
+MH1.16.12 — Add tangent derivative helper
+
+For correct PipeNode.T:
+
+Vec3D evaluateHermiteTangent(
+    const Vec3D& p0,
+    const Vec3D& p1,
+    const Vec3D& m0,
+    const Vec3D& m1,
+    double u)
+{
+    const double u2 =
+        u * u;
+
+
+    const double dh00 =
+        6.0 * u2
+        - 6.0 * u;
+
+
+    const double dh10 =
+        3.0 * u2
+        - 4.0 * u
+        + 1.0;
+
+
+    const double dh01 =
+        -6.0 * u2
+        + 6.0 * u;
+
+
+    const double dh11 =
+        3.0 * u2
+        - 2.0 * u;
+
+
+    return
+        p0 * dh00
+        + m0 * dh10
+        + p1 * dh01
+        + m1 * dh11;
+}
+
+Normalize the result before assigning it to a node.
+
+
+MH1.16.13 — Rewrite appendActiveZoneGeometry()
+
+Use:
+
+bool StretchHelixFormingProcess::
+
+
+    const std::size_t segmentCount =
+        std::max<std::size_t>(
+            1,
+            static_cast<std::size_t>(
+                std::ceil(
+                    activeLength
+                    / input.sampleStep
+                )
+            )
+        );
+
+
+    const Vec3D p0 =
+        boundaries.entry.P;
+
+
+    const Vec3D p1 =
+        boundaries.exit.P;
+
+
+    const Vec3D m0 =
+        boundaries.entry.T
+        * activeLength;
+
+
+    const Vec3D m1 =
+        boundaries.exit.T
+        * activeLength;
+
+
+    for (std::size_t i = 1;
+         i <= segmentCount;
+         ++i)
+    {
+        const double u =
+            static_cast<double>(i)
+            / static_cast<double>(
+                segmentCount
+            );
+
+
+        PipeNode node;
+
+
+        node.pos =
+            evaluateHermitePosition(
+                p0,
+                p1,
+                m0,
+                m1,
+                u
+            );
+
+
+        node.T =
+            evaluateHermiteTangent(
+                p0,
+                p1,
+                m0,
+                m1,
+                u
+            ).normalized();
+
+Now we need N/B.
+
+MH1.16.14 — Interpolate normal initially
+
+For this first version, interpolate N and re-orthogonalize it against the tangent:
+
+        Vec3D interpolatedN =
+            boundaries.entry.N
+            * (1.0 - u)
+            + boundaries.exit.N
+            * u;
+
+
+        interpolatedN =
+            interpolatedN
+            - node.T
+            * dot(
+                interpolatedN,
+                node.T
+            );
+
+
+        if (interpolatedN.lengthSquared() < 1e-12)
+        {
+            interpolatedN =
+                boundaries.entry.N;
+        }
+
+
+        node.N =
+            interpolatedN.normalized();
+
+
+        node.B =
+            cross(
+                node.T,
+                node.N
+            ).normalized();
+
+
+        node.N =
+            cross(
+                node.B,
+                node.T
+            ).normalized();
+
+
+        nodes.push_back(
+            node
+        );
+    }
+
+
+    return true;
+}
+
+This is sufficient for the MH1.16 foundation.
+
+Later, if necessary, we can use quaternion/frame interpolation, but not yet.
+
+MH1.16.15 — Important correction to appendFormedGeometry()
+
+Your formed helix is currently anchored to:
+
+const Vec3D activeExit =
+    activeFormingFrame.P
+    + activeFormingFrame.T * activeLength;
+
+That position is still correct.
+
+But now its first frame should correspond to the same exit orientation calculated by ACTIVE.
+
+The easiest way to ensure consistency is to reuse:
+
+ActiveZoneBoundaryFrames boundaries;
+
+
+if (!resolveActiveZoneBoundaryFrames(
+    boundaries
+))
+{
+    return false;
+}
+
+
+const Vec3D activeExit =
+    boundaries.exit.P;
+
+Keep the formed rotation logic for now.
+
+The key is both builders use the same boundary resolver.
+
+MH1.16.16 — Add tangent continuity diagnostic
+
+We should quantify the junction rather than only inspect visually.
+
+At the end of rebuildCurrentGeometry(), find the active/frozen transition if convenient.
+
+Simpler: inside the boundary resolver print:
+
+const double tangentAlignment =
+    dot(
+        boundaries.entry.T.normalized(),
+        boundaries.exit.T.normalized()
+    );
+
+
+std::cout
+    << "[MH1 ACTIVE TRANSITION]"
+    << " activeLength="
+    << activeLength
+    << " rotationAngle="
+    << state.supportRotationAngle
+    << " entryExitDot="
+    << tangentAlignment
+    << " entryT=("
+    << boundaries.entry.T.x
+    << ", "
+    << boundaries.entry.T.y
+    << ", "
+    << boundaries.entry.T.z
+    << ")"
+    << " exitT=("
+    << boundaries.exit.T.x
+    << ", "
+    << boundaries.exit.T.y
+    << ", "
+    << boundaries.exit.T.z
+    << ")"
+    << std::endl;
+
+entryExitDot does not need to be 1.
+
+The whole reason ACTIVE exists is to transition between different tangent directions.
+
+What matters is:
+
+Hermite tangent at u=0 = entryT
+Hermite tangent at u=1 = exitT
+
+
+MH1.16.17 — Add endpoint tangent acceptance
+
+Inside appendActiveZoneGeometry() after defining m0/m1, optionally evaluate:
+
+const Vec3D startTangent =
+    evaluateHermiteTangent(
+        p0,
+        p1,
+        m0,
+        m1,
+        0.0
+    ).normalized();
+
+
+const Vec3D endTangent =
+    evaluateHermiteTangent(
+        p0,
+        p1,
+        m0,
+        m1,
+        1.0
+    ).normalized();
+
+
+const double startAlignment =
+    dot(
+        startTangent,
+        boundaries.entry.T.normalized()
+    );
+
+
+const double endAlignment =
+    dot(
+        endTangent,
+        boundaries.exit.T.normalized()
+    );
+
+
+std::cout
+    << "[MH1 ACTIVE ACCEPTANCE]"
+    << " startAlignment="
+    << startAlignment
+    << " endAlignment="
+    << endAlignment
+    << std::endl;
+
+Expected:
+
+startAlignment ≈ 1
+endAlignment   ≈ 1
+
+That proves mathematical tangent continuity.
+
+MH1.16.18 — Manual visual test
+
+Use:
+
+J
+H
+
+not continuous K first.
+
+After the first H we expect approximately:
+
+wrappedLength ≈ 255
+rotationAngle ≈ 0.5
+
+Look closely at:
+
+INCOMING → ACTIVE
+
+and:
+
+ACTIVE → FORMED
+
+The first should be smooth because:
+
+T_active_start = T_incoming
+
+The second should be smooth because:
+
+T_active_end = T_formed
+
+Expected:
+
+BAD
+
+
+--------------[active] \
+                         ))))
+
+
+
+
+GOOD
+
+
+------------------\
+                   \
+                    )))
+                       )))
+MH1.16.19 — Check FRONT and oblique view
+
+FRONT alone may hide a tangent discontinuity.
+
+Test:
+
+FRONT
+LEFT SIDE
+TOP
+oblique/orbit
+
+Especially look at ACTIVE in MESH mode.
+
+MH1.16.20 — Do not change activeZoneLength yet
+
+Keep:
+
+activeZoneLength = 20.0;
+
+during this test.
+
+A short 20 mm window may ultimately be physically too short for the required reorientation. If the Hermite curve develops an overly sharp shape, that is valuable information.
+
+Don't fix it by arbitrarily increasing the window yet.
+
+Later we can derive active-zone length from:
+
+allowable curvature
+machine tooling
+pipe diameter
+forming mechanics
+
+For now it is a controlled debug parameter.
+
+One physical caveat
+
+This first MH1.16 model creates a geometrically smooth ACTIVE zone, but it does not yet guarantee constant arc length equal to exactly 20 mm.
+
+A cubic Hermite curve between endpoints separated by 20 mm with different tangents generally has an arc length slightly greater than 20 mm.
+
+Therefore:
+
+activeZoneLength = 20
+
+currently means approximately:
+
+nominal machine window/span
+
+rather than rigorously:
+
+centerline material arc length = exactly 20 mm.
+
+We should not silently ignore that permanently.
+
+The next refinement after visual/tangent acceptance should measure the Hermite arc length and either reparameterize it or solve the tangent scale so that the ACTIVE centerline consumes exactly the intended amount of material.
+
+But first prove the topology and continuity.
+
+MH1.16 acceptance
+
+Before proceeding, confirm:
+
+✔ incoming remains completely straight
+✔ incoming direction does not rotate
+✔ active entry remains fixed
+✔ active exit remains fixed
+✔ active curve changes shape as support rotates
+✔ active starts tangent to incoming
+✔ active ends tangent to formed helix
+✔ startAlignment ≈ 1
+✔ endAlignment ≈ 1
+✔ no positional gap at either boundary
+✔ formed helix still grows/rotates
+✔ zones still report total ≈ 500
+✔ LINE visualization is smooth
+✔ MESH frame is stable
+✔ H10 unloading still works after wrapping
+
+The most useful console fragment after implementing MH1.16 will be:
+
+[MH1 ACTIVE TRANSITION]
+[MH1 ACTIVE ACCEPTANCE]
+[MH1 FORMED MOTION]
+[MH1 ZONES]
+
+along with what you see at the ACTIVE junction in FRONT and oblique views.
+========================================================================
+==============================================================================
+
+SIMPLIFY
+
+Tak — dla wersji Workshop to jest rozsądne uproszczenie. Zachowałbym
+pojęcie „forming point” w stanie maszyny, ale usunąłbym geometryczną
+ACTIVE zone z generowania rury.
+
+Nowy prostszy model:
+
+CAD MODE
+Operation → Curve → Nodes
+
+
+
+
+MANUFACTURING STRETCH HELIX
+
+
+straight incoming
+      │
+      │ shortens, never rotates
+      ▼
+FIXED FORMING POINT
+      │
+      ▼
+formed helix
+grows + rotates with support
+      │
+      ▼
+loaded helix
+      │
+      ▼
+springback κ + τ
+      │
+      ▼
+final helix
+
+Czyli:
+
+rebuildCurrentGeometry()
+    ├── appendIncomingGeometry()
+    └── appendFormedGeometry()
+
+Usuwamy z workflow:
+
+appendActiveZoneGeometry()
+measure ACTIVE length
+ActiveZoneBoundaryFrames
+Hermite ACTIVE transition
+
+Nie musisz ich od razu kasować z plików. Najpierw odłącz je od aktywnego 
+workflow, sprawdź build/render, potem usuń jako cleanup.
+
+1. Uprość długości stref
+
+W rebuildCurrentGeometry():
+
+const double formedLength =
+    std::clamp(
+        state.wrappedLength,
+        0.0,
+        input.pipeArcLength
+    );
+
+
+const double incomingLength =
+    std::max(
+        0.0,
+        input.pipeArcLength
+        - formedLength
+    );
+
+I:
+
+if (!appendIncomingGeometry(
+    currentNodes
+))
+{
+    return false;
+}
+
+
+if (!appendFormedGeometry(
+    currentNodes
+))
+{
+    return false;
+}
+
+Nie ma już:
+
+activeLength
+frozenLength
+
+Bilans jest po prostu:
+
+incomingLength + formedLength = pipeArcLength
+2. appendFormedGeometry() nie odejmuje już active zone
+
+Zamień:
+
+const double activeLength =
+    std::min(
+        activeZoneLength,
+        totalFormedLength
+    );
+
+
+const double frozenLength =
+    std::max(
+        0.0,
+        totalFormedLength
+        - activeLength
+    );
+
+na:
+
+const double formedLength =
+    std::clamp(
+        state.wrappedLength,
+        0.0,
+        input.pipeArcLength
+    );
+
+
+if (formedLength <= 1e-12)
+    return true;
+
+I indeks:
+
+const double normalizedLength =
+    formedLength
+    / input.pipeArcLength;
+
+Punktem połączenia pozostaje stały:
+
+const Vec3D formingPoint =
+    activeFormingFrame.P;
+
+Czyli formed geometry kotwiczysz w:
+
+formingPoint
+
+zamiast:
+
+activeExit
+
+To daje dokładnie warsztatowy model:
+
+incoming ------------* )))))))))
+                    fixed
+                  forming point
+Springback torsion τ
+
+To jest teraz dobry moment, bo obecne H9/H10 robi:
+
+κ_loaded → κ_final
+τ_loaded = τ_final
+
+Chcemy:
+
+(κ_loaded, τ_loaded)
+          ↓ unloading
+(κ_final,  τ_final)
+
+Dla prostego modelu Workshop zastosowałbym osobny współczynnik 
+torsional springback.
+
+W StretchHelixWrappingInput.h:
+
+double torsionSpringbackRatio =
+    0.05;
+
+
+bool compensateTorsionSpringback =
+    true;
+
+Walidacja:
+
+if (!std::isfinite(torsionSpringbackRatio))
+    return false;
+
+
+if (torsionSpringbackRatio < 0.0
+    || torsionSpringbackRatio >= 1.0)
+{
+    return false;
+}
+
+Nie używałbym automatycznie tego samego 0.1 co dla curvature. 
+Nawet jeśli na początku ustawisz oba podobnie, lepiej architektonicznie
+przechowywać je osobno:
+
+springbackRatio         → bending κ
+torsionSpringbackRatio  → torsion τ
+3. Dodaj wartości do StretchHelixFormingProcess
+
+W private::
+
+double targetFinalTorsion =
+    0.0;
+
+
+double loadedTorsion =
+    0.0;
+
+
+double predictedFinalTorsion =
+    0.0;
+
+Gettery:
+
+double getTargetFinalTorsion() const;
+double getLoadedTorsion() const;
+double getPredictedFinalTorsion() const;
+4. Policz prosty torsion springback
+
+W rebuildStretchEvaluation(), po wyliczeniu curvature springback:
+
+targetFinalTorsion =
+    kinematics.torsion;
+
+Jeżeli kompensacja jest włączona:
+
+if (input.compensateTorsionSpringback)
+{
+    loadedTorsion =
+        targetFinalTorsion
+        / (
+            1.0
+            - input.torsionSpringbackRatio
+        );
+}
+else
+{
+    loadedTorsion =
+        targetFinalTorsion;
+}
+
+Predykcja po unloading:
+
+predictedFinalTorsion =
+    loadedTorsion
+    * (
+        1.0
+        - input.torsionSpringbackRatio
+    );
+
+Diagnostyka:
+
+std::cout
+    << "[STRETCH HELIX TORSION SPRINGBACK]"
+    << " targetTau="
+    << targetFinalTorsion
+    << " loadedTau="
+    << loadedTorsion
+    << " predictedFinalTau="
+    << predictedFinalTorsion
+    << " ratio="
+    << input.torsionSpringbackRatio
+    << std::endl;
+
+Przy kompensacji powinno być:
+
+|loadedTau| > |targetTau|
+
+
+predictedFinalTau ≈ targetTau
+
+Dla ujemnej helisy znak τ pozostaje ujemny, więc warunek sprawdzaj 
+przez moduł.
+
+5. Loaded reference musi używać loadedTorsion
+
+W:
+
+rebuildLoadedReferenceGeometry()
+
+masz teraz prawdopodobnie:
+
+ConstantCurvatureTorsionProfileBuilder::build(
+    input.pipeArcLength,
+    loadedCurvature,
+    kinematics.torsion
+);
+
+zmień na:
+
+ConstantCurvatureTorsionProfileBuilder::build(
+    input.pipeArcLength,
+    loadedCurvature,
+    loadedTorsion
+);
+
+To bardzo ważna zmiana.
+
+Teraz purple loaded helix reprezentuje:
+
+κ_loaded
+τ_loaded
+
+a nie tylko zwiększoną curvature.
+
+6. Final geometry używa finalnych obu parametrów
+
+W:
+
+rebuildFinalGeometry()
+
+zmień:
+
+ConstantCurvatureTorsionProfileBuilder::build(
+    input.pipeArcLength,
+    predictedFinalCurvature,
+    kinematics.torsion
+);
+
+na:
+
+ConstantCurvatureTorsionProfileBuilder::build(
+    input.pipeArcLength,
+    predictedFinalCurvature,
+    predictedFinalTorsion
+);
+
+Czyli:
+
+PURPLE loaded:
+κ = loadedCurvature
+τ = loadedTorsion
+
+
+GREEN final:
+κ = predictedFinalCurvature
+τ = predictedFinalTorsion
+
+
+YELLOW target:
+κ = targetFinalCurvature
+τ = targetFinalTorsion
+
+Przy dobrej kompensacji:
+
+GREEN ≈ YELLOW
+7. H10 unloading interpoluje teraz oba
+
+W rebuildUnloadingGeometry() masz obecnie:
+
+const double currentCurvature =
+    loadedCurvature
+    + fraction
+    * (
+        predictedFinalCurvature
+        - loadedCurvature
+    );
+
+Dodaj:
+
+const double currentTorsion =
+    loadedTorsion
+    + fraction
+    * (
+        predictedFinalTorsion
+        - loadedTorsion
+    );
+
+I profil:
+
+const CurvatureTorsionProfile profile =
+    ConstantCurvatureTorsionProfileBuilder::build(
+        input.pipeArcLength,
+        currentCurvature,
+        currentTorsion
+    );
+
+Diagnostyka:
+
+std::cout
+    << "[STRETCH HELIX UNLOADING]"
+    << " fraction="
+    << fraction
+    << " kappa="
+    << currentCurvature
+    << " tau="
+    << currentTorsion
+    << std::endl;
+
+Wtedy H10 rzeczywiście wykonuje:
+
+LOADED
+κ_loaded
+τ_loaded
+   │
+   ▼
+UNLOADING
+κ decreases
+τ decreases in magnitude
+   │
+   ▼
+FINAL
+κ_final
+τ_final
+
+To jest dobry poziom modelu dla Workshop: geometria pozostaje
+curvature/torsion-driven, ale nie komplikujemy symulacji krótkiej 
+aktywnej strefy, której precyzyjna mechanika nie jest Ci
+\teraz potrzebna.

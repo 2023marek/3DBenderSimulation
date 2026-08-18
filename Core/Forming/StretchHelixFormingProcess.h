@@ -16,6 +16,8 @@
 #include "Core/Forming/StretchBendingManufacturingStage.h"
 
 
+
+
 class StretchHelixFormingProcess
 {
 public:
@@ -26,8 +28,9 @@ public:
     // =====================================================
 
     bool initialize(
-        const StretchHelixWrappingInput& input,
-        const Frame& startFrame
+        const StretchHelixWrappingInput& newInput,
+        const Frame& newStartFrame,
+        const Frame& newSupportAxisFrame
     );
 
     void reset();
@@ -91,6 +94,21 @@ public:
 
     double getUnloadingFraction() const;
 private:
+
+    struct ActiveZoneBoundaryFrames
+    {
+        Frame entry;
+        Frame exit;
+
+        bool valid =
+            false;
+    };
+
+    bool resolveActiveZoneBoundaryFrames(
+        ActiveZoneBoundaryFrames& boundaries
+    ) const;
+
+
     bool rebuildKinematics();
 
     bool rebuildReferenceGeometry();
@@ -140,7 +158,7 @@ private:
     SpatialCurveIntegrationResult
         loadedReferenceResult;
 
-    double activeZoneLength =
+   double activeZoneLength =
         20.0;
     bool rebuildLoadedReferenceGeometry();
 
@@ -182,6 +200,9 @@ private:
     );
 
     bool rebuildUnloadingGeometry();
+    Frame supportAxisFrame;
+
+   
 };
 
 
