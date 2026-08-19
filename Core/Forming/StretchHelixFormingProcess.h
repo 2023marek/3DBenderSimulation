@@ -202,7 +202,23 @@ private:
     bool rebuildUnloadingGeometry();
     Frame supportAxisFrame;
 
-   
+    std::vector<PipeNode>
+        formedHistoryNodes;
+
+    double previousWrappedLength =
+        0.0;
+
+    double previousSupportRotationAngle =
+        0.0;
+
+    bool formedHistoryInitialized =
+        false;
+
+    bool updateFormedHistory();
+
+    bool appendFormedHistory(
+        std::vector<PipeNode>& nodes
+    ) const;
 };
 
 

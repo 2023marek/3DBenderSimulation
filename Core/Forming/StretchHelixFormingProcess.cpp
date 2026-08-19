@@ -322,6 +322,19 @@ rebuildCurrentGeometry()
         return false;
     }
 
+    // =====================================================
+    // UPDATE PERSISTENT FORMED MATERIAL
+    // =====================================================
+
+    if (!updateFormedHistory())
+    {
+        return false;
+    }
+
+    // =====================================================
+    // BUILD CURRENT DISPLAY GEOMETRY
+    // =====================================================
+
     if (!appendIncomingGeometry(
         currentNodes
     ))
@@ -329,47 +342,19 @@ rebuildCurrentGeometry()
         return false;
     }
 
-   // if (!appendActiveZoneGeometry(
-   //    currentNodes
-  // ))
-  //  {
-   //     return false;
-   // }
-
-    if (!appendFormedGeometry(
+    if (!appendFormedHistory(
         currentNodes
     ))
     {
         return false;
     }
 
-    // Empty geometry is allowed only when all manufacturing
-    // zones have momentarily collapsed, but normally we
-    // should now have either incoming or formed geometry.
-    if (state.wrappedLength <= 1e-12)
-    {
-        return
-            currentNodes.size() >= 2;
-    }
-
-    const double totalFormedLength =
-        state.wrappedLength;
-
-   // const double activeLength =
-     //   std::min(
-       //     activeZoneLength,
-         //   totalFormedLength
-       // );
-
-    //const double frozenLength =
-      //  std::max(
-        //    0.0,
-          //  totalFormedLength
-           // - activeLength
-        //);
-
     const double formedLength =
-        totalFormedLength;
+        std::clamp(
+            state.wrappedLength,
+            0.0,
+            input.pipeArcLength
+        );
 
     const double incomingLength =
         std::max(
@@ -378,28 +363,15 @@ rebuildCurrentGeometry()
             - formedLength
         );
 
-    //const double incomingLength =
-      //  std::max(
-        //    0.0,
-          //  input.pipeArcLength
-            //- totalFormedLength
-        //);
-
-    const double zoneLengthSum =
-        incomingLength
-        + formedLength;
-
     std::cout
-        << "[MH1 WORKSHOP ZONES]"
+        << "[MH1.17 HISTORY]"
         << " incoming="
         << incomingLength
         << " formed="
         << formedLength
-        << " sum="
-        << zoneLengthSum
-        << " total="
-        << input.pipeArcLength
-        << " nodes="
+        << " historyNodes="
+        << formedHistoryNodes.size()
+        << " currentNodes="
         << currentNodes.size()
         << std::endl;
 
@@ -473,6 +445,18 @@ advanceTime(
 }
 void StretchHelixFormingProcess::reset()
 {
+
+    formedHistoryNodes.clear();
+
+    previousWrappedLength =
+        0.0;
+
+    previousSupportRotationAngle =
+        0.0;
+
+    formedHistoryInitialized =
+        false;
+
     if (!input.isValid()
         || !kinematics.valid)
     {
@@ -516,6 +500,7 @@ void StretchHelixFormingProcess::reset()
 
     unloadingFraction =
         0.0;
+
 }
 bool StretchHelixFormingProcess::
 isValid() const
@@ -1806,6 +1791,345 @@ resolveActiveZoneBoundaryFrames(
         << std::endl;
     boundaries.valid =
         true;
+
+    return true;
+}
+
+bool StretchHelixFormingProcess::
+updateFormedHistory()
+{
+
+    // =====================================================
+        // MH1.17 — FORMED HISTORY IS UPDATED ONLY WHILE
+        // MATERIAL IS ACTUALLY ENTERING THE FORMING PROCESS.
+        //
+        // During LoadedHold / Unloading / Complete,
+        // no new material is added to the history.
+        // H10 owns the full-pipe unloading geometry.
+        // =====================================================
+
+    if (
+        stage != StretchBendingManufacturingStage::Ready
+        &&
+        stage != StretchBendingManufacturingStage::Forming
+        )
+    {
+        return true;
+    }
+
+
+
+    if (!formedHistoryInitialized)
+    {
+        formedHistoryNodes.clear();
+
+        previousWrappedLength =
+            state.wrappedLength;
+
+        previousSupportRotationAngle =
+            state.supportRotationAngle;
+
+        formedHistoryInitialized =
+            true;
+
+        return true;
+    }
+
+    const double currentWrappedLength =
+        std::clamp(
+            state.wrappedLength,
+            0.0,
+            input.pipeArcLength
+        );
+
+    const double deltaLength =
+        currentWrappedLength
+        - previousWrappedLength;
+
+    const double deltaAngle =
+        state.supportRotationAngle
+        - previousSupportRotationAngle;
+
+    if (!std::isfinite(deltaLength)
+        || !std::isfinite(deltaAngle))
+    {
+        return false;
+    }
+
+    if (deltaLength < -1e-12)
+    {
+        // History should only grow during forming.
+        return false;
+    }
+
+    const Vec3D supportAxisPoint =
+        supportAxisFrame.P;
+
+    Vec3D supportAxisDirection =
+        supportAxisFrame.T;
+
+    if (supportAxisDirection.lengthSquared() < 1e-12)
+        return false;
+
+    supportAxisDirection =
+        supportAxisDirection.normalized();
+    if (std::abs(deltaAngle) > 1e-12)
+    {
+        for (PipeNode& node :
+            formedHistoryNodes)
+        {
+            RigidTransformUtils::
+                rotateNodeAroundAxis(
+                    node,
+                    supportAxisPoint,
+                    supportAxisDirection,
+                    deltaAngle
+                );
+        }
+    }
+    if (deltaLength <= 1e-12)
+    {
+        previousWrappedLength =
+            currentWrappedLength;
+
+        previousSupportRotationAngle =
+            state.supportRotationAngle;
+
+        return true;
+    }
+
+    const SpatialCurveIntegrationResult* formingReference =
+        &referenceResult;
+
+    if (
+        mechanicsValid
+        && loadedReferenceResult.valid
+        && loadedReferenceResult.isComplete()
+        )
+    {
+        formingReference =
+            &loadedReferenceResult;
+    }
+
+    if (!formingReference->valid
+        || !formingReference->isComplete()
+        || formingReference->nodes.size() < 2)
+    {
+        return false;
+    }
+
+    const std::size_t incrementSegments =
+        std::max<std::size_t>(
+            1,
+            static_cast<std::size_t>(
+                std::llround(
+                    deltaLength
+                    / input.sampleStep
+                )
+                )
+        );
+
+    const std::size_t maxSegments =
+        formingReference->nodes.size() - 1;
+
+    const std::size_t segmentCount =
+        std::min(
+            incrementSegments,
+            maxSegments
+        );
+
+    const std::vector<PipeNode>& referenceNodes =
+        formingReference->nodes;
+
+    const Vec3D referenceOrigin =
+        referenceNodes.front().pos;
+
+    const Vec3D formingPoint =
+        activeFormingFrame.P;
+
+    std::vector<PipeNode>
+        newIncrementNodes;
+
+    newIncrementNodes.reserve(
+        segmentCount
+    );
+
+    for (std::size_t i = 1;
+        i <= segmentCount;
+        ++i)
+    {
+        PipeNode node =
+            referenceNodes[i];
+
+        node.pos =
+            formingPoint
+            + (
+                referenceNodes[i].pos
+                - referenceOrigin
+                );
+
+        newIncrementNodes.push_back(
+            node
+        );
+    }
+
+    // =====================================================
+// MH1.17 — JUNCTION DIAGNOSTIC
+//
+// Check connection:
+//
+// new increment ----> old formed history
+//
+// newLast              oldFirst
+//    *--------------------*
+// =====================================================
+
+    if (!newIncrementNodes.empty()
+        && !formedHistoryNodes.empty())
+    {
+        const PipeNode& newLast =
+            newIncrementNodes.back();
+
+        const PipeNode& oldFirst =
+            formedHistoryNodes.front();
+
+        //
+        const Vec3D junctionCorrection =
+            oldFirst.pos
+            - newLast.pos;
+        const std::size_t count =
+            newIncrementNodes.size();
+
+        if (count > 1)
+        {
+            for (std::size_t i = 0;
+                i < count;
+                ++i)
+            {
+                const double fraction =
+                    static_cast<double>(i + 1)
+                    / static_cast<double>(count);
+
+                newIncrementNodes[i].pos +=
+                    junctionCorrection
+                    * fraction;
+            }
+        }
+
+
+
+
+        const Vec3D positionDelta =
+            oldFirst.pos
+            - newLast.pos;
+
+        const double positionGap =
+            positionDelta.length();
+
+        const Vec3D newT =
+            newLast.T.normalized();
+
+        const Vec3D oldT =
+            oldFirst.T.normalized();
+
+        const double tangentDot =
+            dot(
+                newT,
+                oldT
+            );
+
+
+
+
+        std::cout
+            << "[MH1.17 JUNCTION]"
+            << " positionGap="
+            << positionGap
+            << " tangentDot="
+            << tangentDot
+            << " newLastP=("
+            << newLast.pos.x << ", "
+            << newLast.pos.y << ", "
+            << newLast.pos.z << ")"
+            << " oldFirstP=("
+            << oldFirst.pos.x << ", "
+            << oldFirst.pos.y << ", "
+            << oldFirst.pos.z << ")"
+            << std::endl;
+    }
+
+    if (!newIncrementNodes.empty()
+        && !formedHistoryNodes.empty())
+    {
+        const PipeNode& correctedLast =
+            newIncrementNodes.back();
+
+        const PipeNode& oldFirst =
+            formedHistoryNodes.front();
+
+        const double correctedGap =
+            (
+                oldFirst.pos
+                - correctedLast.pos
+                ).length();
+
+        const double correctedTangentDot =
+            dot(
+                correctedLast.T.normalized(),
+                oldFirst.T.normalized()
+            );
+
+        std::cout
+            << "[MH1.17 JUNCTION CORRECTED]"
+            << " positionGap="
+            << correctedGap
+            << " tangentDot="
+            << correctedTangentDot
+            << std::endl;
+    }
+
+    formedHistoryNodes.insert(
+        formedHistoryNodes.begin(),
+        newIncrementNodes.begin(),
+        newIncrementNodes.end()
+    );
+
+    previousWrappedLength =
+        currentWrappedLength;
+
+    previousSupportRotationAngle =
+        state.supportRotationAngle;
+
+    std::cout
+        << "[MH1.17 HISTORY UPDATE]"
+        << " deltaLength="
+        << deltaLength
+        << " deltaAngle="
+        << deltaAngle
+        << " newNodes="
+        << newIncrementNodes.size()
+        << " historyNodes="
+        << formedHistoryNodes.size()
+        << std::endl;
+
+      
+
+    return true;
+}
+
+
+bool StretchHelixFormingProcess::
+appendFormedHistory(
+    std::vector<PipeNode>& nodes) const
+{
+    if (formedHistoryNodes.empty())
+        return true;
+
+    nodes.insert(
+        nodes.end(),
+        formedHistoryNodes.begin(),
+        formedHistoryNodes.end()
+    );
 
     return true;
 }
