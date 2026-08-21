@@ -219,6 +219,43 @@ private:
     bool appendFormedHistory(
         std::vector<PipeNode>& nodes
     ) const;
+
+    double previousSupportAxialPosition =
+        0.0;
+    std::size_t previousFormedReferenceIndex =
+        0;
+
+
+    double finalHelixCurvature =
+        0.0;
+
+    double finalHelixTorsion =
+        0.0;
+
+    double finalHelixRadius =
+        0.0;
+
+    double finalHelixRisePerRadian =
+        0.0;
+
+    double finalHelixPitch =
+        0.0;
+
+
+    double loadedHelixCurvature =
+        0.0;
+
+    double loadedHelixTorsion =
+        0.0;
+
+    double loadedHelixRadius =
+        0.0;
+
+    double loadedHelixRisePerRadian =
+        0.0;
+
+    double loadedHelixPitch =
+        0.0;
 };
 
 

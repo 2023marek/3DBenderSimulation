@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cmath>
 #include <algorithm>
+#include <limits>
 #include "Core/Forming/StretchHelixWrappingKinematicsBuilder.h"
 #include "Core/Forming/StretchHelixWrappingStateBuilder.h"
 #include "Core/Forming/StretchHelixWrappingStateAdvancer.h"
@@ -110,6 +111,146 @@ namespace
         return length;
     }
 
+
+    double distancePointToAxis(
+        const Vec3D& point,
+        const Vec3D& axisPoint,
+        const Vec3D& axisDirection)
+    {
+        Vec3D axis =
+            axisDirection.normalized();
+
+        if (axis.lengthSquared() < 1e-12)
+            return 0.0;
+
+        const Vec3D relative =
+            point - axisPoint;
+
+        const double axialProjection =
+            dot(
+                relative,
+                axis
+            );
+
+        const Vec3D radialVector =
+            relative
+            - axis * axialProjection;
+
+        return
+            radialVector.length();
+    }
+
+
+
+    struct RadiusStats
+    {
+        double minimum = 0.0;
+        double maximum = 0.0;
+        double average = 0.0;
+
+        bool valid = false;
+    };
+
+    RadiusStats calculateRadiusStats(
+        const std::vector<PipeNode>& nodes,
+        const Vec3D& axisPoint,
+        const Vec3D& axisDirection)
+    {
+        RadiusStats result;
+
+        if (nodes.empty())
+            return result;
+
+        double sum =
+            0.0;
+
+        double minimum =
+            std::numeric_limits<double>::max();
+
+        double maximum =
+            0.0;
+
+        for (const PipeNode& node : nodes)
+        {
+            const double radius =
+                distancePointToAxis(
+                    node.pos,
+                    axisPoint,
+                    axisDirection
+                );
+
+            minimum =
+                std::min(
+                    minimum,
+                    radius
+                );
+
+            maximum =
+                std::max(
+                    maximum,
+                    radius
+                );
+
+            sum +=
+                radius;
+        }
+
+        result.minimum =
+            minimum;
+
+        result.maximum =
+            maximum;
+
+        result.average =
+            sum
+            / static_cast<double>(
+                nodes.size()
+                );
+
+        result.valid =
+            true;
+
+        return result;
+    }
+
+    double helixRadiusFromCurvatureTorsion(
+        double curvature,
+        double torsion)
+    {
+        const double denominator =
+            curvature * curvature
+            + torsion * torsion;
+
+        if (!std::isfinite(denominator)
+            || denominator <= 1e-18)
+        {
+            return 0.0;
+        }
+
+        return
+            curvature
+            / denominator;
+    }
+
+
+    double helixRisePerRadianFromCurvatureTorsion(
+        double curvature,
+        double torsion)
+    {
+        const double denominator =
+            curvature * curvature
+            + torsion * torsion;
+
+        if (!std::isfinite(denominator)
+            || denominator <= 1e-18)
+        {
+            return 0.0;
+        }
+
+        return
+            torsion
+            / denominator;
+    }
 }
 
 bool StretchHelixFormingProcess::initialize(
@@ -126,6 +267,8 @@ bool StretchHelixFormingProcess::initialize(
     input =
         newInput;
 
+    previousFormedReferenceIndex =
+        0;
     startFrame =
         newStartFrame;
 
@@ -374,7 +517,60 @@ rebuildCurrentGeometry()
         << " currentNodes="
         << currentNodes.size()
         << std::endl;
+// temporary for debugging
+    bool framesValid =
+        true;
 
+    for (std::size_t i = 0;
+        i < currentNodes.size();
+        ++i)
+    {
+        const PipeNode& node =
+            currentNodes[i];
+
+        const double t2 =
+            node.T.lengthSquared();
+
+        const double n2 =
+            node.N.lengthSquared();
+
+        const double b2 =
+            node.B.lengthSquared();
+
+        if (t2 < 1e-12
+            || n2 < 1e-12
+            || b2 < 1e-12)
+        {
+            framesValid =
+                false;
+
+            std::cout
+                << "[MH1.18 INVALID FRAME]"
+                << " index="
+                << i
+                << " T2="
+                << t2
+                << " N2="
+                << n2
+                << " B2="
+                << b2
+                << " P=("
+                << node.pos.x << ", "
+                << node.pos.y << ", "
+                << node.pos.z
+                << ")"
+                << std::endl;
+
+            break;
+        }
+    }std::cout
+        << "[MH1.18 MESH FRAME CHECK]"
+        << " nodes="
+        << currentNodes.size()
+        << " valid="
+        << framesValid
+        << std::endl;
+    
     return
         !currentNodes.empty();
 }
@@ -501,6 +697,10 @@ void StretchHelixFormingProcess::reset()
     unloadingFraction =
         0.0;
 
+    previousSupportAxialPosition =
+        0.0;
+    previousFormedReferenceIndex =
+        0;
 }
 bool StretchHelixFormingProcess::
 isValid() const
@@ -690,6 +890,30 @@ rebuildStretchEvaluation()
     if (!mechanicalInput.isValid())
         return false;
 
+    finalHelixCurvature =
+        kinematics.curvature;
+
+    finalHelixTorsion =
+        kinematics.torsion;
+
+    finalHelixRadius =
+        helixRadiusFromCurvatureTorsion(
+            finalHelixCurvature,
+            finalHelixTorsion
+        );
+
+    finalHelixRisePerRadian =
+        helixRisePerRadianFromCurvatureTorsion(
+            finalHelixCurvature,
+            finalHelixTorsion
+        );
+
+    finalHelixPitch =
+        2.0
+        * 3.14159265358979323846
+        * finalHelixRisePerRadian;
+
+
     StretchBendingEvaluator evaluator;
 
     stretchEvaluation =
@@ -707,6 +931,73 @@ rebuildStretchEvaluation()
 
     loadedCurvature =
         stretchEvaluation.loadedCurvatureCommand;
+
+    loadedHelixCurvature =
+        loadedCurvature;
+
+
+
+    // Temporary until torsion springback is implemented.
+    loadedHelixTorsion =
+        finalHelixTorsion;
+
+    loadedHelixRadius =
+        helixRadiusFromCurvatureTorsion(
+            loadedHelixCurvature,
+            loadedHelixTorsion
+        );
+
+  
+    loadedHelixRisePerRadian =
+        helixRisePerRadianFromCurvatureTorsion(
+            loadedHelixCurvature,
+            loadedHelixTorsion
+        );
+
+    loadedHelixPitch =
+        2.0
+        * 3.14159265358979323846
+        * loadedHelixRisePerRadian;
+   
+    std::cout
+        << "[MH1.19A HELIX PARAMETERS]"
+        << " finalKappa="
+        << finalHelixCurvature
+        << " finalTau="
+        << finalHelixTorsion
+        << " finalRadius="
+        << finalHelixRadius
+        << " finalPitch="
+        << finalHelixPitch
+        << " loadedKappa="
+        << loadedHelixCurvature
+        << " loadedTau="
+        << loadedHelixTorsion
+        << " loadedRadius="
+        << loadedHelixRadius
+        << " loadedPitch="
+        << loadedHelixPitch
+        << std::endl;
+    const bool loadedTighter =
+        loadedHelixRadius
+        < finalHelixRadius;
+
+    const bool curvatureCompensated =
+        std::abs(
+            loadedHelixCurvature
+        )
+        >
+        std::abs(
+            finalHelixCurvature
+        );
+
+    std::cout
+        << "[MH1.19A HELIX ACCEPTANCE]"
+        << " loadedTighter="
+        << loadedTighter
+        << " curvatureCompensated="
+        << curvatureCompensated
+        << std::endl;
 
     predictedFinalCurvature =
         stretchEvaluation.predictedFinalCurvature;
@@ -730,8 +1021,7 @@ rebuildStretchEvaluation()
         << " ratio="
         << stretchEvaluation.springbackRatio
         << std::endl;
-    return
-        stretchEvaluation.valid;
+   
 
 
     std::cout
@@ -757,7 +1047,8 @@ rebuildStretchEvaluation()
         << " tension="
         << stretchEvaluation.commandedTension
         << std::endl;
-
+ return
+        stretchEvaluation.valid;
     
 }
 
@@ -804,16 +1095,24 @@ rebuildLoadedReferenceGeometry()
         << " targetKappa="
         << targetFinalCurvature
         << " loadedKappa="
-        << loadedCurvature
+        << loadedHelixCurvature
         << " predictedFinalKappa="
         << predictedFinalCurvature
         << " torsion="
-        << kinematics.torsion
+        << loadedHelixTorsion
+        << " theoreticalRadius="
+        << loadedHelixRadius
+        << " theoreticalPitch="
+        << loadedHelixPitch
         << " length="
         << input.pipeArcLength
         << " sampleStep="
         << input.sampleStep
         << std::endl;
+
+    // =====================================================
+    // VALIDATION
+    // =====================================================
 
     if (!input.isValid())
     {
@@ -835,7 +1134,9 @@ rebuildLoadedReferenceGeometry()
         return false;
     }
 
-    if (!std::isfinite(loadedCurvature))
+    if (!std::isfinite(
+        loadedHelixCurvature
+    ))
     {
         std::cout
             << "[STRETCH HELIX LOADED BUILD FAIL]"
@@ -845,23 +1146,56 @@ rebuildLoadedReferenceGeometry()
         return false;
     }
 
-    if (loadedCurvature <= 0.0)
+    if (loadedHelixCurvature <= 0.0)
     {
         std::cout
             << "[STRETCH HELIX LOADED BUILD FAIL]"
             << " reason=LoadedCurvatureNotPositive"
             << " loadedKappa="
-            << loadedCurvature
+            << loadedHelixCurvature
             << std::endl;
 
         return false;
     }
 
+    if (!std::isfinite(
+        loadedHelixTorsion
+    ))
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=LoadedTorsionNotFinite"
+            << std::endl;
+
+        return false;
+    }
+
+    if (!std::isfinite(
+        loadedHelixRadius
+    )
+        || loadedHelixRadius <= 0.0)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=LoadedRadiusInvalid"
+            << " radius="
+            << loadedHelixRadius
+            << std::endl;
+
+        return false;
+    }
+
+    // =====================================================
+    // BUILD LOADED CURVATURE / TORSION PROFILE
+    //
+    // Use explicit MH1.19A loaded helix parameters.
+    // =====================================================
+
     const CurvatureTorsionProfile loadedProfile =
         ConstantCurvatureTorsionProfileBuilder::build(
             input.pipeArcLength,
-            loadedCurvature,
-            kinematics.torsion
+            loadedHelixCurvature,
+            loadedHelixTorsion
         );
 
     std::cout
@@ -883,6 +1217,10 @@ rebuildLoadedReferenceGeometry()
 
         return false;
     }
+
+    // =====================================================
+    // INTEGRATE LOADED HELIX
+    // =====================================================
 
     SpatialCurveIntegrator integrator;
 
@@ -935,8 +1273,154 @@ rebuildLoadedReferenceGeometry()
         return false;
     }
 
+    // =====================================================
+    // MH1.19A.7 — THEORETICAL LOADED HELIX AXIS
+    //
+    // For constant kappa / tau:
+    //
+    // axisDirection ? tau*T0 + kappa*B0
+    //
+    // Frenet N0 points from the helix centerline toward
+    // the helix axis.
+    //
+    // axisPoint = P0 + N0 * R_loaded
+    // =====================================================
+
+    Vec3D loadedAxisDirection =
+        startFrame.T
+        * loadedHelixTorsion
+        + startFrame.B
+        * loadedHelixCurvature;
+
+    if (loadedAxisDirection.lengthSquared() < 1e-12)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=LoadedAxisDirectionInvalid"
+            << std::endl;
+
+        return false;
+    }
+
+    loadedAxisDirection =
+        loadedAxisDirection.normalized();
+
+    const Vec3D loadedNormal =
+        startFrame.N.normalized();
+
+    if (loadedNormal.lengthSquared() < 1e-12)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=LoadedStartNormalInvalid"
+            << std::endl;
+
+        return false;
+    }
+
+    const Vec3D loadedAxisPoint =
+        startFrame.P
+        + loadedNormal
+        * loadedHelixRadius;
+
+    // =====================================================
+    // MH1.19A.7 — MEASURE LOADED REFERENCE AROUND ITS
+    // OWN THEORETICAL AXIS
+    // =====================================================
+
+    const RadiusStats loadedStats =
+        calculateRadiusStats(
+            loadedReferenceResult.nodes,
+            loadedAxisPoint,
+            loadedAxisDirection
+        );
+
+    if (!loadedStats.valid)
+    {
+        std::cout
+            << "[STRETCH HELIX LOADED BUILD FAIL]"
+            << " reason=LoadedRadiusStatsInvalid"
+            << std::endl;
+
+        return false;
+    }
+
+    std::cout
+        << "[MH1.19A LOADED AXIS]"
+        << " point=("
+        << loadedAxisPoint.x
+        << ", "
+        << loadedAxisPoint.y
+        << ", "
+        << loadedAxisPoint.z
+        << ")"
+        << " direction=("
+        << loadedAxisDirection.x
+        << ", "
+        << loadedAxisDirection.y
+        << ", "
+        << loadedAxisDirection.z
+        << ")"
+        << std::endl;
+
+    std::cout
+        << "[MH1.19A LOADED RADIUS CHECK]"
+        << " theoreticalRadius="
+        << loadedHelixRadius
+        << " measuredAvg="
+        << loadedStats.average
+        << " measuredMin="
+        << loadedStats.minimum
+        << " measuredMax="
+        << loadedStats.maximum
+        << std::endl;
+
+    // =====================================================
+    // ACCEPTANCE
+    // =====================================================
+
+    const double averageError =
+        std::abs(
+            loadedStats.average
+            - loadedHelixRadius
+        );
+
+    const double radialSpread =
+        loadedStats.maximum
+        - loadedStats.minimum;
+
+    constexpr double radiusTolerance =
+        0.5;
+
+    const bool averageAccepted =
+        averageError <= radiusTolerance;
+
+    const bool spreadAccepted =
+        radialSpread <= radiusTolerance;
+
+    std::cout
+        << "[MH1.19A LOADED RADIUS ACCEPTANCE]"
+        << " averageError="
+        << averageError
+        << " radialSpread="
+        << radialSpread
+        << " averageAccepted="
+        << averageAccepted
+        << " spreadAccepted="
+        << spreadAccepted
+        << " accepted="
+        << (
+            averageAccepted
+            && spreadAccepted
+            )
+        << std::endl;
+
     return true;
 }
+
+
+
+ 
 const SpatialCurveIntegrationResult&
 StretchHelixFormingProcess::
 getFinalResult() const
@@ -1616,9 +2100,62 @@ appendIncomingGeometry(
             - activeFormingFrame.T
             * distanceFromActive;
 
+        node.T =
+            activeFormingFrame.T.normalized();
+
+        node.N =
+            activeFormingFrame.N.normalized();
+
+        node.B =
+            activeFormingFrame.B.normalized();
+
         nodes.push_back(
             node
         );
+
+        Vec3D T =
+            activeFormingFrame.T.normalized();
+
+        Vec3D N =
+            activeFormingFrame.N
+            - T * dot(
+                activeFormingFrame.N,
+                T
+            );
+
+        if (N.lengthSquared() < 1e-12)
+            return false;
+
+        N =
+            N.normalized();
+
+        Vec3D B =
+            cross(
+                T,
+                N
+            ).normalized();
+
+        N =
+            cross(
+                B,
+                T
+            ).normalized();
+
+
+
+        node.pos =
+            activeFormingFrame.P
+            - activeFormingFrame.T
+            * distanceFromActive;
+
+        node.T = T;
+        node.N = N;
+        node.B = B;
+
+        nodes.push_back(
+            node  
+        );
+       
     }
 
     std::cout
@@ -1868,16 +2405,27 @@ updateFormedHistory()
     Vec3D supportAxisDirection =
         supportAxisFrame.T;
 
+    const double deltaAxialPosition =
+        state.supportAxialPosition
+        - previousSupportAxialPosition;
+
+    if (!std::isfinite(deltaAxialPosition))
+    {
+        return false;
+    }
+
     if (supportAxisDirection.lengthSquared() < 1e-12)
         return false;
 
     supportAxisDirection =
         supportAxisDirection.normalized();
+
+
     if (std::abs(deltaAngle) > 1e-12)
-    {
         for (PipeNode& node :
             formedHistoryNodes)
         {
+            // Rotate old formed material with support.
             RigidTransformUtils::
                 rotateNodeAroundAxis(
                     node,
@@ -1885,8 +2433,12 @@ updateFormedHistory()
                     supportAxisDirection,
                     deltaAngle
                 );
+
+            // Move old formed material axially with support.
+            node.pos +=
+                supportAxisDirection
+                * deltaAxialPosition;
         }
-    }
     if (deltaLength <= 1e-12)
     {
         previousWrappedLength =
@@ -1918,28 +2470,73 @@ updateFormedHistory()
         return false;
     }
 
-    const std::size_t incrementSegments =
-        std::max<std::size_t>(
-            1,
-            static_cast<std::size_t>(
-                std::llround(
-                    deltaLength
-                    / input.sampleStep
-                )
-                )
-        );
-
-    const std::size_t maxSegments =
-        formingReference->nodes.size() - 1;
-
-    const std::size_t segmentCount =
-        std::min(
-            incrementSegments,
-            maxSegments
-        );
-
     const std::vector<PipeNode>& referenceNodes =
         formingReference->nodes;
+
+    const std::size_t lastReferenceIndex =
+        referenceNodes.size() - 1;
+
+    // =====================================================
+    // MH1.17B — CUMULATIVE MATERIAL INDEX
+    // =====================================================
+
+    const double formedFraction =
+        std::clamp(
+            currentWrappedLength
+            / input.pipeArcLength,
+            0.0,
+            1.0
+        );
+
+    const std::size_t targetFormedReferenceIndex =
+        std::min(
+            lastReferenceIndex,
+            static_cast<std::size_t>(
+                std::llround(
+                    formedFraction
+                    * static_cast<double>(
+                        lastReferenceIndex
+                        )
+                )
+                )
+        );
+
+    if (
+        targetFormedReferenceIndex
+        < previousFormedReferenceIndex
+        )
+    {
+        return false;
+    }
+
+    const std::size_t oldFormedReferenceIndex =
+        previousFormedReferenceIndex;
+
+    const std::size_t newSegmentCount =
+        targetFormedReferenceIndex
+        - previousFormedReferenceIndex;
+
+    // =====================================================
+    // NO NEW MATERIAL SAMPLES THIS STEP
+    // =====================================================
+
+    if (newSegmentCount == 0)
+    {
+        previousWrappedLength =
+            currentWrappedLength;
+
+        previousSupportRotationAngle =
+            state.supportRotationAngle;
+
+        previousSupportAxialPosition =
+            state.supportAxialPosition;
+
+        return true;
+    }
+
+    // =====================================================
+    // BUILD NEW INCREMENT
+    // =====================================================
 
     const Vec3D referenceOrigin =
         referenceNodes.front().pos;
@@ -1951,11 +2548,11 @@ updateFormedHistory()
         newIncrementNodes;
 
     newIncrementNodes.reserve(
-        segmentCount
+        newSegmentCount
     );
 
     for (std::size_t i = 1;
-        i <= segmentCount;
+        i <= newSegmentCount;
         ++i)
     {
         PipeNode node =
@@ -1972,7 +2569,6 @@ updateFormedHistory()
             node
         );
     }
-
     // =====================================================
 // MH1.17 — JUNCTION DIAGNOSTIC
 //
@@ -2100,21 +2696,123 @@ updateFormedHistory()
     previousSupportRotationAngle =
         state.supportRotationAngle;
 
+    previousSupportAxialPosition =
+        state.supportAxialPosition;
+
+    previousFormedReferenceIndex =
+        targetFormedReferenceIndex;
     std::cout
-        << "[MH1.17 HISTORY UPDATE]"
-        << " deltaLength="
-        << deltaLength
-        << " deltaAngle="
-        << deltaAngle
-        << " newNodes="
-        << newIncrementNodes.size()
+       
+     
+    << "[MH1.17 HISTORY UPDATE]"
+    << " deltaLength="
+    << deltaLength
+    << " deltaAngle="
+    << deltaAngle
+    << " deltaAxial="
+    << deltaAxialPosition
+    << " newNodes="
+    << newIncrementNodes.size()
+    << " historyNodes="
+    << formedHistoryNodes.size()
+    << std::endl;
+
+    std::cout
+        << "[MH1.17B SAMPLING]"
+        << " wrappedLength="
+        << currentWrappedLength
+        << " previousIndex="
+        << oldFormedReferenceIndex
+        << " targetIndex="
+        << targetFormedReferenceIndex
+        << " newSegments="
+        << newSegmentCount
         << " historyNodes="
         << formedHistoryNodes.size()
         << std::endl;
 
-      
+    if (!formedHistoryNodes.empty())
+    {
+        const Vec3D axisPoint =
+            supportAxisFrame.P;
 
-    return true;
+        const Vec3D axisDirection =
+            supportAxisFrame.T.normalized();
+
+        const PipeNode& historyNode =
+            formedHistoryNodes[
+                formedHistoryNodes.size() / 2
+            ];
+
+        const double historyRadius =
+            distancePointToAxis(
+                historyNode.pos,
+                axisPoint,
+                axisDirection
+            );
+
+        std::cout
+            << "[MH1.17C HISTORY RADIUS]"
+            << " radius="
+            << historyRadius
+            << " nodes="
+            << formedHistoryNodes.size()
+            << std::endl;
+    }
+
+    const Vec3D axisPoint =
+        supportAxisFrame.P;
+
+    const Vec3D axisDirection =
+        supportAxisFrame.T.normalized();
+
+    const RadiusStats historyStats =
+        calculateRadiusStats(
+            formedHistoryNodes,
+            axisPoint,
+            axisDirection
+        );
+
+    const RadiusStats loadedStats =
+        calculateRadiusStats(
+            loadedReferenceResult.nodes,
+            axisPoint,
+            axisDirection
+        );
+
+    const RadiusStats finalStats =
+        calculateRadiusStats(
+            finalResult.nodes,
+            axisPoint,
+            axisDirection
+        );
+
+    std::cout
+        << "[MH1.17C RADIAL COMPARISON]"
+        << " historyAvg="
+        << historyStats.average
+        << " historyMin="
+        << historyStats.minimum
+        << " historyMax="
+        << historyStats.maximum
+
+        << " loadedAvg="
+        << loadedStats.average
+        << " loadedMin="
+        << loadedStats.minimum
+        << " loadedMax="
+        << loadedStats.maximum
+
+        << " finalAvg="
+        << finalStats.average
+        << " finalMin="
+        << finalStats.minimum
+        << " finalMax="
+        << finalStats.maximum
+        << std::endl;
+
+     
+     return true;
 }
 
 

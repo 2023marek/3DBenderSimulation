@@ -1,4 +1,539 @@
-﻿DOTYCHCZAS
+﻿
+Yes. The key is to separate physical material length, sampling/indexing, and geometry shape. They are related, but not the same thing.
+
+1. Are we moving from 0 mm to 6500 mm with wrappedLength?
+
+Yes.
+
+Think of the original straight pipe as having a material coordinate s:
+
+Original pipe material coordinate
+
+
+s = 0 mm                                      s = 6500 mm
+|------------------------------------------------------|
+^                                                      ^
+start                                                  end
+
+During manufacturing, wrappedLength tells us how much of those 6500 mm has already passed through the forming point and become formed material.
+
+For example:
+
+wrappedLength = 2000 mm
+
+
+0                         2000                         6500
+|==========================|-----------------------------|
+       FORMED                     INCOMING
+       2000 mm                    4500 mm
+                            ^
+                            forming boundary
+
+Later:
+
+wrappedLength = 5000 mm
+
+
+0                                             5000    6500
+|===============================================|-------|
+                    FORMED                       incoming
+                                                 ^
+
+Finally:
+
+wrappedLength = 6500 mm
+
+
+0                                                     6500
+|======================================================|
+                         FORMED
+                                                       ^
+                                                wrappedLength
+
+So yes: wrappedLength progresses from 0 → 6500 mm.
+
+2. Why doesn't wrappedLength grow in equal sections?
+
+Because your simulation timestep dt is not always equal.
+
+Approximately:
+
+deltaLength =
+    centerlineSpeed * dt;
+
+Your speed is approximately:
+
+centerlineSpeed = 1020.2 mm/s
+
+Therefore if:
+
+dt = 0.100 s
+
+then:
+
+deltaLength ≈ 1020.2 × 0.100
+            ≈ 102.02 mm
+
+But if:
+
+dt = 0.049 s
+
+then:
+
+deltaLength ≈ 1020.2 × 0.049
+            ≈ 49.99 mm
+
+Exactly as your console showed:
+
+deltaLength=49.9896
+...
+deltaLength=102.02
+...
+deltaLength=52.03
+...
+deltaLength=102.02
+
+So the physical process is:
+
+time step varies
+      │
+      ▼
+dt varies
+      │
+      ▼
+centerlineSpeed × dt
+      │
+      ▼
+deltaLength varies
+      │
+      ▼
+wrappedLength grows by different amounts
+
+That's perfectly okay.
+
+3. What does wrappedLength / 6500 mean?
+
+Yes, / means division.
+
+We calculate:
+
+formedFraction =
+    currentWrappedLength
+    / input.pipeArcLength;
+
+For your pipe:
+
+pipeArcLength = 6500 mm
+
+Suppose:
+
+wrappedLength = 3250 mm
+
+Then:
+
+formedFraction =
+    3250 / 6500
+  = 0.5
+
+Meaning:
+
+50% of the pipe material has been formed.
+
+Another example:
+
+wrappedLength = 4875 mm
+
+
+4875 / 6500 = 0.75
+
+So:
+
+0.00 =   0%
+0.25 =  25%
+0.50 =  50%
+0.75 =  75%
+1.00 = 100%
+
+Graphically:
+
+0 mm                    3250 mm                    6500 mm
+|==========================|--------------------------|
+                            ^
+                     wrappedLength
+
+
+3250 / 6500
+     =
+    0.5
+     =
+    50%
+
+We are normalizing physical length into a fraction from 0 to 1.
+
+4. What does fraction × lastReferenceIndex do?
+
+Now we translate physical progress into a discrete node/index position.
+
+Your reference geometry has:
+
+26001 nodes
+
+Their indices are:
+
+0, 1, 2, 3, ... 25998, 25999, 26000
+
+Therefore:
+
+lastReferenceIndex = 26000;
+
+Notice:
+
+26001 nodes
+but
+last index = 26000
+
+because indexing starts at zero.
+
+Now suppose:
+
+wrappedLength = 3250
+pipeLength    = 6500
+
+First:
+
+fraction = 3250 / 6500
+         = 0.5
+
+Then:
+
+target index =
+    0.5 × 26000
+  = 13000
+
+Graphically:
+
+PHYSICAL MATERIAL
+
+
+0 mm                  3250 mm                    6500 mm
+|========================|--------------------------|
+                         ^
+                         50%
+
+
+
+
+REFERENCE NODE INDICES
+
+
+0                      13000                     26000
+|========================|--------------------------|
+                         ^
+                    target index
+
+So we are saying:
+
+If 50% of the material is formed, we should have reached approximately 50% of the reference material samples.
+
+5. Are we calculating the maximum index?
+
+No. The maximum index is already known:
+
+lastReferenceIndex = referenceNodes.size() - 1;
+
+For you:
+
+lastReferenceIndex = 26000
+
+We calculate the index corresponding to the current wrapped length.
+
+So:
+
+wrappedLength
+     │
+     ▼
+current fraction of pipe
+     │
+     ▼
+corresponding reference index
+
+Examples:
+
+wrappedLength     fraction       target index
+
+
+0                 0.00                0
+1625              0.25             6500
+3250              0.50            13000
+4875              0.75            19500
+6500              1.00            26000
+
+That's the purpose of targetFormedReferenceIndex.
+
+6. Is targetFormedReferenceIndex the same thing as "target index"?
+
+Yes.
+
+When I write:
+
+targetIndex
+
+in the diagrams, that's just shorthand for:
+
+targetFormedReferenceIndex
+
+The full C++ name is better because it says exactly what it represents:
+
+target
+  │
+  └── where we SHOULD be
+
+
+formed
+  │
+  └── formed material
+
+
+reference
+  │
+  └── index into referenceNodes
+
+
+index
+  │
+  └── discrete node number
+
+So:
+
+targetFormedReferenceIndex = the reference node index that corresponds to the current total amount of formed material.
+
+7. Then why targetIndex - previousIndex?
+
+Suppose previous timestep ended here:
+
+previousIndex = 24509
+
+Now current wrapped length says we should be here:
+
+targetIndex = 24917
+
+Therefore:
+
+24917 - 24509 = 408
+
+We need to manufacture 408 new material segments/samples.
+
+REFERENCE INDEX
+
+
+0 -------------------------24509---------24917----------26000
+                              |============|
+                                   408
+                               NEW MATERIAL
+
+Then store:
+
+previousFormedReferenceIndex =
+    targetFormedReferenceIndex;
+
+Next timestep starts from 24917.
+
+This is why cumulative sampling self-corrects.
+
+8. Why do we need Reference, Loaded, and History helixes?
+
+This is the most important conceptual question.
+
+They represent different things.
+
+Reference/final helix
+
+This answers:
+
+What shape do I ultimately want after the pipe is released?
+
+For example:
+
+YELLOW
+
+
+        final unloaded spring
+
+
+      ╭────╮
+    ╭─╯    ╰─╮
+   ╭╯        ╰╮
+   ╰╮        ╭╯
+    ╰─╮    ╭─╯
+      ╰────╯
+
+This is essentially your desired CAD/result geometry.
+
+Loaded helix
+
+This answers:
+
+What shape must the pipe have while the machine/support is still forcing it?
+
+Because of springback:
+
+loaded shape ≠ final shape
+
+You already have:
+
+targetKappa         = 0.00196003
+loadedKappa         = 0.00217781
+predictedFinalKappa = 0.00196003
+
+So you're deliberately bending it more tightly while loaded, knowing that it will relax afterward.
+
+Conceptually:
+
+       LOADED                     RELEASED
+
+
+      tighter                      larger
+       radius                       radius
+
+
+        ))))        unload          ))))
+      ))    ))      ------>       ))    ))
+      ))    ))                   ))        ))
+        ))))                       ))))))
+History helix
+
+This answers a completely different question:
+
+What has actually been manufactured so far?
+
+At 20%:
+
+incoming straight
+------------------------●))))
+
+
+                         ^
+                    forming point
+
+
+                         <--->
+                     formedHistory
+
+At 60%:
+
+incoming
+----------●))))))))))))))))))
+
+
+           <----------------->
+              formedHistory
+
+At 100%:
+
+●))))))))))))))))))))))))))))
+
+
+ <--------------------------->
+       complete history
+
+So formedHistoryNodes is not primarily a target shape.
+
+It is process state.
+
+It remembers material that has already passed through the forming point.
+
+Why the distinction matters for your current bug
+
+This connects directly to your visualization problem.
+
+During manufacturing, you want:
+
+                   support tube
+
+
+                  ╭─────────╮
+incoming --------●│         │
+                  ╰)))))))))╯
+                    ^
+                    |
+              formed HISTORY
+              touching support
+
+The history should therefore be created according to the loaded/support-constrained state.
+
+Yellow final/reference geometry should represent where the pipe wants to go after release:
+
+DURING FORMING
+
+
+            yellow FINAL reference
+                 . . . . . . .
+              .                 .
+            .                     .
+
+
+                 orange HISTORY
+                  )))))))))))
+                 [SUPPORT]
+
+Then:
+
+FORMING COMPLETE
+       │
+       ▼
+loaded helix touching support
+       │
+       ▼
+UNLOADING / SPRINGBACK
+       │
+       ▼
+orange moves outward
+       │
+       ▼
+yellow final/reference
+
+So yes, the distinction is needed if we want to model springback and manufacturing animation correctly.
+
+A useful mental model is:
+
+REFERENCE / FINAL
+"What do I want?"
+        │
+        │ mechanics determines overbend
+        ▼
+LOADED REFERENCE
+"What shape must the machine impose?"
+        │
+        │ manufacturing progresses
+        ▼
+FORMED HISTORY
+"What material has actually been formed so far?"
+        │
+        │ unloading
+        ▼
+FINAL CURRENT GEOMETRY
+"Where did the manufactured pipe end up?"
+
+And this explains why your current visual observation matters so much: 
+if formedHistoryNodes visually follow the yellow final/reference helix
+during forming, we are mixing the second and first concepts.
+
+The cumulative sampler can be perfectly correct while the history geometry 
+is still being placed at the wrong loaded radius. That is exactly why I would 
+leave MH1.17B alone now and diagnose history radius vs loaded-reference radius 
+vs final-reference
+radius next.
+
+//////////////////////////////........................
+\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+////////////////////////////////////////////////////
+
+
+
+
+
+
+DOTYCHCZAS
 
 contact front porusza się po helisie
         ↓
@@ -2844,3 +3379,777 @@ To jest dobry poziom modelu dla Workshop: geometria pozostaje
 curvature/torsion-driven, ale nie komplikujemy symulacji krótkiej 
 aktywnej strefy, której precyzyjna mechanika nie jest Ci
 \teraz potrzebna.
+
+
+[[[[[[[[[[[[[[[[[[[[[[[]]]]]]]]]]]]]]]]]]]]]]]
+===============================================
+[[[[[[[[[[[[[[[[[[[[[[[[[[
+]]]]]]]]]]]]]]]]]]]]]]]]]]
+
+================================================
+Good. Since LINE mode now behaves correctly, MESH failure is almost certainly a frame/orientation problem, not a centerline problem.
+
+Start with this principle:
+
+LINE needs:
+    node.pos
+
+
+MESH usually needs:
+    node.pos
+    node.T
+    node.N
+    node.B
+
+So MH1.18 should verify and repair T/N/B for the assembled Workshop geometry.
+
+incoming nodes
+    fixed frame
+
+
+new increment nodes
+    copied from reference frame
+
+
+old history nodes
+    rotated with rigid transform
+
+
+junction correction
+    currently changes only pos
+        ↓
+possible frame mismatch
+        ↓
+MESH disappears / breaks
+
+The first likely bug is exactly here: when you apply the positional junction correction, you move newIncrementNodes[i].pos, but you do not recompute the local frames afterward.
+
+That is harmless for LINE. For MESH it can invalidate the relationship between centerline direction and node.T.
+
+Step 1 — add frame diagnostic
+
+At the end of rebuildCurrentGeometry(), before return, add temporarily:
+
+bool framesValid =
+        || b2 < 1e-12)
+    {
+        framesValid =
+            false;
+
+
+        break;
+    }
+
+
+    worstTLength =
+        std::min(
+            worstTLength,
+            std::sqrt(t2)
+        );
+
+
+    worstNLength =
+        std::min(
+            worstNLength,
+            std::sqrt(n2)
+        );
+
+
+    worstBLength =
+        std::min(
+            worstBLength,
+            std::sqrt(b2)
+        );
+
+
+    worstTN =
+        std::max(
+            worstTN,
+            std::abs(
+                dot(node.T, node.N)
+            )
+        );
+
+
+    worstTB =
+        std::max(
+            worstTB,
+            std::abs(
+                dot(node.T, node.B)
+            )
+        );
+
+
+    worstNB =
+        std::max(
+            worstNB,
+            std::abs(
+                dot(node.N, node.B)
+            )
+        );
+}
+
+
+std::cout
+    << "[MH1.18 MESH FRAME CHECK]"
+    << " nodes="
+    << currentNodes.size()
+    << " valid="
+    << framesValid
+    << " minT="
+    << worstTLength
+    << " minN="
+    << worstNLength
+    << " minB="
+    << worstBLength
+    << " maxTN="
+    << worstTN
+    << " maxTB="
+    << worstTB
+    << " maxNB="
+    << worstNB
+    << std::endl;
+
+At a healthy state expect roughly:
+
+valid=1
+minT≈1
+minN≈1
+minB≈1
+
+
+maxTN≈0
+maxTB≈0
+maxNB≈0
+
+
+
+======================================================
+======================================================
+==========================================================
+==========================================================
+
+
+K. We leave MH1.17B unchanged. Now we add a diagnostic only—no 
+geometry correction yet.
+
+MH1.17C — history radius vs loaded radius vs final radius
+
+We want to answer one question numerically:
+
+DURING FORMING
+
+
+                    YELLOW final/unloaded
+                 . . . . . . . . . .
+              .                       .
+             .                         .
+
+
+              ORANGE manufacturing
+                  )))))))))))
+                ╭─────────────╮
+                │ SUPPORT TUBE│
+                ╰─────────────╯
+                       │
+                       │
+                  support axis
+
+Expected:
+
+orange/history radius ≈ loaded radius
+orange/history radius ≠ final/yellow radius
+
+If instead:
+
+history radius ≈ final radius
+
+we have identified your visual problem.
+
+MH1.17C.1 — add point-to-axis distance helper
+
+In StretchHelixFormingProcess.cpp, near your other local helpers:
+
+namespace
+{
+
+
+double distancePointToAxis(
+    const Vec3D& point,
+    const Vec3D& axisPoint,
+    const Vec3D& axisDirection)
+{
+    Vec3D axis =
+        axisDirection.normalized();
+
+
+    if (axis.lengthSquared() < 1e-12)
+        return 0.0;
+
+
+    const Vec3D relative =
+        point - axisPoint;
+
+
+    const double axialProjection =
+        dot(
+            relative,
+            axis
+        );
+
+
+    const Vec3D radialVector =
+        relative
+        - axis * axialProjection;
+
+
+    return
+        radialVector.length();
+}
+
+
+}
+
+This calculates:
+
+                    P pipe node
+                    *
+                   /
+                  / R
+                 /
+----------------O---------------- support axis
+
+It ignores position along the support axis and measures only
+perpendicular distance.
+
+
+////
+MH1.17C.2 — first use only one representative history node
+
+Do not begin with averages over 26,000 nodes. First make the diagnostic easy
+to understand.
+
+Inside updateFormedHistory(), after the history has been updated and after 
+the new increment has been inserted, add:
+
+if (!formedHistoryNodes.empty())
+{
+    const Vec3D axisPoint =
+        supportAxisFrame.P;
+
+
+    const Vec3D axisDirection =
+        supportAxisFrame.T.normalized();
+
+
+    const PipeNode& historyNode =
+        formedHistoryNodes[
+            formedHistoryNodes.size() / 2
+        ];
+
+
+    const double historyRadius =
+        distancePointToAxis(
+            historyNode.pos,
+            axisPoint,
+            axisDirection
+        );
+
+
+    std::cout
+        << "[MH1.17C HISTORY RADIUS]"
+        << " radius="
+        << historyRadius
+        << " nodes="
+        << formedHistoryNodes.size()
+        << std::endl;
+}
+
+This is only a first sanity check.
+
+For your current machine we roughly expect the loaded pipe centerline to be near:
+
+support radius + pipe radius
+
+
+500 + 10 = 510 mm
+
+although springback compensation can make the integrated loaded reference
+slightly different, so don't use 510 as an acceptance
+criterion yet.
+
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+OK. Start MH1.19A — FinalHelix ↔ LoadedHelix parameter comparison.
+We will not touch history/rendering yet. The goal is to verify the 
+compensation math first and resolve the suspicious loadedAvg=464 spread.
+
+CUSTOMER CAD / FINAL HELIX
+        │
+        ├── κ_final
+        ├── τ_final
+        ├── R_final
+        └── pitch_final
+        │
+        ▼
+SPRINGBACK COMPENSATION
+        │
+        ├── κ_loaded
+        └── τ_loaded
+        │
+        ▼
+LOADED HELIX
+        ├── R_loaded
+        └── pitch_loaded
+        │
+        ▼
+TOOL GEOMETRY
+        └── supportOuterRadius = R_loaded - pipeRadius
+
+Expected relationship for your current case:
+
+κ_loaded > κ_final
+
+
+R_loaded < R_final
+
+and later the loaded reference measured around its own correct axis 
+should satisfy:
+
+loadedMin ≈ loadedAvg ≈ loadedMax
+
+The current:
+
+loadedMin=408
+loadedAvg=464
+loadedMax=510
+
+is not acceptable as a constant-radius helix diagnostic.
+
+MH1.19A.1 — Add explicit helix parameter storage
+
+In StretchHelixFormingProcess.h, under private: add:
+
+double finalHelixCurvature =
+    0.0;
+
+
+double finalHelixTorsion =
+    0.0;
+
+
+double finalHelixRadius =
+    0.0;
+
+
+double finalHelixRisePerRadian =
+    0.0;
+
+
+double finalHelixPitch =
+    0.0;
+
+
+
+
+double loadedHelixCurvature =
+    0.0;
+
+
+double loadedHelixTorsion =
+    0.0;
+
+
+double loadedHelixRadius =
+    0.0;
+
+
+double loadedHelixRisePerRadian =
+    0.0;
+
+
+double loadedHelixPitch =
+    0.0;
+
+Do not reuse vague names if you can avoid it. We want the semantics explicit.
+
+MH1.19A.2 — Add helper formulas
+
+In the anonymous namespace of StretchHelixFormingProcess.cpp add:
+
+double helixRadiusFromCurvatureTorsion(
+    double curvature,
+    double torsion)
+{
+    const double denominator =
+        curvature * curvature
+        + torsion * torsion;
+
+
+    if (!std::isfinite(denominator)
+        || denominator <= 1e-18)
+    {
+        return 0.0;
+    }
+
+
+    return
+        curvature
+        / denominator;
+}
+
+
+
+
+double helixRisePerRadianFromCurvatureTorsion(
+    double curvature,
+    double torsion)
+{
+    const double denominator =
+        curvature * curvature
+        + torsion * torsion;
+
+
+    if (!std::isfinite(denominator)
+        || denominator <= 1e-18)
+    {
+        return 0.0;
+    }
+
+
+    return
+        torsion
+        / denominator;
+}
+
+For a constant helix:
+
+R = κ / (κ² + τ²)
+
+
+b = τ / (κ² + τ²)
+
+
+pitch = 2πb
+MH1.19A.3 — Define FINAL values first
+
+In rebuildStretchEvaluation() or immediately after the mechanical
+evaluation has successfully produced springback data, assign:
+
+finalHelixCurvature =
+    kinematics.curvature;
+
+
+finalHelixTorsion =
+    kinematics.torsion;
+
+Then:
+
+finalHelixRadius =
+    helixRadiusFromCurvatureTorsion(
+        finalHelixCurvature,
+        finalHelixTorsion
+    );
+
+
+finalHelixRisePerRadian =
+    helixRisePerRadianFromCurvatureTorsion(
+        finalHelixCurvature,
+        finalHelixTorsion
+    );
+
+
+finalHelixPitch =
+    2.0
+    * 3.14159265358979323846
+    * finalHelixRisePerRadian;
+
+For your current values this should come out near:
+
+κ_final ≈ 0.00196003
+τ_final ≈ 3.8432e-05
+R_final ≈ 510
+pitch_final ≈ 62.83
+MH1.19A.4 — Define LOADED values explicitly
+
+For now, use your current springback model exactly as it already exists.
+
+Curvature:
+
+loadedHelixCurvature =
+    stretchEvaluation.loadedCurvatureCommand;
+
+For torsion, since torsional springback is not yet implemented, temporarily:
+
+loadedHelixTorsion =
+    finalHelixTorsion;
+
+This is intentionally temporary.
+
+Then:
+
+loadedHelixRadius =
+    helixRadiusFromCurvatureTorsion(
+        loadedHelixCurvature,
+        loadedHelixTorsion
+    );
+
+
+loadedHelixRisePerRadian =
+    helixRisePerRadianFromCurvatureTorsion(
+        loadedHelixCurvature,
+        loadedHelixTorsion
+    );
+
+
+loadedHelixPitch =
+    2.0
+    * 3.14159265358979323846
+    * loadedHelixRisePerRadian;
+
+Now we have a clean mathematical loaded helix definition independent of rendering.
+
+MH1.19A.5 — Print direct comparison
+
+Add:
+
+std::cout
+    << "[MH1.19A HELIX PARAMETERS]"
+    << " finalKappa="
+    << finalHelixCurvature
+    << " finalTau="
+    << finalHelixTorsion
+    << " finalRadius="
+    << finalHelixRadius
+    << " finalPitch="
+    << finalHelixPitch
+    << " loadedKappa="
+    << loadedHelixCurvature
+    << " loadedTau="
+    << loadedHelixTorsion
+    << " loadedRadius="
+    << loadedHelixRadius
+    << " loadedPitch="
+    << loadedHelixPitch
+    << std::endl;
+
+Add acceptance:
+
+const bool loadedTighter =
+    loadedHelixRadius
+    < finalHelixRadius;
+
+
+const bool curvatureCompensated =
+    std::abs(
+        loadedHelixCurvature
+    )
+    >
+    std::abs(
+        finalHelixCurvature
+    );
+
+
+std::cout
+    << "[MH1.19A HELIX ACCEPTANCE]"
+    << " loadedTighter="
+    << loadedTighter
+    << " curvatureCompensated="
+    << curvatureCompensated
+    << std::endl;
+
+Expected:
+
+loadedTighter=1
+curvatureCompensated=1
+MH1.19A.6 — Do not derive support radius yet
+
+Not yet.
+
+We first want trustworthy values like:
+
+finalRadius ≈ 510
+loadedRadius ≈ 459
+
+Only after that do we calculate:
+
+requiredSupportOuterRadius
+=
+loadedRadius - pipeRadius
+
+That belongs to MH1.19B.
+
+MH1.19A.7 — Important: compare theoretical loaded radius with
+loadedReferenceResult
+
+Now we attack the loadedAvg=464 issue.
+
+You already have:
+
+loadedAvg=464.018
+loadedMin=408.05
+loadedMax=510.031
+
+After calculating:
+
+loadedHelixRadius
+
+print it next to the stats:
+
+std::cout
+    << "[MH1.19A LOADED RADIUS CHECK]"
+    << " theoreticalRadius="
+    << loadedHelixRadius
+    << " measuredAvg="
+    << loadedStats.average
+    << " measuredMin="
+    << loadedStats.minimum
+    << " measuredMax="
+    << loadedStats.maximum
+    << std::endl;
+
+This comparison is extremely important.
+
+Suppose you get:
+
+theoreticalRadius=459.1
+measuredAvg=464.0
+measuredMin=408.0
+measuredMax=510.0
+
+Then the problem is not primarily the (κ,τ) formula.
+
+The theoretical value is reasonable.
+
+The problem is that loadedReferenceResult is being integrated or measured
+relative to the wrong axis/frame.
+
+MH1.19A.8 — Why loadedMin/max are probably wrong
+
+Imagine the correct loaded helix axis:
+
+LOADED HELIX
+
+
+        ))))))))))
+      ))          ))
+     ))     O      ))
+      ))          ))
+        ))))))))))
+
+
+             O = loaded axis
+
+
+Every centerline point:
+distance to O ≈ R_loaded
+
+If you measure that same helix around a displaced axis:
+
+wrong axis X
+
+
+X             ))))))))))
+            ))          ))
+           ))     O      ))
+            ))          ))
+              ))))))))))
+
+then radius to X changes around the turn:
+
+near side  → small radius
+far side   → large radius
+
+which produces exactly:
+
+min << avg << max
+
+So the current:
+
+408 ... 510
+
+strongly suggests an axis-placement mismatch.
+
+MH1.19A.9 — Add theoretical-axis diagnostic, but don't change geometry yet
+
+For the loaded helix, derive its axis direction from its start frame 
+and (κ_loaded, τ_loaded):
+
+Vec3D loadedAxisDirection =
+    startFrame.T
+        * loadedHelixTorsion
+    + startFrame.B
+        * loadedHelixCurvature;
+
+
+if (loadedAxisDirection.lengthSquared() > 1e-12)
+{
+    loadedAxisDirection =
+        loadedAxisDirection.normalized();
+}
+
+Do not yet use it as the machine axis.
+
+Just print:
+
+std::cout
+    << "[MH1.19A LOADED AXIS DIR]"
+    << " dir=("
+    << loadedAxisDirection.x
+    << ", "
+    << loadedAxisDirection.y
+    << ", "
+    << loadedAxisDirection.z
+    << ")"
+    << std::endl;
+
+Later we will derive the corresponding axis point correctly.
+
+MH1.19A acceptance
+
+At the end of this phase we want to know:
+
+FINAL
+κ_final = ?
+τ_final = ?
+R_final = ?
+pitch_final = ?
+
+
+LOADED
+κ_loaded = ?
+τ_loaded = ?
+R_loaded = ?
+pitch_loaded = ?
+
+and establish:
+
+κ_loaded > κ_final
+R_loaded < R_final
+
+Then compare:
+
+R_loaded theoretical
+        versus
+loadedReferenceResult measured radius
+
+If theoretical is around 459 but measured radius varies 408…510, then
+MH1.19B/C will focus on deriving the correct loaded helix
+axis and required support tool from the loaded helix—not on modifying
+the sampler or history.
+
+For this phase, the most useful output will be:
+
+[MH1.19A HELIX PARAMETERS]
+[MH1.19A HELIX ACCEPTANCE]
+[MH1.19A LOADED RADIUS CHECK]
+[MH1.19A LOADED AXIS DIR]
+
+Once we see those numbers, we'll know whether the current loaded helix
+mathematics is correct before changing the machine/tool geometry.
