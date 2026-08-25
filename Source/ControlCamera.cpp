@@ -147,10 +147,60 @@ glm::mat4 ControlCamera::getViewMatrix()
         )
     );
 }
-glm::mat4 ControlCamera::getProjection(float width, float height)
+//glm::mat4 ControlCamera::getProjection(float width, float height)
+//{
+ //   return glm::perspective(glm::radians(45.0f), width / height, 0.1f, 2000.0f);
+//}
+glm::mat4 ControlCamera::getProjection(
+    float width,
+    float height)
 {
-    return glm::perspective(glm::radians(45.0f), width / height, 0.1f, 2000.0f);
+    if (width <= 0.0f
+        || height <= 0.0f)
+    {
+        return glm::mat4(1.0f);
+    }
+
+    const float aspect =
+        width / height;
+
+    // =====================================================
+    // ORTHOGRAPHIC VIEW SIZE
+    //
+    // distance is now also used as orthographic zoom.
+    //
+    // Larger distance:
+    //     more geometry visible
+    //
+    // Smaller distance:
+    //     zoom in
+    // =====================================================
+
+    const float halfHeight =
+        distance;
+
+    const float halfWidth =
+        halfHeight * aspect;
+
+    // Large depth range because workshop geometry
+    // can be several metres long.
+    const float nearPlane =
+        -10000.0f;
+
+    const float farPlane =
+        10000.0f;
+
+    return glm::ortho(
+        -halfWidth,
+        halfWidth,
+        -halfHeight,
+        halfHeight,
+        nearPlane,
+        farPlane
+    );
 }
+
+
 
 void ControlCamera::processMouseMovement(float dx, float dy)
 {

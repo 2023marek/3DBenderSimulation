@@ -4746,6 +4746,115 @@ debugTestStretchHelixWrappingKinematics()
     {
         return;
     }
+
+    const Frame& requiredSupportAxisFrame =
+        debugStretchHelixProcess
+        .getRequiredSupportAxisFrame();
+
+    const double requiredSupportOuterRadius =
+        debugStretchHelixProcess
+        .getRequiredSupportOuterRadius();
+
+    std::cout
+        << "[MH1.19C PROCESS TOOL]"
+        << " radius="
+        << requiredSupportOuterRadius
+        << " axisPoint=("
+        << requiredSupportAxisFrame.P.x
+        << ", "
+        << requiredSupportAxisFrame.P.y
+        << ", "
+        << requiredSupportAxisFrame.P.z
+        << ")"
+        << " axisDir=("
+        << requiredSupportAxisFrame.T.x
+        << ", "
+        << requiredSupportAxisFrame.T.y
+        << ", "
+        << requiredSupportAxisFrame.T.z
+        << ")"
+        << std::endl;
+
+    sim.getMachineSystem()
+        .setHelixSupportGeometry(
+            requiredSupportAxisFrame,
+            requiredSupportOuterRadius
+        );
+
+    const MachineModel& synchronizedMachineModel =
+        sim.getMachineSystem().getModel();
+
+    std::cout
+        << "[MH1.19C MACHINE SUPPORT]"
+        << " radius="
+        << synchronizedMachineModel.supportOuterRadius
+        << " axisPoint=("
+        << synchronizedMachineModel.supportAxisFrame.P.x
+        << ", "
+        << synchronizedMachineModel.supportAxisFrame.P.y
+        << ", "
+        << synchronizedMachineModel.supportAxisFrame.P.z
+        << ")"
+        << " axisDir=("
+        << synchronizedMachineModel.supportAxisFrame.T.x
+        << ", "
+        << synchronizedMachineModel.supportAxisFrame.T.y
+        << ", "
+        << synchronizedMachineModel.supportAxisFrame.T.z
+        << ")"
+        << std::endl;
+
+
+    const double radiusError =
+        std::abs(
+            synchronizedMachineModel.supportOuterRadius
+            - requiredSupportOuterRadius
+        );
+
+    const double axisPointError =
+        (
+            synchronizedMachineModel.supportAxisFrame.P
+            - requiredSupportAxisFrame.P
+            ).length();
+
+    const double axisDirectionDot =
+        dot(
+            synchronizedMachineModel.supportAxisFrame.T.normalized(),
+            requiredSupportAxisFrame.T.normalized()
+        );
+
+    constexpr double radiusTolerance =
+        1e-9;
+
+    constexpr double axisPointTolerance =
+        1e-9;
+
+    const bool radiusAccepted =
+        radiusError <= radiusTolerance;
+
+    const bool axisPointAccepted =
+        axisPointError <= axisPointTolerance;
+
+    const bool axisDirectionAccepted =
+        axisDirectionDot >= 1.0 - 1e-12;
+
+    const bool accepted1 =
+        radiusAccepted
+        && axisPointAccepted
+        && axisDirectionAccepted;
+
+    std::cout
+        << "[MH1.19C MACHINE SUPPORT ACCEPTANCE]"
+        << " radiusError="
+        << radiusError
+        << " axisPointError="
+        << axisPointError
+        << " axisDirectionDot="
+        << axisDirectionDot
+        << " accepted="
+        << accepted1
+        << std::endl;
+
     const StretchBendingEvaluationResult& mechanics =
         debugStretchHelixProcess.getStretchEvaluation();
 

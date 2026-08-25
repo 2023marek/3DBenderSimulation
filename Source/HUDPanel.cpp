@@ -137,35 +137,58 @@ void HUDPanel::render()
     if (!visible)
         return;
 
+    // =====================================================
+    // HUD STATE
+    // =====================================================
+
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_CULL_FACE);
 
     glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    // 1. Draw panel rectangles first
-    drawMainPanel();
-
-    // 2. Draw text after text shader setup
-    if (!textShader || fontTexture == 0)
-        return;
-
-    textShader->use();
-
-    glm::mat4 projection = glm::ortho(
-        0.0f,
-        static_cast<float>(windowWidth),
-        static_cast<float>(windowHeight),
-        0.0f
+    glBlendFunc(
+        GL_SRC_ALPHA,
+        GL_ONE_MINUS_SRC_ALPHA
     );
 
-    textShader->setMat4("projection", projection);
-    textShader->setInt("fontTex", 0);
+    // Draw panel rectangles.
+    drawMainPanel();
 
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, fontTexture);
+    // Draw text only when resources are valid.
+    if (textShader && fontTexture != 0)
+    {
+        textShader->use();
 
-    glBindVertexArray(textVAO);
+        glm::mat4 projection =
+            glm::ortho(
+                0.0f,
+                static_cast<float>(windowWidth),
+                static_cast<float>(windowHeight),
+                0.0f
+            );
+
+        textShader->setMat4(
+            "projection",
+            projection
+        );
+
+        textShader->setInt(
+            "fontTex",
+            0
+        );
+
+        glActiveTexture(
+            GL_TEXTURE0
+        );
+
+        glBindTexture(
+            GL_TEXTURE_2D,
+            fontTexture
+        );
+
+        glBindVertexArray(
+            textVAO
+        );
+
 
     float textX = 15.0f;
     float textY = 5.0f;
@@ -212,7 +235,7 @@ void HUDPanel::render()
         )
     );
 
-  
+
     drawText(
         textX,
         textY + lineH * 9,
@@ -220,7 +243,7 @@ void HUDPanel::render()
         glm::vec4(0.7f, 0.9f, 0.7f, 1.0f)
     );
 
-   
+
 
     drawText(
         textX,
@@ -370,13 +393,13 @@ void HUDPanel::render()
         stretchGeometryStream
             << "PREVIEW: "
             << visibilityState
-            << " | GEOMETRY: " 
+            << " | GEOMETRY: "
             << geometryState;
 
 
 
         drawText(
-            textX + 50.0f   ,
+            textX + 50.0f,
             textY + lineH * 18,
             stretchHeaderStream.str(),
             glm::vec4(1.0f, 0.65f, 0.2f, 1.0f)
@@ -418,7 +441,7 @@ void HUDPanel::render()
         );
 
         drawText(
-			textX + 70.0f,
+            textX + 70.0f,
             textY + lineH * 20,
             "LOADED=" + loadedVisibility,
             glm::vec4(
@@ -513,8 +536,13 @@ void HUDPanel::render()
     }
 
 
+}
+
     glBindVertexArray(0);
-    glBindTexture(GL_TEXTURE_2D, 0);
+    glDisable(GL_BLEND);
+   // glBindTexture(GL_TEXTURE_2D, 0);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 }
 
 

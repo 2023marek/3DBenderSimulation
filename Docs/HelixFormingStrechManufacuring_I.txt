@@ -4153,3 +4153,1378 @@ For this phase, the most useful output will be:
 
 Once we see those numbers, we'll know whether the current loaded helix
 mathematics is correct before changing the machine/tool geometry.
+
+
+===================================================================
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+OK. Start MH1.19B — derive the required support tube geometry from the loaded helix.
+
+This phase should still be calculation + machine-model update only. Do not change formedHistoryNodes yet.
+
+CUSTOMER CAD / FINAL HELIX
+        │
+        ▼
+R_final = 510
+pitch_final = 62.8319
+        │
+        ▼
+springback compensation
+        │
+        ▼
+LOADED HELIX
+R_loaded = 459.034
+pitch_loaded = 50.8975
+        │
+        ▼
+PIPE CENTERLINE ON TOOL
+        │
+        │ subtract pipe radius
+        ▼
+REQUIRED SUPPORT TUBE
+R_support = 459.034 - 10
+          = 449.034 mm
+
+Expected cross-section:
+
+        pipe centerline
+              *
+              |
+              | pipe radius = 10
+              |
+        ┌───────────────┐
+       /                 \
+      |    SUPPORT TUBE   |
+       \                 /
+        └───────────────┘
+              O
+          support axis
+
+O → pipe centerline = 459.034 mm
+O → support surface  = 449.034 mm
+MH1.19B.1 — add explicit calculated tooling values
+
+In StretchHelixFormingProcess.h, under private: add:
+
+double requiredSupportOuterRadius =
+    0.0;
+
+Frame requiredSupportAxisFrame;
+
+I would call them required..., because these are manufacturing outputs derived from the requested final helix, not original customer inputs.
+
+Also add public getters:
+
+double getRequiredSupportOuterRadius() const
+{
+    return requiredSupportOuterRadius;
+}
+
+const Frame& getRequiredSupportAxisFrame() const
+{
+    return requiredSupportAxisFrame;
+}
+MH1.19B.2 — derive pipe centerline radius
+
+Your loaded helix already gives:
+
+loadedHelixRadius
+
+which is the radius of the pipe centerline, not the tool surface.
+
+So first calculate pipe radius:
+
+const double pipeOuterRadius =
+    input.pipeSection.outerDiameter
+    * 0.5;
+
+For your case:
+
+OD = 20
+pipeOuterRadius = 10
+
+Then:
+
+requiredSupportOuterRadius =
+    loadedHelixRadius
+    - pipeOuterRadius;
+
+Expected:
+
+459.034 - 10 = 449.034 mm
+
+Add validation:
+
+if (!std::isfinite(requiredSupportOuterRadius)
+    || requiredSupportOuterRadius <= 0.0)
+{
+    std::cout
+        << "[MH1.19B SUPPORT FAIL]"
+        << " reason=InvalidSupportRadius"
+        << " loadedRadius="
+        << loadedHelixRadius
+        << " pipeRadius="
+        << pipeOuterRadius
+        << std::endl;
+
+    return false;
+}
+MH1.19B.3 — derive the support axis frame from loaded helix
+
+Use the loaded-helix axis that MH1.19A just proved correct.
+
+Inside the same calculation area:
+
+Vec3D loadedAxisDirection =
+    startFrame.T
+        * loadedHelixTorsion
+    + startFrame.B
+        * loadedHelixCurvature;
+
+if (loadedAxisDirection.lengthSquared() < 1e-12)
+{
+    return false;
+}
+
+loadedAxisDirection =
+    loadedAxisDirection.normalized();
+
+Then axis point:
+
+Vec3D loadedNormal =
+    startFrame.N.normalized();
+
+if (loadedNormal.lengthSquared() < 1e-12)
+{
+    return false;
+}
+
+const Vec3D loadedAxisPoint =
+    startFrame.P
+    + loadedNormal
+    * loadedHelixRadius;
+
+For your current case, this should remain close to:
+
+(-459.034, -500, 0)
+
+Now build the frame:
+
+requiredSupportAxisFrame.P =
+    loadedAxisPoint;
+
+requiredSupportAxisFrame.T =
+    loadedAxisDirection;
+
+For N/B, create a stable orthonormal frame.
+
+Start from the radial direction:
+
+requiredSupportAxisFrame.N =
+    (
+        startFrame.P
+        - loadedAxisPoint
+    ).normalized();
+
+Then:
+
+requiredSupportAxisFrame.B =
+    cross(
+        requiredSupportAxisFrame.T,
+        requiredSupportAxisFrame.N
+    ).normalized();
+
+requiredSupportAxisFrame.N =
+    cross(
+        requiredSupportAxisFrame.B,
+        requiredSupportAxisFrame.T
+    ).normalized();
+
+So:
+
+T = support axis direction
+N = radial direction toward forming point
+B = completes right-handed frame
+MH1.19B.4 — put the calculation in one helper
+
+I recommend adding:
+
+bool rebuildRequiredSupportGeometry();
+
+to StretchHelixFormingProcess.
+
+Then implementation:
+
+bool StretchHelixFormingProcess::
+rebuildRequiredSupportGeometry()
+{
+    requiredSupportOuterRadius =
+        0.0;
+
+    requiredSupportAxisFrame =
+        Frame{};
+
+    if (!std::isfinite(loadedHelixRadius)
+        || loadedHelixRadius <= 0.0)
+    {
+        return false;
+    }
+
+    const double pipeOuterRadius =
+        input.pipeSection.outerDiameter
+        * 0.5;
+
+    if (!std::isfinite(pipeOuterRadius)
+        || pipeOuterRadius <= 0.0)
+    {
+        return false;
+    }
+
+    requiredSupportOuterRadius =
+        loadedHelixRadius
+        - pipeOuterRadius;
+
+    if (!std::isfinite(requiredSupportOuterRadius)
+        || requiredSupportOuterRadius <= 0.0)
+    {
+        return false;
+    }
+
+    Vec3D axisDirection =
+        startFrame.T
+            * loadedHelixTorsion
+        + startFrame.B
+            * loadedHelixCurvature;
+
+    if (axisDirection.lengthSquared() < 1e-12)
+        return false;
+
+    axisDirection =
+        axisDirection.normalized();
+
+    const Vec3D loadedNormal =
+        startFrame.N.normalized();
+
+    if (loadedNormal.lengthSquared() < 1e-12)
+        return false;
+
+    const Vec3D axisPoint =
+        startFrame.P
+        + loadedNormal
+        * loadedHelixRadius;
+
+    requiredSupportAxisFrame.P =
+        axisPoint;
+
+    requiredSupportAxisFrame.T =
+        axisDirection;
+
+    requiredSupportAxisFrame.N =
+        (
+            startFrame.P
+            - axisPoint
+        ).normalized();
+
+    requiredSupportAxisFrame.B =
+        cross(
+            requiredSupportAxisFrame.T,
+            requiredSupportAxisFrame.N
+        ).normalized();
+
+    requiredSupportAxisFrame.N =
+        cross(
+            requiredSupportAxisFrame.B,
+            requiredSupportAxisFrame.T
+        ).normalized();
+
+    return true;
+}
+MH1.19B.5 — call it during initialization
+
+In initialize(), after:
+
+mechanicsValid =
+    rebuildStretchEvaluation();
+
+and after the loaded helix parameters have been calculated, call:
+
+if (mechanicsValid)
+{
+    if (!rebuildRequiredSupportGeometry())
+    {
+        std::cout
+            << "[STRETCH HELIX PROCESS INIT FAIL]"
+            << " reason=RequiredSupportGeometry"
+            << std::endl;
+
+        return false;
+    }
+}
+
+This must happen before Manufacturing history uses the support frame.
+
+The logical sequence becomes:
+
+rebuildKinematics()
+        ↓
+rebuildStretchEvaluation()
+        ↓
+calculate loaded helix κ/τ/R/pitch
+        ↓
+rebuildRequiredSupportGeometry()
+        ↓
+rebuildReferenceGeometry()
+        ↓
+rebuildLoadedReferenceGeometry()
+MH1.19B.6 — diagnostic
+
+Inside rebuildRequiredSupportGeometry() before return:
+
+std::cout
+    << "[MH1.19B REQUIRED SUPPORT]"
+    << " loadedCenterlineRadius="
+    << loadedHelixRadius
+    << " pipeOuterRadius="
+    << pipeOuterRadius
+    << " supportOuterRadius="
+    << requiredSupportOuterRadius
+    << " axisPoint=("
+    << requiredSupportAxisFrame.P.x
+    << ", "
+    << requiredSupportAxisFrame.P.y
+    << ", "
+    << requiredSupportAxisFrame.P.z
+    << ")"
+    << " axisDir=("
+    << requiredSupportAxisFrame.T.x
+    << ", "
+    << requiredSupportAxisFrame.T.y
+    << ", "
+    << requiredSupportAxisFrame.T.z
+    << ")"
+    << std::endl;
+
+Expected approximately:
+
+loadedCenterlineRadius=459.034
+pipeOuterRadius=10
+supportOuterRadius=449.034
+
+axisPoint=(-459.034,-500,0)
+axisDir=(0,0.0176443,0.999844)
+MH1.19B.7 — acceptance test
+
+Add:
+
+const double reconstructedCenterlineRadius =
+    requiredSupportOuterRadius
+    + pipeOuterRadius;
+
+const double supportRadiusError =
+    std::abs(
+        reconstructedCenterlineRadius
+        - loadedHelixRadius
+    );
+
+constexpr double tolerance =
+    1e-9;
+
+const bool accepted =
+    supportRadiusError <= tolerance;
+
+Print:
+
+std::cout
+    << "[MH1.19B SUPPORT ACCEPTANCE]"
+    << " reconstructedCenterlineRadius="
+    << reconstructedCenterlineRadius
+    << " expectedLoadedRadius="
+    << loadedHelixRadius
+    << " error="
+    << supportRadiusError
+    << " accepted="
+    << accepted
+    << std::endl;
+
+Expected:
+
+reconstructedCenterlineRadius=459.034
+expectedLoadedRadius=459.034
+error≈0
+accepted=1
+MH1.19B.8 — do NOT overwrite MachineModel yet
+
+For this checkpoint, leave:
+
+MachineModel.supportOuterRadius
+MachineModel.supportAxisFrame
+
+unchanged.
+
+Why? We first want to prove that the process-calculated tooling is correct.
+
+Architecture for now:
+
+MachineModel
+    current/debug support tool
+
+StretchHelixFormingProcess
+    requiredSupportOuterRadius
+    requiredSupportAxisFrame
+
+Once MH1.19B prints correct results, MH1.19C will synchronize the
+MachineModel support tube with these calculated manufacturing values.
+
+That prevents us from changing simulation and renderer simultaneously.
+
+MH1.19B acceptance
+
+Before moving on, we want:
+
+✔ final helix remains R=510
+✔ loaded helix remains R≈459.034
+✔ pipe radius = 10
+✔ required support outer radius≈449.034
+✔ support axis comes from loaded helix
+✔ support axis point≈(-459.034,-500,0)
+✔ reconstructed tool+pipe radius = loaded radius
+✔ acceptance=1
+✔ existing rendering remains unchanged for now
+
+Then MH1.19C will make the actual rendered/support-machine geometry use this
+derived tool, and only after that will we redirect formedHistoryNodes onto 
+the true loaded manufacturing 
+path.
+
+
+============================================================
+==========================================================
+====================================================
+OK. MH1.19C should connect the now-correct calculated tooling to both sides:
+
+StretchHelixFormingProcess
+        │
+        │ calculates
+        ▼
+requiredSupportAxisFrame
+requiredSupportOuterRadius = 449.034
+        │
+        ├──────────────► Manufacturing history
+        │                  rotates/grows on R_loaded
+        │
+        └──────────────► MachineModel
+                           │
+                           ▼
+                     support renderer
+
+Expected visual manufacturing sequence:
+
+CUSTOMER FINAL / YELLOW
+        . . . . . . . . . . . .        R_final = 510
+      .                         .
+     .                           .
+
+
+                 ORANGE LOADED
+                ))))))))))))))           R_loaded = 459.034
+             ╭──────────────────╮
+             │   SUPPORT TUBE   │          R_tool = 449.034
+             ╰──────────────────╯
+                      │
+                      │ loaded axis
+
+Then:
+
+FORMING COMPLETE
+orange ≈ loaded helix
+        │
+        ▼
+UNLOADING
+R: 459 → ... → 510
+        │
+        ▼
+orange ≈ yellow final CAD
+MH1.19C.1 — history must stop using the old supportAxisFrame
+
+This is the first and most important change.
+
+In:
+
+StretchHelixFormingProcess::
+updateFormedHistory()
+
+you probably have:
+
+const Vec3D supportAxisPoint =
+    supportAxisFrame.P;
+
+Vec3D supportAxisDirection =
+    supportAxisFrame.T;
+
+Change that to:
+
+const Vec3D supportAxisPoint =
+    requiredSupportAxisFrame.P;
+
+Vec3D supportAxisDirection =
+    requiredSupportAxisFrame.T;
+
+Keep:
+
+if (supportAxisDirection.lengthSquared() < 1e-12)
+    return false;
+
+supportAxisDirection =
+    supportAxisDirection.normalized();
+
+This changes the actual manufacturing history from the old axis near:
+
+(-510,-500,0)
+
+to the compensated loaded axis:
+
+(-459.034,-500,0)
+
+Do not touch cumulative sampling, junction correction, deltaAngle, or deltaAxial.
+
+MH1.19C.2 — also change radial diagnostics to the required loaded axis
+
+Your current MH1.17C diagnostic probably still uses:
+
+const Vec3D axisPoint =
+    supportAxisFrame.P;
+
+const Vec3D axisDirection =
+    supportAxisFrame.T.normalized();
+
+Change this to:
+
+const Vec3D axisPoint =
+    requiredSupportAxisFrame.P;
+
+const Vec3D axisDirection =
+    requiredSupportAxisFrame.T.normalized();
+
+This is essential; otherwise we would manufacture around one axis 
+but measure around another.
+
+Expected after the fix:
+
+historyAvg ≈ 459.034
+
+rather than:
+
+historyAvg ≈ 510
+MH1.19C.3 — update appendFormedGeometry() only if it is still active
+
+MH1.17 should now use:
+
+updateFormedHistory()
+appendFormedHistory()
+
+so the old:
+
+appendFormedGeometry()
+
+should no longer drive current forming geometry.
+
+If it is truly disconnected, do not modify it further.
+
+If it is still called anywhere during Manufacturing Stretch Helix, replace its:
+
+supportAxisFrame
+
+with:
+
+requiredSupportAxisFrame
+
+too.
+
+But preferably verify that rebuildCurrentGeometry() is now only:
+
+rebuildCurrentGeometry()
+    │
+    ├── updateFormedHistory()
+    ├── appendIncomingGeometry()
+    └── appendFormedHistory()
+MH1.19C.4 — expose calculated tool geometry
+
+You already added or should add these public getters:
+
+double
+getRequiredSupportOuterRadius() const
+{
+    return requiredSupportOuterRadius;
+}
+
+const Frame&
+getRequiredSupportAxisFrame() const
+{
+    return requiredSupportAxisFrame;
+}
+
+These are the values that AppController will transfer to MachineModel.
+
+MH1.19C.5 — important initialization change
+
+There is now a conceptual redundancy.
+
+Previously:
+
+MachineModel supportAxisFrame
+        ↓
+passed into process initialize()
+
+But now:
+
+customer final helix
+        ↓
+springback
+        ↓
+process calculates requiredSupportAxisFrame
+
+Therefore the process no longer needs MachineModel to tell
+it what the support axis is.
+
+The correct direction is now:
+
+BEFORE
+
+MachineModel → StretchHelixFormingProcess
+
+
+NOW
+
+StretchHelixFormingProcess → calculated tool → MachineModel
+
+For this checkpoint, don't immediately break the API. Leave:
+
+initialize(
+    input,
+    referenceStartFrame,
+    supportAxisFrame
+);
+
+temporarily if removing it would create many changes.
+
+But inside Manufacturing logic use:
+
+requiredSupportAxisFrame
+
+as the source of truth.
+
+Later MH1.19C cleanup can remove that third initialization argument entirely.
+
+MH1.19C.6 — transfer calculated tool to MachineModel
+
+After:
+
+const bool processInitialized =
+    debugStretchHelixProcess.initialize(...);
+
+and after checking:
+
+if (!processInitialized)
+    return;
+
+we need to update the actual machine model.
+
+Architecturally I prefer not to let:
+
+StretchHelixFormingProcess
+
+modify MachineModel directly.
+
+Keep:
+
+FormingProcess → result
+AppController/SimulationController → coordination
+MachineSystem → MachineModel
+
+So in AppController conceptually:
+
+const Frame& requiredAxis =
+    debugStretchHelixProcess
+        .getRequiredSupportAxisFrame();
+
+const double requiredRadius =
+    debugStretchHelixProcess
+        .getRequiredSupportOuterRadius();
+
+Then transfer those values to MachineModel.
+
+If MachineSystem already gives a mutable model:
+
+MachineModel& machineModel =
+    sim.getMachineSystem().getModel();
+
+then:
+
+machineModel.supportAxisFrame =
+    requiredAxis;
+
+machineModel.supportOuterRadius =
+    requiredRadius;
+
+If getModel() returns only:
+
+const MachineModel&
+
+do not remove constness with const_cast.
+
+Instead add a proper MachineSystem method, for example:
+
+void setHelixSupportGeometry(
+    const Frame& axisFrame,
+    double outerRadius);
+
+That is cleaner.
+
+MH1.19C.7 — recommended MachineSystem setter
+
+If needed, in MachineSystem.h:
+
+void setHelixSupportGeometry(
+    const Frame& axisFrame,
+    double outerRadius);
+
+In .cpp:
+
+void MachineSystem::
+setHelixSupportGeometry(
+    const Frame& axisFrame,
+    double outerRadius)
+{
+    model.supportAxisFrame =
+        axisFrame;
+
+    model.supportOuterRadius =
+        outerRadius;
+}
+
+Then AppController becomes:
+
+sim.getMachineSystem()
+    .setHelixSupportGeometry(
+        debugStretchHelixProcess
+            .getRequiredSupportAxisFrame(),
+        debugStretchHelixProcess
+            .getRequiredSupportOuterRadius()
+    );
+
+That preserves your architectural rule:
+
+StretchHelixFormingProcess
+    does NOT own MachineModel
+
+AppController
+    coordinates
+
+MachineSystem
+    owns MachineModel
+MH1.19C.8 — add synchronization diagnostic
+
+Immediately after transferring it:
+
+const MachineModel& machineModel =
+    sim.getMachineSystem().getModel();
+
+std::cout
+    << "[MH1.19C MACHINE SUPPORT]"
+    << " radius="
+    << machineModel.supportOuterRadius
+    << " axisPoint=("
+    << machineModel.supportAxisFrame.P.x
+    << ", "
+    << machineModel.supportAxisFrame.P.y
+    << ", "
+    << machineModel.supportAxisFrame.P.z
+    << ")"
+    << " axisDir=("
+    << machineModel.supportAxisFrame.T.x
+    << ", "
+    << machineModel.supportAxisFrame.T.y
+    << ", "
+    << machineModel.supportAxisFrame.T.z
+    << ")"
+    << std::endl;
+
+Expected:
+
+radius=449.034
+axisPoint=(-459.034,-500,0)
+axisDir=(0,0.0176443,0.999844)
+
+It must match:
+
+[MH1.19B REQUIRED SUPPORT]
+MH1.19C.9 — support renderer must read MachineModel
+
+The actual rendered support tube must use:
+
+machineModel.supportAxisFrame
+machineModel.supportOuterRadius
+
+not hard-coded debug values such as:
+
+500.0
+
+or:
+
+Vec3D{-510,-500,0}
+
+This is critical.
+
+The renderer side should conceptually receive:
+
+MachineModel
+    │
+    ├── supportAxisFrame
+    └── supportOuterRadius
+             │
+             ▼
+        support renderer
+
+If your support tube is currently drawn directly inside GLView/debug 
+code from constants, do not duplicate the calculation there.
+Redirect that rendering to the machine values.
+
+MH1.19C.10 — first test before full playback
+
+After initialization, console should show the same geometry three times:
+
+PROCESS CALCULATION
+[MH1.19B REQUIRED SUPPORT]
+radius=449.034
+axis=(-459.034,...)
+
+        ↓
+
+MACHINE MODEL
+[MH1.19C MACHINE SUPPORT]
+radius=449.034
+axis=(-459.034,...)
+
+        ↓
+
+RENDERER
+same support tube
+
+If MachineModel still says:
+
+radius=500
+
+stop there—we haven't synchronized tooling.
+
+MH1.19C.11 — manufacturing test
+
+Then use:
+
+J
+H
+H
+H
+
+Expected radial result:
+
+[MH1.17C RADIAL COMPARISON]
+
+historyAvg ≈ 459
+loadedAvg  ≈ 459
+finalAvg   ≈ 510
+
+But one warning: your existing loadedStats and finalStats must each be
+measured around their corresponding axes.
+
+Do not compare all three against one shared axis and interpret the
+averages directly.
+
+For MH1.19C the most important immediate check is:
+
+history radius around requiredSupportAxisFrame
+        ≈
+loadedHelixRadius
+        ≈
+459.034
+
+So add a dedicated acceptance:
+
+const double historyRadiusError =
+    std::abs(
+        historyStats.average
+        - loadedHelixRadius
+    );
+
+constexpr double historyRadiusTolerance =
+    1.0;
+
+const bool historyOnLoadedTool =
+    historyRadiusError
+    <= historyRadiusTolerance;
+
+std::cout
+    << "[MH1.19C HISTORY TOOL ACCEPTANCE]"
+    << " historyAvg="
+    << historyStats.average
+    << " loadedRadius="
+    << loadedHelixRadius
+    << " error="
+    << historyRadiusError
+    << " accepted="
+    << historyOnLoadedTool
+    << std::endl;
+
+Expected eventually:
+
+historyAvg≈459.034
+loadedRadius=459.034
+error small
+accepted=1
+Expected visual effect
+
+Before MH1.19C:
+
+yellow final / R510
+        . . . . . . .
+      .               .
+     .    ORANGE      .
+       ))))))))))       ← orange also ~R510
+
+       SUPPORT old
+
+After MH1.19C:
+
+yellow final / R510
+        . . . . . . . . .
+      .                   .
+     .                     .
+
+           orange loaded / R459
+             ))))))))))
+          ╭──────────────╮
+          │ SUPPORT R449 │
+          ╰──────────────╯
+
+During unloading:
+
+R459                           R510
+orange loaded                  yellow CAD
+   )))))                         . . .
+      \                           /
+       \       springback        /
+        ───────────────────────►
+MH1.19C acceptance
+
+We want:
+
+✔ requiredSupportOuterRadius = 449.034
+✔ MachineModel receives 449.034
+✔ MachineModel axis matches loaded axis
+✔ rendered support tube moves/resizes accordingly
+✔ incoming remains fixed
+✔ history still grows incrementally
+✔ history rotates + advances axially
+✔ historyAvg moves from ~510 to ~459
+✔ history remains tangent/continuous
+✔ cumulative sampler remains correct
+✔ MESH framesValid=1
+✔ LoadedHold history visually matches loaded helix
+✔ unloading expands toward yellow R=510
+
+The most important checkpoint is before changing the renderer: first redirect 
+updateFormedHistory() from supportAxisFrame to requiredSupportAxisFrame, 
+run a few H steps, and inspect [MH1.19C HISTORY TOOL ACCEPTANCE]. 
+If that becomes ≈459/accepted=1, the process side is correct; 
+then synchronize the rendered support
+tube.
+
+
+================================================================
+===============================================================
+=================================================================
+
+Yes — MH1.19C.2 is a clean PASS.
+
+Your diagnostic is exactly what we wanted:
+
+historyAvg=459.034
+historyMin=459.034
+historyMax=459.034
+
+loadedAvg=459.034
+loadedMin=459.033
+loadedMax=459.034
+
+expectedLoadedRadius=459.034
+
+This proves something important:
+
+FORMED HISTORY
+      │
+      ▼
+is now built around
+requiredSupportAxisFrame
+      │
+      ▼
+same radius as LOADED HELIX
+
+So the process-side geometry is now correct.
+
+Customer final helix
+R = 510
+    │
+    ▼ compensation
+Loaded helix
+R = 459.034
+    │
+    ▼
+Required support
+R = 449.034
+    │
+    ▼
+History during forming
+R = 459.034   ✓
+
+Now we can safely continue.
+
+MH1.19C.3 — Check whether appendFormedGeometry() is still active
+
+The purpose here is not to modify it automatically. First determine
+whether it is dead code.
+
+Your desired workflow should now be:
+
+rebuildCurrentGeometry()
+        │
+        ├── updateFormedHistory()
+        │
+        ├── appendIncomingGeometry()
+        │
+        └── appendFormedHistory()
+
+It should not be:
+
+rebuildCurrentGeometry()
+        │
+        └── appendFormedGeometry()
+
+Open:
+
+StretchHelixFormingProcess::
+rebuildCurrentGeometry()
+
+and verify you have something equivalent to:
+
+if (!updateFormedHistory())
+{
+    return false;
+}
+
+if (!appendIncomingGeometry(
+    currentNodes
+))
+{
+    return false;
+}
+
+if (!appendFormedHistory(
+    currentNodes
+))
+{
+    return false;
+}
+
+If there is no call to:
+
+appendFormedGeometry(...)
+
+then do nothing to that function.
+
+I would actually mark it temporarily:
+
+// LEGACY MH1 PREFIX REBUILD
+// No longer used by Workshop incremental-history workflow.
+bool StretchHelixFormingProcess::
+appendFormedGeometry(
+    std::vector<PipeNode>& nodes) const
+{
+    ...
+}
+
+Do not delete it yet.
+
+Also search the project for:
+
+appendFormedGeometry(
+
+If the only matches are:
+
+declaration
+definition
+
+then it is inactive.
+
+That gives us:
+
+OLD
+full prefix regenerated every step
+
+        X
+
+NEW
+persistent formedHistoryNodes
+updated incrementally
+
+That distinction is fundamental.
+
+MH1.19C.4 — Expose calculated tooling geometry
+
+Now StretchHelixFormingProcess knows the tooling required to 
+manufacture the customer's requested helix.
+
+Currently that information is private:
+
+requiredSupportOuterRadius
+requiredSupportAxisFrame
+
+But AppController will shortly need it to configure MachineModel.
+
+So in StretchHelixFormingProcess.h, in public:, add:
+
+double getRequiredSupportOuterRadius() const
+{
+    return requiredSupportOuterRadius;
+}
+
+const Frame& getRequiredSupportAxisFrame() const
+{
+    return requiredSupportAxisFrame;
+}
+
+If you prefer declarations in .h and definitions in .cpp:
+
+double getRequiredSupportOuterRadius() const;
+
+const Frame&
+getRequiredSupportAxisFrame() const;
+
+Then .cpp:
+
+double StretchHelixFormingProcess::
+getRequiredSupportOuterRadius() const
+{
+    return
+        requiredSupportOuterRadius;
+}
+
+const Frame&
+StretchHelixFormingProcess::
+getRequiredSupportAxisFrame() const
+{
+    return
+        requiredSupportAxisFrame;
+}
+
+I prefer this second version if most of your class already uses 
+out-of-line definitions.
+
+Why expose getters instead of exposing members?
+
+Because we want:
+
+AppController
+    can READ calculated manufacturing requirements
+
+but not:
+
+AppController
+    can arbitrarily modify internal process calculations
+
+So:
+
+StretchHelixFormingProcess
+        OWNS calculation
+
+AppController
+        READS result
+
+MachineSystem
+        receives result
+
+That preserves your architecture.
+
+MH1.19C.5 — Initialization direction has changed
+
+This is the conceptual part worth understanding carefully.
+
+Earlier we had:
+
+MachineModel
+    │
+    │ provides support axis
+    ▼
+StretchHelixFormingProcess
+
+That made sense when we thought:
+
+the support tube is already known, and we simulate wrapping onto it.
+
+But your actual workshop problem is different.
+
+The customer specifies the finished helix.
+
+So the correct dependency is:
+
+CUSTOMER CAD
+     │
+     ▼
+StretchHelixFormingProcess
+     │
+     ├── calculate final helix
+     ├── compensate springback
+     ├── calculate loaded helix
+     └── calculate required tooling
+                  │
+                  ▼
+              MachineModel
+
+This means the support tube is no longer an input to the calculation.
+
+It is an output of the manufacturing calculation.
+
+Current temporary API
+
+You currently have:
+
+initialize(
+    input,
+    referenceStartFrame,
+    supportAxisFrame
+);
+
+But internally we now use:
+
+requiredSupportAxisFrame
+
+and not the passed:
+
+supportAxisFrame
+
+for the actual MH1.17 manufacturing history.
+
+Therefore the third argument is becoming obsolete.
+
+For now, do not remove it yet.
+
+Keep:
+
+debugStretchHelixProcess.initialize(
+    input,
+    referenceStartFrame,
+    supportAxisFrame
+);
+
+so we don't create unnecessary compile changes while MH1.19C is still
+being integrated.
+
+But conceptually mark it as transitional.
+
+You can add a comment in the header:
+
+bool initialize(
+    const StretchHelixWrappingInput& newInput,
+    const Frame& newStartFrame,
+
+    // Temporary legacy argument.
+    // MH1.19 derives the actual required support axis
+    // from loaded helix compensation.
+    const Frame& newSupportAxisFrame
+);
+
+Later, after MachineModel synchronization works, we should simplify it to:
+
+bool initialize(
+    const StretchHelixWrappingInput& newInput,
+    const Frame& newStartFrame
+);
+
+That will complete the dependency reversal.
+
+What MH1.19C.3–C.5 achieve
+
+After these three steps, architecture becomes:
+
+                   CUSTOMER CAD
+                        │
+                        ▼
+             StretchHelixFormingProcess
+                        │
+                 final κ, τ, R
+                        │
+                        ▼
+                springback model
+                        │
+                        ▼
+                loaded κ, τ, R
+                        │
+             ┌──────────┴──────────┐
+             │                     │
+             ▼                     ▼
+      formedHistory          required tooling
+        R=459.034            Rtool=449.034
+                                   │
+                                   ▼
+                              public getters
+                                   │
+                                   ▼
+                              AppController
+
+But we have not yet crossed this boundary:
+
+AppController
+      │
+      ▼
+MachineModel
+
+That is precisely MH1.19C.6–C.8.
+
+Before proceeding to C.6
+
+You should confirm these three things:
+
+✔ rebuildCurrentGeometry uses updateFormedHistory + appendFormedHistory
+✔ appendFormedGeometry is no longer called during Workshop forming
+✔ public getters compile:
+   getRequiredSupportOuterRadius()
+   getRequiredSupportAxisFrame()
+
+And leave the 3-argument initialize() temporarily unchanged.
+
+Once those compile successfully, MH1.19C.6 will be the important
+architectural handoff:
+
+Process-calculated tool
+        ↓
+AppController
+        ↓
+MachineSystem
+        ↓
+MachineModel
+        ↓
+renderer
+
+That is where the actual visible support tube will finally become the 
+calculated 449.034 mm tool rather than the old debug 
+500 mm support.

@@ -18,6 +18,14 @@ struct MachineRenderData
 {
     Frame machineEntryFrame;
 
+    Frame supportAxisFrame;
+
+    double supportOuterRadius =
+        0.0;
+
+    bool supportVisible =
+        false;
+
     Vec3D bendDieCenter = { 0.0, 0.0, 0.0 };
 
     double bendDieRadius = 20.0;

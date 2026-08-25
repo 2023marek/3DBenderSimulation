@@ -66,6 +66,26 @@ public:
     {
         MachineRenderData data;
 
+        // Copy static machine parts into render snapshot.
+        data.parts =
+            model.parts;
+
+        // =====================================================
+        // MH1.19C — HELIX SUPPORT TOOL
+        // =====================================================
+
+        data.supportAxisFrame =
+            model.supportAxisFrame;
+
+        data.supportOuterRadius =
+            model.supportOuterRadius;
+
+        data.supportVisible =
+            true;
+
+      
+
+
         data.machineEntryFrame =
             model.machineEntryFrame;
 
@@ -109,11 +129,44 @@ public:
             + model.machineEntryFrame.N * (data.bendDieRadius * bendSign);
 
         // Copy static machine parts into render snapshot.
-        data.parts =
-            model.parts;
+       
 
+      //  std::cout
+      //      << "[MH1.19C RENDER SUPPORT DATA]"
+       //     << " radius="
+     //       << data.supportOuterRadius
+      //      << " axisPoint=("
+     //       << data.supportAxisFrame.P.x
+     //       << ", "
+     //       << data.supportAxisFrame.P.y
+     //       << ", "
+    //        << data.supportAxisFrame.P.z
+    //        << ")"
+    //        << " axisDir=("
+    //        << data.supportAxisFrame.T.x
+    //        << ", "
+    //        << data.supportAxisFrame.T.y
+    //        << ", "
+    //        << data.supportAxisFrame.T.z
+     //       << ")"
+    //        << std::endl;
         return data;
     }
+
+    void setHelixSupportGeometry(
+        const Frame& axisFrame,
+        double outerRadius)
+    {
+        if (outerRadius <= 0.0)
+            return;
+
+        model.supportAxisFrame =
+            axisFrame;
+
+        model.supportOuterRadius =
+            outerRadius;
+    }
+
 
 private:
     MachineModel model;

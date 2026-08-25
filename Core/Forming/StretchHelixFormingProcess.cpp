@@ -320,6 +320,10 @@ bool StretchHelixFormingProcess::initialize(
     mechanicsValid =
         rebuildStretchEvaluation();
 
+
+    
+
+
     // =====================================================
     // TARGET REFERENCE GEOMETRY
     // =====================================================
@@ -342,13 +346,24 @@ bool StretchHelixFormingProcess::initialize(
     {
         if (!rebuildLoadedReferenceGeometry())
         {
+           std::cout
+               << "[STRETCH HELIX PROCESS INIT FAIL]"
+                << " reason=LoadedGeometry"
+              << std::endl;
+
+            return false;
+        }
+
+        if (!rebuildRequiredSupportGeometry())
+        {
             std::cout
                 << "[STRETCH HELIX PROCESS INIT FAIL]"
-                << " reason=LoadedGeometry"
+                << " reason=RequiredSupportGeometry"
                 << std::endl;
 
             return false;
         }
+
 
         if (!rebuildFinalGeometry())
         {
@@ -1416,7 +1431,9 @@ rebuildLoadedReferenceGeometry()
         << std::endl;
 
     return true;
-}
+
+
+} 
 
 
 
@@ -1853,6 +1870,9 @@ appendActiveZoneGeometry(
     return true;
 }
 
+
+// LEGACY MH1 PREFIX REBUILD
+// No longer used by Workshop incremental-history workflow.
 
 
 bool StretchHelixFormingProcess::
@@ -2400,10 +2420,10 @@ updateFormedHistory()
     }
 
     const Vec3D supportAxisPoint =
-        supportAxisFrame.P;
+        requiredSupportAxisFrame.P;
 
     Vec3D supportAxisDirection =
-        supportAxisFrame.T;
+        requiredSupportAxisFrame.T;
 
     const double deltaAxialPosition =
         state.supportAxialPosition
@@ -2734,10 +2754,10 @@ updateFormedHistory()
     if (!formedHistoryNodes.empty())
     {
         const Vec3D axisPoint =
-            supportAxisFrame.P;
+            requiredSupportAxisFrame.P;
 
         const Vec3D axisDirection =
-            supportAxisFrame.T.normalized();
+            requiredSupportAxisFrame.T.normalized();
 
         const PipeNode& historyNode =
             formedHistoryNodes[
@@ -2760,35 +2780,35 @@ updateFormedHistory()
             << std::endl;
     }
 
-    const Vec3D axisPoint =
-        supportAxisFrame.P;
+    const Vec3D loadedAxisPoint =
+    requiredSupportAxisFrame.P;
 
-    const Vec3D axisDirection =
-        supportAxisFrame.T.normalized();
+const Vec3D loadedAxisDirection =
+    requiredSupportAxisFrame.T.normalized();
 
-    const RadiusStats historyStats =
-        calculateRadiusStats(
-            formedHistoryNodes,
-            axisPoint,
-            axisDirection
-        );
+const RadiusStats historyStats =
+    calculateRadiusStats(
+        formedHistoryNodes,
+        loadedAxisPoint,
+        loadedAxisDirection
+    );
 
-    const RadiusStats loadedStats =
-        calculateRadiusStats(
-            loadedReferenceResult.nodes,
-            axisPoint,
-            axisDirection
-        );
+const RadiusStats loadedStats =
+    calculateRadiusStats(
+        loadedReferenceResult.nodes,
+        loadedAxisPoint,
+        loadedAxisDirection
+    );
 
-    const RadiusStats finalStats =
-        calculateRadiusStats(
-            finalResult.nodes,
-            axisPoint,
-            axisDirection
-        );
+   // const RadiusStats finalStats =
+   //     calculateRadiusStats(
+   //         finalResult.nodes,
+   //         axisPoint,
+   //         axisDirection
+   //     );
 
     std::cout
-        << "[MH1.17C RADIAL COMPARISON]"
+        << "[MH1.19C LOADED TOOL COMPARISON]"
         << " historyAvg="
         << historyStats.average
         << " historyMin="
@@ -2803,12 +2823,15 @@ updateFormedHistory()
         << " loadedMax="
         << loadedStats.maximum
 
-        << " finalAvg="
-        << finalStats.average
-        << " finalMin="
-        << finalStats.minimum
-        << " finalMax="
-        << finalStats.maximum
+        << " expectedLoadedRadius="
+        << loadedHelixRadius
+
+       // << " finalAvg="
+       // << finalStats.average
+       // << " finalMin="
+       // << finalStats.minimum
+       // << " finalMax="
+      //  << finalStats.maximum
         << std::endl;
 
      
@@ -2830,4 +2853,156 @@ appendFormedHistory(
     );
 
     return true;
+}
+
+bool StretchHelixFormingProcess::
+rebuildRequiredSupportGeometry()
+{
+    requiredSupportOuterRadius =
+        0.0;
+
+    requiredSupportAxisFrame =
+        Frame{};
+
+    if (!std::isfinite(loadedHelixRadius)
+        || loadedHelixRadius <= 0.0)
+    {
+        return false;
+    }
+
+    const double pipeOuterRadius =
+        input.pipeSection.outerDiameter
+        * 0.5;
+
+    if (!std::isfinite(pipeOuterRadius)
+        || pipeOuterRadius <= 0.0)
+    {
+        return false;
+    }
+
+    requiredSupportOuterRadius =
+        loadedHelixRadius
+        - pipeOuterRadius;
+
+    if (!std::isfinite(requiredSupportOuterRadius)
+        || requiredSupportOuterRadius <= 0.0)
+    {
+        return false;
+    }
+
+    Vec3D axisDirection =
+        startFrame.T
+        * loadedHelixTorsion
+        + startFrame.B
+        * loadedHelixCurvature;
+
+    if (axisDirection.lengthSquared() < 1e-12)
+        return false;
+
+    axisDirection =
+        axisDirection.normalized();
+
+    const Vec3D loadedNormal =
+        startFrame.N.normalized();
+
+    if (loadedNormal.lengthSquared() < 1e-12)
+        return false;
+
+    const Vec3D axisPoint =
+        startFrame.P
+        + loadedNormal
+        * loadedHelixRadius;
+
+    requiredSupportAxisFrame.P =
+        axisPoint;
+
+    requiredSupportAxisFrame.T =
+        axisDirection;
+
+    requiredSupportAxisFrame.N =
+        (
+            startFrame.P
+            - axisPoint
+            ).normalized();
+
+    requiredSupportAxisFrame.B =
+        cross(
+            requiredSupportAxisFrame.T,
+            requiredSupportAxisFrame.N
+        ).normalized();
+
+    requiredSupportAxisFrame.N =
+        cross(
+            requiredSupportAxisFrame.B,
+            requiredSupportAxisFrame.T
+        ).normalized();
+    std::cout
+        << "[MH1.19B REQUIRED SUPPORT]"
+        << " loadedCenterlineRadius="
+        << loadedHelixRadius
+        << " pipeOuterRadius="
+        << pipeOuterRadius
+        << " supportOuterRadius="
+        << requiredSupportOuterRadius
+        << " axisPoint=("
+        << requiredSupportAxisFrame.P.x
+        << ", "
+        << requiredSupportAxisFrame.P.y
+        << ", "
+        << requiredSupportAxisFrame.P.z
+        << ")"
+        << " axisDir=("
+        << requiredSupportAxisFrame.T.x
+        << ", "
+        << requiredSupportAxisFrame.T.y
+        << ", "
+        << requiredSupportAxisFrame.T.z
+        << ")"
+        << std::endl;
+
+    const double reconstructedCenterlineRadius =
+        requiredSupportOuterRadius
+        + pipeOuterRadius;
+
+    const double supportRadiusError =
+        std::abs(
+            reconstructedCenterlineRadius
+            - loadedHelixRadius
+        );
+
+    constexpr double tolerance =
+        1e-9;
+
+    const bool accepted =
+        supportRadiusError <= tolerance;
+
+    std::cout
+        << "[MH1.19B SUPPORT ACCEPTANCE]"
+        << " reconstructedCenterlineRadius="
+        << reconstructedCenterlineRadius
+        << " expectedLoadedRadius="
+        << loadedHelixRadius
+        << " error="
+        << supportRadiusError
+        << " accepted="
+        << accepted
+        << std::endl;
+
+
+    return true;
+}
+
+double StretchHelixFormingProcess::
+getRequiredSupportOuterRadius() const
+{
+    return
+        requiredSupportOuterRadius;
+}
+
+const Frame&
+StretchHelixFormingProcess::
+getRequiredSupportAxisFrame() const
+{
+    return
+        requiredSupportAxisFrame;
 }

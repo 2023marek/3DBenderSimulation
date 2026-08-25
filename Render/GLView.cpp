@@ -760,6 +760,19 @@ void GLView::drawMachineReference()
     machineRenderer.drawParts(data);
 
     // =====================================================
+    // MH1.19C — DRAW CALCULATED HELIX SUPPORT TOOL
+    // =====================================================
+
+    shader->setVec3(
+        "pipeColor",
+        glm::vec3(0.55f, 0.55f, 0.58f)
+    );
+
+    machineRenderer.drawHelixSupport(
+        data
+    );
+
+    // =====================================================
     // Draw simple reference overlay
     // =====================================================
 
@@ -772,12 +785,16 @@ void GLView::drawMachineReference()
 
     machineRenderer.drawReference(data);
 
-    // Restore pipe color for next frame safety.
     shader->setVec3(
         "pipeColor",
         glm::vec3(0.2f, 0.9f, 0.3f)
     );
 }
+
+
+
+
+
 // =========================
 // RENDER FRAME (RUNS EVERY FRAME)
 // =========================
@@ -805,6 +822,11 @@ void GLView::paintGL()
     //    draw machine / HUD
 //=============================================================================
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glEnable(GL_DEPTH_TEST);
+    glDepthMask(GL_TRUE);
+    glDepthFunc(GL_LESS);
+
+    glDisable(GL_BLEND);
 
     if (!shader)
         return;

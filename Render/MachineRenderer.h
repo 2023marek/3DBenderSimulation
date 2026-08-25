@@ -84,10 +84,126 @@ public:
         }
     }
 
+
+    void drawHelixSupport(
+        const MachineRenderData& data)
+    {
+        if (!data.supportVisible)
+            return;
+
+        if (!std::isfinite(
+            data.supportOuterRadius
+        ))
+        {
+            return;
+        }
+
+        if (data.supportOuterRadius <= 0.0)
+            return;
+
+        Vec3D axisDirection =
+            data.supportAxisFrame.T;
+
+        if (axisDirection.lengthSquared() < 1e-12)
+            return;
+
+        axisDirection =
+            axisDirection.normalized();
+
+        const Vec3D axisPoint =
+            data.supportAxisFrame.P;
+
+        // =====================================================
+        // MH1.19C — TEMPORARY SUPPORT LENGTH
+        //
+        // Only radius and axis are being accepted in this phase.
+        // Later derive support length from loaded helix extent.
+        // =====================================================
+
+        const double supportLength =
+            1500.0;
+
+        const Vec3D supportStart =
+            axisPoint
+            - axisDirection
+            * (
+                supportLength * 0.5
+                );
+
+        const Vec3D supportEnd =
+            axisPoint
+            + axisDirection
+            * (
+                supportLength * 0.5
+                );
+
+        // =====================================================
+        // STRAIGHT CENTERLINE FOR PROCEDURAL CYLINDER
+        // =====================================================
+
+        const std::vector<Vec3D> centers =
+        {
+            supportStart,
+            supportEnd
+        };
+
+        const std::vector<Vec3D> tangents =
+        {
+            axisDirection, 
+            axisDirection
+        };
+
+        constexpr int radialSegments =
+            72;
+
+        // =====================================================
+        // GENERATE CYLINDER MESH
+        // =====================================================
+
+        supportTubeMesh.generate(
+            centers,
+            tangents,
+            data.supportOuterRadius -0.5,
+            radialSegments
+        );
+
+        const std::vector<TubeMesh::Vertex>& vertices =
+            supportTubeMesh.getVertices();
+
+        const std::vector<unsigned int>& indices =
+            supportTubeMesh.getIndices();
+
+        if (vertices.empty()
+            || indices.empty())
+        {
+            return;
+        }
+
+        // =====================================================
+        // DRAW USING EXISTING MACHINE MESH RENDERER
+        // =====================================================
+
+        meshRenderer.setMode(
+            RenderMode::MESH
+        );
+
+        meshRenderer.uploadMesh(
+            vertices,
+            indices
+        );
+
+        glDisable(GL_CULL_FACE);
+
+        meshRenderer.draw();
+
+        glEnable(GL_CULL_FACE);
+
+        meshRenderer.draw();
+    }
 private:
     PipeRenderer referenceRenderer;
     PipeRenderer meshRenderer;
-
+    TubeMesh supportTubeMesh;
     std::unordered_map<std::string, TriangleMesh> meshCache;
     std::unordered_set<std::string> failedPaths;
 

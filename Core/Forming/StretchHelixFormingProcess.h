@@ -30,6 +30,10 @@ public:
     bool initialize(
         const StretchHelixWrappingInput& newInput,
         const Frame& newStartFrame,
+
+        // Temporary legacy argument.
+    // MH1.19 derives the actual required support axis
+    // from loaded helix compensation.
         const Frame& newSupportAxisFrame
     );
 
@@ -93,6 +97,13 @@ public:
         getStage() const;
 
     double getUnloadingFraction() const;
+
+ //
+    double getRequiredSupportOuterRadius() const;
+
+    const Frame&
+        getRequiredSupportAxisFrame() const;
+
 private:
 
     struct ActiveZoneBoundaryFrames
@@ -119,6 +130,8 @@ private:
 
     bool mechanicsValid =
         false;
+
+   
 private:
     StretchHelixWrappingInput
         input;
@@ -256,6 +269,14 @@ private:
 
     double loadedHelixPitch =
         0.0;
+
+    //
+    double requiredSupportOuterRadius =
+        0.0;
+
+    Frame requiredSupportAxisFrame;
+
+    bool rebuildRequiredSupportGeometry();
 };
 
 
