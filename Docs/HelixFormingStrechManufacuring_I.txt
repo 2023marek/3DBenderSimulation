@@ -5528,3 +5528,808 @@ renderer
 That is where the actual visible support tube will finally become the 
 calculated 449.034 mm tool rather than the old debug 
 500 mm support.
+
+
+====================================================================
+====================================================================
+====================================================================
+
+
+Nazwijmy ten etap MH1.21 — pitch-aware helix start frames. 
+Cel jest bardzo konkretny:
+
+FINAL HELIX                  LOADED HELIX
+κ_final, τ_final             κ_loaded, τ_loaded
+      │                            │
+      ▼                            ▼
+ α_final=atan2(τ,κ)          α_loaded=atan2(τ,κ)
+      │                            │
+      ▼                            ▼
+finalStartFrame              loadedStartFrame
+      │                            │
+      ▼                            ▼
+τT + κB                     τT + κB
+      │                            │
+      └────────────► GLOBAL +Z ◄───┘
+MH1.21.1 — dodaj helper budujący frame
+
+Najpierw w StretchHelixFormingProcess.cpp, w tym samym anonimowym n
+amespace, gdzie masz np. distancePointToAxis(), dodaj:
+
+Frame buildHelixStartFrameForGlobalZAxis(
+    const Vec3D& startPosition,
+    double curvature,
+    double torsion)
+{
+    Frame frame;
+
+    if (!std::isfinite(curvature)
+        || !std::isfinite(torsion)
+        || curvature <= 0.0)
+    {
+        return frame;
+    }
+
+    const double alpha =
+        std::atan2(
+            torsion,
+            curvature
+        );
+
+    const double c =
+        std::cos(alpha);
+
+    const double s =
+        std::sin(alpha);
+
+    frame.P =
+        startPosition;
+
+    frame.T =
+    {
+        0.0,
+        c,
+        s
+    };
+
+    frame.N =
+    {
+        -1.0,
+        0.0,
+        0.0
+    };
+
+    frame.B =
+    {
+        0.0,
+        -s,
+        c
+    };
+
+    return frame;
+}
+
+Na tym etapie nie używaj go jeszcze w integratorze.
+
+MH1.21.2 — dodaj dwa osobne frame'y do procesu
+
+W StretchHelixFormingProcess.h, private: dodaj:
+
+Frame finalHelixStartFrame;
+Frame loadedHelixStartFrame;
+
+To jest ważniejsze niż używanie jednego wspólnego:
+
+startFrame
+
+bo:
+
+κ_final != κ_loaded
+
+więc nawet przy tym samym τ:
+
+α_final != α_loaded
+MH1.21.3 — zbuduj FINAL frame
+
+Po tym, jak masz już poprawnie policzone:
+
+finalHelixCurvature
+finalHelixTorsion
+
+dodaj:
+
+finalHelixStartFrame =
+    buildHelixStartFrameForGlobalZAxis(
+        startFrame.P,
+        finalHelixCurvature,
+        finalHelixTorsion
+    );
+
+Następnie diagnostyka:
+
+const Vec3D finalLancret =
+    finalHelixStartFrame.T
+        * finalHelixTorsion
+    + finalHelixStartFrame.B
+        * finalHelixCurvature;
+
+const Vec3D finalAxisDirection =
+    finalLancret.normalized();
+
+std::cout
+    << "[MH1.21 FINAL FRAME]"
+    << " T=("
+    << finalHelixStartFrame.T.x << ", "
+    << finalHelixStartFrame.T.y << ", "
+    << finalHelixStartFrame.T.z
+    << ")"
+    << " B=("
+    << finalHelixStartFrame.B.x << ", "
+    << finalHelixStartFrame.B.y << ", "
+    << finalHelixStartFrame.B.z
+    << ")"
+    << " axis=("
+    << finalAxisDirection.x << ", "
+    << finalAxisDirection.y << ", "
+    << finalAxisDirection.z
+    << ")"
+    << std::endl;
+
+Oczekujemy:
+
+axis ≈ (0, 0, 1)
+MH1.21.4 — zbuduj LOADED frame osobno
+
+Po policzeniu:
+
+loadedHelixCurvature
+loadedHelixTorsion
+
+dodaj:
+
+loadedHelixStartFrame =
+    buildHelixStartFrameForGlobalZAxis(
+        startFrame.P,
+        loadedHelixCurvature,
+        loadedHelixTorsion
+    );
+
+Następnie:
+
+const Vec3D loadedLancret =
+    loadedHelixStartFrame.T
+        * loadedHelixTorsion
+    + loadedHelixStartFrame.B
+        * loadedHelixCurvature;
+
+const Vec3D loadedAxisDirection =
+    loadedLancret.normalized();
+
+std::cout
+    << "[MH1.21 LOADED FRAME]"
+    << " T=("
+    << loadedHelixStartFrame.T.x << ", "
+    << loadedHelixStartFrame.T.y << ", "
+    << loadedHelixStartFrame.T.z
+    << ")"
+    << " B=("
+    << loadedHelixStartFrame.B.x << ", "
+    << loadedHelixStartFrame.B.y << ", "
+    << loadedHelixStartFrame.B.z
+    << ")"
+    << " axis=("
+    << loadedAxisDirection.x << ", "
+    << loadedAxisDirection.y << ", "
+    << loadedAxisDirection.z
+    << ")"
+    << std::endl;
+
+Ponownie oczekujemy:
+
+axis ≈ (0, 0, 1)
+MH1.21.5 — dodaj acceptance
+
+Możesz od razu sprawdzić:
+
+const Vec3D globalZ =
+{
+    0.0,
+    0.0,
+    1.0
+};
+
+const double finalAxisDot =
+    dot(
+        finalAxisDirection,
+        globalZ
+    );
+
+const double loadedAxisDot =
+    dot(
+        loadedAxisDirection,
+        globalZ
+    );
+
+const bool finalAccepted =
+    finalAxisDot >= 1.0 - 1e-12;
+
+const bool loadedAccepted =
+    loadedAxisDot >= 1.0 - 1e-12;
+
+std::cout
+    << "[MH1.21 AXIS ACCEPTANCE]"
+    << " finalDot="
+    << finalAxisDot
+    << " loadedDot="
+    << loadedAxisDot
+    << " accepted="
+    << (
+        finalAccepted
+        && loadedAccepted
+        )
+    << std::endl;
+
+Oczekiwane:
+
+finalDot=1
+loadedDot=1
+accepted=1
+MH1.21.6 — dopiero teraz podmień FINAL integrację
+
+W rebuildReferenceGeometry() znajdź:
+
+integrator.integrate(
+    startFrame,
+    referenceProfile,
+    input.sampleStep
+);
+
+i zmień tylko pierwszy argument:
+
+integrator.integrate(
+    finalHelixStartFrame,
+    referenceProfile,
+    input.sampleStep
+);
+
+Czyli:
+
+BEFORE
+reference profile + generic startFrame
+
+AFTER
+reference profile + pitch-aware finalHelixStartFrame
+MH1.21.7 — podmień LOADED integrację
+
+W:
+
+rebuildLoadedReferenceGeometry()
+
+masz obecnie:
+
+loadedReferenceResult =
+    integrator.integrate(
+        startFrame,
+        loadedProfile,
+        input.sampleStep
+    );
+
+zmień na:
+
+loadedReferenceResult =
+    integrator.integrate(
+        loadedHelixStartFrame,
+        loadedProfile,
+        input.sampleStep
+    );
+
+To jest bardzo ważne.
+
+Nie używaj:
+
+finalHelixStartFrame
+
+dla loaded helix.
+
+MH1.21.8 — popraw wyliczenie loaded axis point
+
+Do tej pory miałeś mniej więcej:
+
+const Vec3D loadedAxisPoint =
+    startFrame.P
+    + startFrame.N.normalized()
+    * loadedHelixRadius;
+
+Teraz użyj:
+
+const Vec3D loadedAxisPoint =
+    loadedHelixStartFrame.P
+    + loadedHelixStartFrame.N.normalized()
+    * loadedHelixRadius;
+
+A kierunek:
+
+Vec3D loadedAxisDirection =
+    loadedHelixStartFrame.T
+        * loadedHelixTorsion
+    + loadedHelixStartFrame.B
+        * loadedHelixCurvature;
+
+loadedAxisDirection =
+    loadedAxisDirection.normalized();
+
+Po zmianie powinieneś dostać:
+
+axisPoint≈(-459.034,-500,0)
+axisDir≈(0,0,1)
+
+Czyli radius/położenie osi pozostaje, ale znika sztuczne pochylenie osi.
+
+MH1.21.9 — popraw rebuildRequiredSupportGeometry()
+
+Tam również nie używaj już:
+
+startFrame.T
+startFrame.B
+startFrame.N
+
+do loaded tool.
+
+Zamiast tego:
+
+Vec3D axisDirection =
+    loadedHelixStartFrame.T
+        * loadedHelixTorsion
+    + loadedHelixStartFrame.B
+        * loadedHelixCurvature;
+
+axisDirection =
+    axisDirection.normalized();
+
+const Vec3D axisPoint =
+    loadedHelixStartFrame.P
+    + loadedHelixStartFrame.N.normalized()
+    * loadedHelixRadius;
+
+Reszta:
+
+requiredSupportAxisFrame.P =
+    axisPoint;
+
+requiredSupportAxisFrame.T =
+    axisDirection;
+
+może zostać.
+
+W efekcie support tube powinien dostać:
+
+T ≈ (0,0,1)
+
+i wizualnie przestać być lekko pochylony względem global Z.
+
+Oczekiwany console checkpoint
+
+Przed dalszym ruszaniem historii/springback chciałbym zobaczyć coś
+podobnego do:
+
+[MH1.21 FINAL FRAME]
+...
+axis=(0, ~0, 1)
+
+[MH1.21 LOADED FRAME]
+...
+axis=(0, ~0, 1)
+
+[MH1.21 AXIS ACCEPTANCE]
+finalDot=1 loadedDot=1 accepted=1
+
+[MH1.19A LOADED AXIS]
+point=(-459.034,-500,0)
+direction=(0,~0,1)
+
+[MH1.19A LOADED RADIUS CHECK]
+theoreticalRadius=459.034
+measuredAvg≈459.034
+measuredMin≈459.034
+measuredMax≈459.034
+
+[MH1.19B REQUIRED SUPPORT]
+...
+axisDir=(0,~0,1)
+
+Jeśli to przejdzie, wtedy przejdziemy do następnego kroku: ponowne
+sprawdzenie formedHistoryNodes, ponieważ incremental history musi teraz 
+używać nowego loaded start frame jako lokalnego szablonu. Dopiero po tym 
+wrócimy do torsional 
+springback compensation.
+
+==================================================================
+================================================================
+=======================================================================
+
+
+Start MH1.20 — torsional springback compensation on top of the now-correct pitch-aware FINAL/LOADED frames.
+
+The key change is that unloading will no longer evolve only curvature:
+
+OLD
+κ_loaded ─────────────► κ_final
+τ_loaded = τ_final
+
+It will evolve both:
+
+NEW
+κ_loaded ─────────────► κ_final
+τ_loaded ─────────────► τ_final
+
+And because τ/κ defines helix pitch angle, this also affects the start frame, pitch, and support-tool geometry.
+
+MH1.20.1 — add torsional springback fields
+
+In the same input/result layer where you already carry bending springback, add:
+
+double torsionSpringbackRatio =
+    0.0;
+
+For the first controlled test, set:
+
+torsionSpringbackRatio =
+    0.10;
+
+Keep it separate from your existing curvature/bending springbackRatio.
+
+Conceptually:
+
+springbackRatio         -> bending / curvature recovery
+torsionSpringbackRatio  -> torsional recovery
+
+Do not assume they must be equal later.
+
+MH1.20.2 — calculate loadedHelixTorsion
+
+Right now you have the temporary line:
+
+loadedHelixTorsion =
+    finalHelixTorsion;
+
+Replace it with guarded compensation:
+
+const double torsionRecoveryFactor =
+    1.0
+    - torsionSpringbackRatio;
+
+if (!std::isfinite(torsionRecoveryFactor)
+    || torsionRecoveryFactor <= 1e-12)
+{
+    return false;
+}
+
+loadedHelixTorsion =
+    finalHelixTorsion
+    / torsionRecoveryFactor;
+
+If the ratio lives inside input, use:
+
+const double torsionRecoveryFactor =
+    1.0
+    - input.torsionSpringbackRatio;
+
+For your current numbers:
+
+τ_final = 3.8432e-05
+ratio   = 0.10
+
+τ_loaded
+= 3.8432e-05 / 0.9
+≈ 4.27022e-05
+
+Expected:
+
+loadedTau > finalTau
+MH1.20.3 — rebuild all loaded helix properties from the new pair
+
+Immediately after calculating loadedHelixTorsion, recalculate:
+
+loadedHelixRadius =
+    helixRadiusFromCurvatureTorsion(
+        loadedHelixCurvature,
+        loadedHelixTorsion
+    );
+
+loadedHelixRisePerRadian =
+    helixRisePerRadianFromCurvatureTorsion(
+        loadedHelixCurvature,
+        loadedHelixTorsion
+    );
+
+loadedHelixPitch =
+    2.0
+    * 3.14159265358979323846
+    * loadedHelixRisePerRadian;
+
+Then rebuild the pitch-aware loaded frame:
+
+loadedHelixStartFrame =
+    buildHelixStartFrameForGlobalZAxis(
+        startFrame.P,
+        loadedHelixCurvature,
+        loadedHelixTorsion
+    );
+
+This ordering matters:
+
+κ_loaded
+τ_loaded
+   ↓
+R_loaded
+pitch_loaded
+   ↓
+loadedHelixStartFrame
+   ↓
+axis = global Z
+   ↓
+required support geometry
+MH1.20.4 — add diagnostics
+
+Add:
+
+std::cout
+    << "[MH1.20 TORSION SPRINGBACK]"
+    << " finalTau="
+    << finalHelixTorsion
+    << " ratio="
+    << torsionSpringbackRatio
+    << " loadedTau="
+    << loadedHelixTorsion
+    << " finalPitch="
+    << finalHelixPitch
+    << " loadedPitch="
+    << loadedHelixPitch
+    << std::endl;
+
+And acceptance:
+
+const bool torsionCompensated =
+    std::abs(
+        loadedHelixTorsion
+    )
+    >
+    std::abs(
+        finalHelixTorsion
+    );
+
+std::cout
+    << "[MH1.20 TORSION ACCEPTANCE]"
+    << " compensated="
+    << torsionCompensated
+    << std::endl;
+
+For positive 10% recovery:
+
+compensated=1
+MH1.20.5 — rebuild loaded reference with compensated torsion
+
+In rebuildLoadedReferenceGeometry() make sure the profile uses:
+
+ConstantCurvatureTorsionProfileBuilder::build(
+    input.pipeArcLength,
+    loadedHelixCurvature,
+    loadedHelixTorsion
+);
+
+not:
+
+loadedCurvature,
+kinematics.torsion
+
+This is now essential.
+
+The loaded helix must represent the compensated pair:
+
+(κ_loaded, τ_loaded)
+MH1.20.6 — verify the pitch-aware loaded axis still resolves to Z
+
+Your existing MH1.21 diagnostic should now automatically use the changed torsion.
+
+Expected:
+
+[MH1.21 LOADED FRAME]
+axis=(0, ~0, 1)
+
+Even though loadedTau has changed.
+
+Why? Because:
+
+alphaLoaded = atan2(τ_loaded, κ_loaded)
+
+is recalculated.
+
+So the frame adapts and keeps:
+
+τ_loaded*T + κ_loaded*B
+        ↓
+global Z
+MH1.20.7 — support tool must be recalculated
+
+Because both loaded curvature and loaded torsion changed, these also change slightly:
+
+R_loaded
+pitch_loaded
+requiredSupportOuterRadius
+
+So do not hard-code the old:
+
+459.034
+449.034
+
+After the new torsional compensation, trust the recalculated values.
+
+rebuildRequiredSupportGeometry() should continue using:
+
+loadedHelixCurvature
+loadedHelixTorsion
+loadedHelixRadius
+loadedHelixStartFrame
+
+and therefore update automatically.
+
+MH1.20.8 — now modify unloading interpolation
+
+In advanceUnloading() or rebuildUnloadingGeometry(), you likely currently compute something like:
+
+const double currentCurvature =
+    loadedHelixCurvature
+    + (
+        finalHelixCurvature
+        - loadedHelixCurvature
+    )
+    * unloadingFraction;
+
+Keep that, and add:
+
+const double currentTorsion =
+    loadedHelixTorsion
+    + (
+        finalHelixTorsion
+        - loadedHelixTorsion
+    )
+    * unloadingFraction;
+
+Then build the instantaneous profile with both:
+
+const CurvatureTorsionProfile unloadingProfile =
+    ConstantCurvatureTorsionProfileBuilder::build(
+        input.pipeArcLength,
+        currentCurvature,
+        currentTorsion
+    );
+
+The unloading sequence becomes:
+
+u = 0
+
+κ = κ_loaded
+τ = τ_loaded
+
+      ↓
+
+u = 0.5
+
+κ halfway
+τ halfway
+
+      ↓
+
+u = 1
+
+κ = κ_final
+τ = τ_final
+MH1.20.9 — important: instantaneous pitch-aware frame during unloading
+
+Because κ_current and τ_current both change, the instantaneous pitch angle also changes.
+
+So before integrating unloading geometry:
+
+const Frame unloadingStartFrame =
+    buildHelixStartFrameForGlobalZAxis(
+        startFrame.P,
+        currentCurvature,
+        currentTorsion
+    );
+
+Then:
+
+currentResult =
+    integrator.integrate(
+        unloadingStartFrame,
+        unloadingProfile,
+        input.sampleStep
+    );
+
+Do not reuse:
+
+loadedHelixStartFrame
+
+for the entire unloading sequence.
+
+ASCII:
+
+LOADED
+α_loaded
+   │
+   ▼
+u=0.25
+α_current
+   │
+   ▼
+u=0.50
+α_current
+   │
+   ▼
+u=1
+α_final
+
+while the helix axis remains:
+
+global Z
+
+throughout.
+
+MH1.20.10 — improve unloading diagnostic
+
+Change your current line from something like:
+
+[STRETCH HELIX UNLOADING]
+fraction=...
+currentKappa=...
+
+to:
+
+std::cout
+    << "[MH1.20 UNLOADING]"
+    << " fraction="
+    << unloadingFraction
+    << " currentKappa="
+    << currentCurvature
+    << " loadedKappa="
+    << loadedHelixCurvature
+    << " finalKappa="
+    << finalHelixCurvature
+    << " currentTau="
+    << currentTorsion
+    << " loadedTau="
+    << loadedHelixTorsion
+    << " finalTau="
+    << finalHelixTorsion
+    << std::endl;
+
+Expected progression:
+
+fraction=0
+currentKappa = loadedKappa
+currentTau   = loadedTau
+
+fraction≈0.5
+both intermediate
+
+fraction=1
+currentKappa = finalKappa
+currentTau   = finalTau
+First checkpoint
+
+I recommend implementing MH1.20.1–.7 first, then stopping and checking console before touching unloading.
+
+We want to verify:
+
+finalTau   = 3.8432e-05
+loadedTau  ≈ 4.2702e-05
+
+loaded axis ≈ (0,0,1)
+
+loaded reference:
+measured radius ≈ theoretical loaded radius
+
+required support:
+accepted=1
+
+Only after that passes should you implement .8–.10 for dynamic unloading.

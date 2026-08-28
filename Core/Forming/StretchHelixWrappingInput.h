@@ -114,6 +114,10 @@ struct StretchHelixWrappingInput
     double springbackRatio =
         0.10;
 
+    double torsionSpringbackRatio =
+        0.1;
+    
+
     // If true, commanded loaded curvature is increased so
     // the predicted unloaded geometry approaches the target.
     bool compensateSpringback =

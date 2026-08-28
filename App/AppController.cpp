@@ -4342,7 +4342,7 @@ AppController::buildTestStretchHelixWrappingInput() const
     // =================================================
 
     input.supportOuterRadius =
-        500.0;
+       500.0;
     
     // =================================================
     // MACHINE MOTION
@@ -4586,26 +4586,74 @@ debugTestStretchHelixWrappingKinematics()
             0.0
     };
 
+    // =====================================================
+ // MH1.21 — PITCH-AWARE FINAL REFERENCE START FRAME
+ //
+ // The customer/reference helix must have its Lancret
+ // axis aligned with global +Z:
+ //
+ //     axis ? tau*T + kappa*B
+ //
+ // alpha = atan2(tau, kappa)
+ // =====================================================
+
+    const double referenceAlpha =
+        std::atan2(
+            kinematics.torsion,
+            kinematics.curvature
+        );
+
+    const double referenceCosAlpha =
+        std::cos(
+            referenceAlpha
+        );
+
+    const double referenceSinAlpha =
+        std::sin(
+            referenceAlpha
+        );
+
     referenceStartFrame.T =
-        Vec3D{
-            0.0,
-            1.0,
-            0.0
+    {
+        0.0,
+        referenceCosAlpha,
+        referenceSinAlpha
     };
 
     referenceStartFrame.N =
-        Vec3D{
-            -1.0,
-            0.0,
-            0.0
+    {
+        -1.0,
+        0.0,
+        0.0
     };
 
     referenceStartFrame.B =
-        Vec3D{
-            0.0,
-            0.0,
-            1.0
+    {
+        0.0,
+        -referenceSinAlpha,
+        referenceCosAlpha
     };
+
+
+    const Vec3D referenceLancretAxis =
+        (
+            referenceStartFrame.T
+            * kinematics.torsion
+            +
+            referenceStartFrame.B
+            * kinematics.curvature
+            ).normalized();
+
+    std::cout
+        << "[MH1.21 DEBUG FINAL AXIS]"
+        << " axis=("
+        << referenceLancretAxis.x
+        << ", "
+        << referenceLancretAxis.y
+        << ", "
+        << referenceLancretAxis.z
+        << ")"
+        << std::endl;
     // =====================================================
 // STORE THE SAME FRAME FOR H4
 //
@@ -4658,49 +4706,59 @@ debugTestStretchHelixWrappingKinematics()
     const MachineModel& machineModel =
         sim.getMachineSystem().getModel();
 
-    Frame supportAxisFrame =
+    //Frame supportAxisFrame =
+    //    machineModel.supportAxisFrame;
+
+  
+
+    // =====================================================
+ // LEGACY SUPPORT FRAME
+ //
+ // initialize() still requires this argument,
+ // but MH1.19+ no longer treats it as the authoritative
+ // manufacturing support geometry.
+ //
+ // The real support frame/radius are calculated inside
+ // StretchHelixFormingProcess after springback compensation.
+ // =====================================================
+
+    Frame legacySupportAxisFrame =
         machineModel.supportAxisFrame;
 
-    supportAxisFrame.T =
+    // Keep the legacy axis orientation sane.
+    // Do NOT reposition it using final centerline radius.
+    legacySupportAxisFrame.T =
         Vec3D{
             0.0,
             0.0,
             1.0
     };
 
-    const Vec3D radialDirection =
-        cross(
-            referenceStartFrame.T,
-            supportAxisFrame.T
-        ).normalized();
-
-    supportAxisFrame.P =
-        referenceStartFrame.P
-        - radialDirection
-        * kinematics.centerlineRadius;
-   
-
-
-
     const bool processInitialized =
         debugStretchHelixProcess.initialize(
             input,
             referenceStartFrame,
-            supportAxisFrame
+            legacySupportAxisFrame
         );
-    std::cout
-        << "[STRETCH HELIX SUPPORT AXIS]"
-        << " formingPoint=("
-        << referenceStartFrame.P.x << ", "
-        << referenceStartFrame.P.y << ", "
-        << referenceStartFrame.P.z << ")"
-        << " axisPoint=("
-        << supportAxisFrame.P.x << ", "
-        << supportAxisFrame.P.y << ", "
-        << supportAxisFrame.P.z << ")"
-        << " radius="
-        << kinematics.centerlineRadius
-        << std::endl;
+
+
+    //const Vec3D radialDirection =
+      //  cross(
+        //    referenceStartFrame.T,
+          //  legacySupportAxisFrame.T
+        //).normalized();
+
+   // legacySupportAxisFrame.P = 
+     //   referenceStartFrame.P
+      //  - radialDirection
+      //  * kinematics.centerlineRadius;
+   
+
+
+
+   
+    
+
     std::cout
         << "[STRETCH HELIX PROCESS INIT]"
         << " initialized="

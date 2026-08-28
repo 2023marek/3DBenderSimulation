@@ -147,6 +147,9 @@ private:
 
     Frame startFrame;
 
+    Frame finalHelixStartFrame;
+    Frame loadedHelixStartFrame;
+
     SpatialCurveIntegrationResult
         referenceResult;
 
