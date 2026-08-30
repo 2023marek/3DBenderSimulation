@@ -531,14 +531,10 @@ bool StretchHelixFormingProcess::
 rebuildCurrentGeometry()
 {
 
-    std::cout
-        << "[MH1.MAREK CURRENT BUILD BEGIN]"
-        << " nodes="
-        << currentNodes.size()
-        << std::endl;
     currentNodes.clear();
+
     std::cout
-        << "[MH1.MAREK CURRENT BUILD BEGIN CLEAR]"
+        << "[MH1 CURRENT AFTER CLEAR]"
         << " nodes="
         << currentNodes.size()
         << std::endl;
@@ -557,46 +553,48 @@ rebuildCurrentGeometry()
     // UPDATE PERSISTENT FORMED MATERIAL
     // =====================================================
 
+
     if (!updateFormedHistory())
     {
-
-
         return false;
     }
 
     std::cout
-        << "[MH1 CURRENT AFTER HISTORY]"
-        << " nodes="
+        << "[MH1 CURRENT AFTER HISTORY UPDATE]"
+        << " persistentHistoryNodes="
+        << formedHistoryNodes.size()
+        << " displayNodes="
         << currentNodes.size()
         << std::endl;
+
     // =====================================================
     // BUILD CURRENT DISPLAY GEOMETRY
     // =====================================================
 
-    if (!appendIncomingGeometry(
-        currentNodes
-    ))
+    if (!appendIncomingGeometry(currentNodes))
     {
         return false;
     }
 
     std::cout
-        << "[MH1 CURRENT AFTER INCOMING A]"
+        << "[MH1 CURRENT AFTER INCOMING]"
         << " nodes="
         << currentNodes.size()
         << std::endl;
 
-    if (!appendFormedHistory(
-        currentNodes
-    ))
+
+    if (!appendFormedHistory(currentNodes))
     {
         return false;
     }
+
     std::cout
-        << "[MH1 CURRENT AFTER INCOMING B]"
+        << "[MH1 CURRENT AFTER FORMED HISTORY]"
         << " nodes="
         << currentNodes.size()
         << std::endl;
+
+
     const double formedLength =
         std::clamp(
             state.wrappedLength,
@@ -1813,7 +1811,8 @@ advanceWrapping(
         state,
         dt,
         input,
-        kinematics
+        kinematics,
+        loadedHelixRisePerRadian
     );
 
     if (!rebuildCurrentGeometry())
@@ -1919,12 +1918,20 @@ rebuildUnloadingGeometry()
         );
 
     const double currentCurvature =
-        loadedCurvature
-        + fraction
-        * (
-            predictedFinalCurvature
-            - loadedCurvature
-            );
+        loadedHelixCurvature
+        + (
+            finalHelixCurvature
+            - loadedHelixCurvature
+            )
+        * unloadingFraction;
+
+    const double currentTorsion =
+        loadedHelixTorsion
+        + (
+            finalHelixTorsion
+            - loadedHelixTorsion
+            )
+        * unloadingFraction;
 
     if (!std::isfinite(currentCurvature)
         || currentCurvature <= 0.0)
@@ -1961,20 +1968,24 @@ rebuildUnloadingGeometry()
     currentNodes =
         result.nodes;
 
+   
     std::cout
-        << "[STRETCH HELIX UNLOADING]"
+        << "[MH1.20.8 UNLOADING]"
         << " fraction="
-        << fraction
+        << unloadingFraction
         << " currentKappa="
         << currentCurvature
         << " loadedKappa="
-        << loadedCurvature
+        << loadedHelixCurvature
         << " finalKappa="
-        << predictedFinalCurvature
-        << " nodes="
-        << currentNodes.size()
+        << finalHelixCurvature
+        << " currentTau="
+        << currentTorsion
+        << " loadedTau="
+        << loadedHelixTorsion
+        << " finalTau="
+        << finalHelixTorsion
         << std::endl;
-
     return true;
 }
 
@@ -3272,3 +3283,5 @@ getRequiredSupportAxisFrame() const
     return
         requiredSupportAxisFrame;
 }
+
+

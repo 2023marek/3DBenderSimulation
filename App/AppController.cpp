@@ -1377,6 +1377,9 @@ void AppController::debugTestSpatialHelixIntegrator()
             torsion
         );
 
+
+
+
     // =====================================================
     // 4. INTEGRATE TEMPORARY 3D CURVE
     // =====================================================
@@ -1573,6 +1576,9 @@ b * finalAngle
             )
         << std::endl;
 }
+
+
+
 //Strech bending
 StretchBendingProcessInput
 AppController::buildTestStretchBendingProcessInput() const
@@ -5955,11 +5961,44 @@ debugTestStretchHelixWrappingTimeProgression()
             kinematics.centerlineSpeed * dt
         );
 
+    // =====================================================
+    // MH1.20.8B
+    //
+    // This debug test uses the original machine commands,
+    // not the springback-compensated manufacturing helix.
+    //
+    // Therefore its forming rise per radian comes directly
+    // from the original axial / rotational command ratio.
+    // =====================================================
+
+    const double signedRotationSpeed =
+        static_cast<double>(
+            input.rotationDirection
+            )
+        * input.rotationSpeed;
+
+    if (!std::isfinite(signedRotationSpeed)
+        || std::abs(signedRotationSpeed) <= 1e-12)
+    {
+        std::cout
+            << "[STRETCH HELIX TIME ACCEPTANCE]"
+            << " accepted=0"
+            << " reason=InvalidRotationSpeed"
+            << std::endl;
+
+        return;
+    }
+
+    const double testRisePerRadian =
+        input.axialSpeed
+        / signedRotationSpeed;
+
     StretchHelixWrappingStateAdvancer::advance(
         state,
         dt,
         input,
-        kinematics
+        kinematics,
+        testRisePerRadian
     );
 
     // =====================================================

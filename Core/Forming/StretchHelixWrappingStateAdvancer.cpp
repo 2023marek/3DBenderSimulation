@@ -7,7 +7,8 @@ void StretchHelixWrappingStateAdvancer::advance(
     StretchHelixWrappingState& state,
     double dt,
     const StretchHelixWrappingInput& input,
-    const StretchHelixWrappingKinematics& kinematics)
+    const StretchHelixWrappingKinematics& kinematics,
+    double formingRisePerRadian)
 {
     if (!state.valid)
         return;
@@ -18,6 +19,10 @@ void StretchHelixWrappingStateAdvancer::advance(
     if (!kinematics.valid)
         return;
 
+    if (!std::isfinite(formingRisePerRadian))
+    {
+        return;
+    }
     if (!std::isfinite(dt)
         || dt <= 0.0)
     {
@@ -96,17 +101,49 @@ void StretchHelixWrappingStateAdvancer::advance(
     // to consume those final 5 mm.
     // =====================================================
 
-    state.supportRotationAngle +=
+    // =====================================================
+// ADVANCE MACHINE MOTION
+// =====================================================
+
+    const double deltaAngle =
         static_cast<double>(
             input.rotationDirection
             )
         * input.rotationSpeed
         * actualDt;
 
-    state.supportAxialPosition +=
-        input.axialSpeed
-        * actualDt;
+    const double deltaAxial =
+        formingRisePerRadian
+        * deltaAngle;
 
+    const double measuredRisePerRadian =
+        std::abs(deltaAngle) > 1e-12
+        ? deltaAxial / deltaAngle
+        : 0.0;
+
+    std::cout
+        << "[MH1.20.8B FORMING PITCH]"
+        << " deltaAngle="
+        << deltaAngle
+        << " deltaAxial="
+        << deltaAxial
+        << " risePerRadian="
+        << measuredRisePerRadian
+        << " formingRisePerRadian="
+        << formingRisePerRadian
+        << " inputAxialSpeed="
+        << input.axialSpeed
+        << " inputRotationSpeed="
+        << input.rotationSpeed
+        << std::endl;
+
+    state.supportRotationAngle +=
+        deltaAngle;
+
+    state.supportAxialPosition +=
+        deltaAxial;
+
+   
     state.elapsedTime +=
         actualDt;
 

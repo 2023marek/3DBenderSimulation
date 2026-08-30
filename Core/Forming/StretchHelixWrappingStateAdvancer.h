@@ -11,6 +11,7 @@ public:
         StretchHelixWrappingState& state,
         double dt,
         const StretchHelixWrappingInput& input,
-        const StretchHelixWrappingKinematics& kinematics
+        const StretchHelixWrappingKinematics& kinematics,
+        double formingRisePerRadian
     );
 };

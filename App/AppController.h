@@ -342,6 +342,9 @@ public:
          double getDebugStretchHelixRotationSpeed() const;
 
          double getDebugStretchHelixAxialSpeed() const;
+
+        
+
 private:
     
 
