@@ -1003,6 +1003,7 @@ rebuildStretchEvaluation()
 
     finalHelixTorsion =
         kinematics.torsion;
+
     finalHelixStartFrame =
         buildHelixStartFrameForGlobalZAxis(
             startFrame.P,
@@ -1905,10 +1906,50 @@ advanceUnloading(
 bool StretchHelixFormingProcess::
 rebuildUnloadingGeometry()
 {
+    // ============================================================
+    // MH1.20.9
+    //
+    // Rebuild the COMPLETE instantaneous helix during unloading.
+    //
+    // IMPORTANT:
+    //
+    // The geometry generated in this function must be controlled
+    // entirely by the instantaneous unloading state:
+    //
+    //     currentCurvature
+    //     currentTorsion
+    //     currentHelixStartFrame
+    //
+    // Do NOT accidentally use the original final-helix torsion,
+    // loaded torsion, or original start frame here.
+    //
+    // This function represents:
+    //
+    // loaded helix
+    //      ?
+    // instantaneous unloading helix
+    //      ?
+    // final helix
+    //
+    // ============================================================
+
     currentNodes.clear();
 
     if (!mechanicsValid)
+    {
         return false;
+    }
+
+
+    // ============================================================
+    // Clamp the unloading fraction once.
+    //
+    // From this point onward use ONLY "fraction".
+    //
+    // fraction = 0.0  -> fully loaded geometry
+    // fraction = 1.0  -> fully unloaded / final geometry
+    //
+    // ============================================================
 
     const double fraction =
         std::clamp(
@@ -1917,13 +1958,39 @@ rebuildUnloadingGeometry()
             1.0
         );
 
+
+    // ============================================================
+    // Instantaneous curvature.
+    //
+    // Interpolate from:
+    //
+    // loadedHelixCurvature
+    //          ?
+    // finalHelixCurvature
+    //
+    // ============================================================
+
     const double currentCurvature =
         loadedHelixCurvature
         + (
             finalHelixCurvature
             - loadedHelixCurvature
             )
-        * unloadingFraction;
+        * fraction;
+
+
+    // ============================================================
+    // Instantaneous torsion.
+    //
+    // IMPORTANT:
+    //
+    // This value is the authoritative torsion for the current
+    // unloading geometry.
+    //
+    // Do NOT use kinematics.torsion below when building the
+    // instantaneous unloading profile.
+    //
+    // ============================================================
 
     const double currentTorsion =
         loadedHelixTorsion
@@ -1931,29 +1998,153 @@ rebuildUnloadingGeometry()
             finalHelixTorsion
             - loadedHelixTorsion
             )
-        * unloadingFraction;
+        * fraction;
+
+
+    // ============================================================
+    // Basic validity check for the instantaneous state.
+    // ============================================================
 
     if (!std::isfinite(currentCurvature)
-        || currentCurvature <= 0.0)
+        || currentCurvature <= 0.0
+        || !std::isfinite(currentTorsion))
     {
         return false;
     }
+
+
+    // ============================================================
+    // Build the start frame that belongs specifically to the
+    // CURRENT (kappa, tau) pair.
+    //
+    // IMPORTANT:
+    //
+    // This frame preserves the desired global-Z helix axis while
+    // curvature and torsion change during unloading.
+    //
+    // This frame must later be passed to the integrator.
+    //
+    // ============================================================
+
+    const Frame currentHelixStartFrame =
+        buildHelixStartFrameForGlobalZAxis(
+            startFrame.P,
+            currentCurvature,
+            currentTorsion
+        );
+
+
+    // ============================================================
+    // MH1.20.9A
+    // Instantaneous Lancret-axis validation.
+    // ============================================================
+
+    const Vec3D currentLancret =
+        currentHelixStartFrame.T
+        * currentTorsion
+        + currentHelixStartFrame.B
+        * currentCurvature;
+
+    const Vec3D currentAxisDirection =
+        currentLancret.normalized();
+
+    const Vec3D globalZ =
+    {
+        0.0,
+        0.0,
+        1.0
+    };
+
+    const double currentAxisDot =
+        dot(
+            currentAxisDirection,
+            globalZ
+        );
+
+    const bool axisAccepted =
+        currentAxisDot >= 1.0 - 1e-12;
+
+    std::cout
+        << "[MH1.20.9 AXIS]"
+        << " fraction="
+        << fraction
+        << " axis=("
+        << currentAxisDirection.x << ", "
+        << currentAxisDirection.y << ", "
+        << currentAxisDirection.z
+        << ")"
+        << " dotZ="
+        << currentAxisDot
+        << " accepted="
+        << axisAccepted
+        << std::endl;
+
+
+
+
+
+    // ============================================================
+      // Build the INSTANTANEOUS unloading profile.
+      //
+      // CRITICAL:
+      //
+      // OLD / WRONG:
+      //
+      //     currentCurvature,
+      //     kinematics.torsion
+      //
+      // NEW / CORRECT:
+      //
+      //     currentCurvature,
+      //     currentTorsion
+      //
+      // The profile and diagnostics must describe the same helix.
+      //
+      // ============================================================
 
     const CurvatureTorsionProfile profile =
         ConstantCurvatureTorsionProfileBuilder::build(
             input.pipeArcLength,
             currentCurvature,
-            kinematics.torsion
+            currentTorsion
         );
 
     if (!profile.valid)
+    {
         return false;
+    }
+
 
     SpatialCurveIntegrator integrator;
 
+
+    // ============================================================
+    // Integrate using the CURRENT helix start frame.
+    //
+    // CRITICAL:
+    //
+    // OLD / WRONG:
+    //
+    //     integrator.integrate(
+    //         startFrame,
+    //         ...
+    //     );
+    //
+    // NEW / CORRECT:
+    //
+    //     integrator.integrate(
+    //         currentHelixStartFrame,
+    //         ...
+    //     );
+    //
+    // Otherwise we calculate a pitch-aware current frame but never
+    // actually use it to generate the geometry.
+    //
+    // ============================================================
+
     const SpatialCurveIntegrationResult result =
         integrator.integrate(
-            startFrame,
+            currentHelixStartFrame,
             profile,
             input.sampleStep
         );
@@ -1965,14 +2156,24 @@ rebuildUnloadingGeometry()
         return false;
     }
 
+
+    // ============================================================
+    // The generated node set is now the actual instantaneous
+    // unloading geometry.
+    // ============================================================
+
     currentNodes =
         result.nodes;
 
-   
+
+    // ============================================================
+    // Existing MH1.20.8 interpolation diagnostic.
+    // ============================================================
+
     std::cout
         << "[MH1.20.8 UNLOADING]"
         << " fraction="
-        << unloadingFraction
+        << fraction
         << " currentKappa="
         << currentCurvature
         << " loadedKappa="
@@ -1986,6 +2187,210 @@ rebuildUnloadingGeometry()
         << " finalTau="
         << finalHelixTorsion
         << std::endl;
+
+
+
+
+
+
+    // ============================================================
+    // MH1.20.9A
+    // Theoretical instantaneous helix geometry.
+    // ============================================================
+
+    const double currentRadius =
+        helixRadiusFromCurvatureTorsion(
+            currentCurvature,
+            currentTorsion
+        );
+
+    const double currentRisePerRadian =
+        helixRisePerRadianFromCurvatureTorsion(
+            currentCurvature,
+            currentTorsion
+        );
+
+    const double currentPitch =
+        2.0
+        * 3.14159265358979323846
+        * currentRisePerRadian;
+
+    std::cout
+        << "[MH1.20.9 THEORETICAL HELIX]"
+        << " fraction="
+        << fraction
+        << " radius="
+        << currentRadius
+        << " risePerRadian="
+        << currentRisePerRadian
+        << " pitch="
+        << currentPitch
+        << std::endl;
+
+    // ============================================================
+      // MH1.20.9B
+      // Measure the radius of the ACTUAL integrated currentNodes.
+      //
+      // Helix convention used by buildHelixStartFrameForGlobalZAxis:
+      //
+      //     N points from the pipe start toward the helix axis.
+      //
+      // Therefore:
+      //
+      //     axisPoint =
+      //         startPosition
+      //         + N * radius
+      //
+      // Example:
+      //
+      //     start P = (0, -500, 0)
+      //     N       = (-1, 0, 0)
+      //     R       = 459
+      //
+      //     axis P  = (-459, -500, 0)
+      //
+      // ============================================================
+
+    const Vec3D currentAxisPoint =
+        currentHelixStartFrame.P
+        + currentHelixStartFrame.N
+        * currentRadius;
+
+
+    double radiusSum = 0.0;
+
+    double radiusMin =
+        std::numeric_limits<double>::max();
+
+    double radiusMax = 0.0;
+
+    std::size_t radiusSampleCount = 0;
+
+
+    // ============================================================
+    // For every integrated pipe node:
+    //
+    //     1. form vector from helix axis to node
+    //     2. remove component parallel to helix axis
+    //     3. remaining vector is radial
+    //     4. its length is measured helix radius
+    //
+    // ============================================================
+
+    for (const PipeNode& node : currentNodes)
+    {
+        const Vec3D relative = node.pos
+            - currentAxisPoint;
+
+        const double axialProjection =
+            dot(
+                relative,
+                currentAxisDirection
+            );
+
+        const Vec3D radialVector =
+            relative
+            - currentAxisDirection
+            * axialProjection;
+
+        const double measuredRadius =
+            radialVector.length();
+
+        if (!std::isfinite(measuredRadius))
+        {
+            continue;
+        }
+
+        radiusSum += measuredRadius;
+
+        radiusMin =
+            std::min(
+                radiusMin,
+                measuredRadius
+            );
+
+        radiusMax =
+            std::max(
+                radiusMax,
+                measuredRadius
+            );
+
+        ++radiusSampleCount;
+    }
+
+
+    // ============================================================
+    // Compare actual integrated geometry with theoretical radius.
+    // ============================================================
+
+    double radiusAverage = 0.0;
+    double radiusAverageError = 0.0;
+    double radiusSpread = 0.0;
+
+    bool radiusAccepted = false;
+
+    if (radiusSampleCount > 0)
+    {
+        radiusAverage =
+            radiusSum
+            / static_cast<double>(
+                radiusSampleCount
+                );
+
+        radiusAverageError =
+            std::abs(
+                radiusAverage
+                - currentRadius
+            );
+
+        radiusSpread =
+            radiusMax
+            - radiusMin;
+
+
+        // --------------------------------------------------------
+        // These are diagnostic tolerances.
+        //
+        // They are intentionally much larger than the numerical
+        // errors previously observed (~0.001 mm radial spread),
+        // while still being small geometrically.
+        // --------------------------------------------------------
+
+        const double averageTolerance = 0.01;
+        const double spreadTolerance = 0.01;
+
+        radiusAccepted =
+            radiusAverageError
+            <= averageTolerance
+            &&
+            radiusSpread
+            <= spreadTolerance;
+    }
+
+
+    std::cout
+        << "[MH1.20.9B CURRENT RADIUS]"
+        << " fraction="
+        << fraction
+        << " theoretical="
+        << currentRadius
+        << " measuredAvg="
+        << radiusAverage
+        << " measuredMin="
+        << radiusMin
+        << " measuredMax="
+        << radiusMax
+        << " averageError="
+        << radiusAverageError
+        << " spread="
+        << radiusSpread
+        << " samples="
+        << radiusSampleCount
+        << " accepted="
+        << radiusAccepted
+        << std::endl;
+
+
     return true;
 }
 

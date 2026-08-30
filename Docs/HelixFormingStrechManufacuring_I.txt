@@ -6333,3 +6333,1304 @@ required support:
 accepted=1
 
 Only after that passes should you implement .8–.10 for dynamic unloading.
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+================================================================
+=================================================================
+===================================================================
+
+
+
+
+
+Good — the double-update bug is gone.
+
+Your two diagnostics now agree exactly:
+
+FORMING PITCH:
+deltaAngle = 0.112649
+deltaAxial = 1.12649
+
+HISTORY UPDATE:
+deltaAngle = 0.112649
+deltaAxial = 1.12649
+
+So the advancer is now applying machine motion once per timestep.
+
+The remaining mismatch is still exactly what we expected:
+
+risePerRadian = 10
+
+while the loaded helix requires approximately:
+
+loadedRisePerRadian = 9
+
+That means the current state is now clean enough for the actual
+MH1.20.8B correction.
+
+The next change should be architectural: do not let 
+StretchHelixWrappingStateAdvancer derive axial motion from input.axialSpeed during compensated forming. Instead, let StretchHelixFormingProcess, which already knows loadedHelixCurvature and loadedHelixTorsion, compute the loaded screw ratio and pass it into the advancer.
+
+A minimal version would be to add one parameter:
+
+double formingRisePerRadian
+
+so the signature becomes conceptually:
+
+static void advance(
+    StretchHelixWrappingState& state,
+    double dt,
+    const StretchHelixWrappingInput& input,
+    const StretchHelixWrappingKinematics& kinematics,
+    double formingRisePerRadian
+);
+
+Then inside the advancer:
+
+const double deltaAngle =
+    static_cast<double>(
+        input.rotationDirection
+    )
+    * input.rotationSpeed
+    * actualDt;
+
+const double deltaAxial =
+    formingRisePerRadian
+    * deltaAngle;
+
+For your current helix, StretchHelixFormingProcess should compute:
+
+const double loadedRisePerRadian =
+    loadedHelixTorsion
+    / (
+        loadedHelixCurvature * loadedHelixCurvature
+        + loadedHelixTorsion * loadedHelixTorsion
+    );
+
+because:
+
+b = τ / (κ² + τ²)
+
+With your numbers that should be about:
+
+9 mm/rad
+
+Then the production call inside StretchHelixFormingProcess::
+advanceWrapping() would become approximately:
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    input,
+    kinematics,
+    loadedRisePerRadian
+);
+
+But before you edit the header/API, I want to keep this phase small:
+first check whether you already store a member such as:
+
+loadedHelixRisePerRadian
+loadedHelixPitch
+loadedHelixTorsion
+loadedHelixCurvature
+
+inside StretchHelixFormingProcess.
+
+If loadedHelixPitch already exists, we can simply use:
+
+const double loadedRisePerRadian =
+    loadedHelixPitch / (2.0 * M_PI);
+
+and avoid recomputing it.
+
+So the cleanup is now PASS, and the next exact step is to wire the 
+loaded rise-per-radian from StretchHelixFormingProcess into 
+StretchHelixWrappingStateAdvancer.
+
+Yes I have:loadedHelixRisePerRadian
+loadedHelixPitch
+loadedHelixTorsion
+loadedHelixCurvature                                                                                           this all inside:bool StretchHelixFormingProcess:: 
+rebuildStretchEvaluation() 
+{ 
+    if (!input.isValid()) 
+        return false; 
+ 
+    if (!kinematics.valid) 
+        return false; 
+ 
+    
+     
+    StretchBendingProcessInput mechanicalInput; 
+ 
+    // ===================================================== 
+    // PIPE / MATERIAL 
+    // ===================================================== 
+    
+    mechanicalInput.pipeSection = 
+        input.pipeSection; 
+ 
+    mechanicalInput.material = 
+        input.material; 
+ 
+    // ===================================================== 
+    // HELIX GEOMETRY 
+    // 
+    // H2 derived these from the machine commands. 
+    // ===================================================== 
+ 
+    mechanicalInput.geometry.targetArcLength = 
+        input.pipeArcLength; 
+ 
+    mechanicalInput.geometry.targetCurvature = 
+        kinematics.curvature; 
+ 
+    mechanicalInput.geometry.targetTorsion = 
+        kinematics.torsion; 
+ 
+    // ===================================================== 
+    // STRETCH COMMAND 
+    // ===================================================== 
+ 
+    mechanicalInput.axialStretchStrain = 
+        input.axialStretchStrain; 
+ 
+    // ===================================================== 
+    // NUMERICS / PROCESS 
+    // ===================================================== 
+ 
+    mechanicalInput.feedSpeed = 
+        input.axialSpeed; 
+ 
+    mechanicalInput.sampleStep = 
+        input.sampleStep; 
+ 
+    // H8 does not yet model springback. 
+    mechanicalInput.springbackRatio = 
+        input.springbackRatio; 
+ 
+    mechanicalInput.compensateSpringback = 
+        input.compensateSpringback;  
+ 
+    mechanicalInput.enabled = 
+        true; 
+ 
+    if (!mechanicalInput.isValid()) 
+        return false; 
+ 
+    finalHelixCurvature = 
+        kinematics.curvature; 
+ 
+    finalHelixTorsion = 
+        kinematics.torsion; 
+    finalHelixStartFrame = 
+        buildHelixStartFrameForGlobalZAxis( 
+            startFrame.P, 
+            finalHelixCurvature, 
+            finalHelixTorsion 
+        ); 
+ 
+    const Vec3D finalLancret = 
+        finalHelixStartFrame.T 
+        * finalHelixTorsion 
+        + finalHelixStartFrame.B 
+        * finalHelixCurvature; 
+ 
+    const Vec3D finalAxisDirection = 
+        finalLancret.normalized(); 
+ 
+    std::cout 
+        << "[MH1.21 FINAL FRAME]" 
+        << " T=(" 
+        << finalHelixStartFrame.T.x << ", " 
+        << finalHelixStartFrame.T.y << ", " 
+        << finalHelixStartFrame.T.z 
+        << ")" 
+        << " B=(" 
+        << finalHelixStartFrame.B.x << ", " 
+        << finalHelixStartFrame.B.y << ", " 
+        << finalHelixStartFrame.B.z 
+        << ")" 
+        << " axis=(" 
+        << finalAxisDirection.x << ", " 
+        << finalAxisDirection.y << ", " 
+        << finalAxisDirection.z 
+        << ")" 
+        << std::endl; 
+    finalHelixRadius = 
+        helixRadiusFromCurvatureTorsion( 
+            finalHelixCurvature, 
+            finalHelixTorsion 
+        ); 
+ 
+    finalHelixRisePerRadian = 
+        helixRisePerRadianFromCurvatureTorsion( 
+            finalHelixCurvature, 
+            finalHelixTorsion 
+        ); 
+ 
+    finalHelixPitch = 
+        2.0 
+        * 3.14159265358979323846 
+        * finalHelixRisePerRadian; 
+ 
+ 
+    StretchBendingEvaluator evaluator; 
+ 
+    stretchEvaluation = 
+        evaluator.evaluate( 
+            mechanicalInput 
+        ); 
+    if (!stretchEvaluation.valid) 
+    { 
+        return false; 
+    } 
+ 
+    // ================================================= 
+   // H9 — COPY SPRINGBACK RESULT INTO PROCESS STATE 
+   // ================================================= 
+ 
+    targetFinalCurvature = 
+        stretchEvaluation.finalTargetCurvature; 
+ 
+    loadedCurvature = 
+        stretchEvaluation.loadedCurvatureCommand; 
+ 
+    loadedHelixCurvature = 
+        loadedCurvature; 
+ 
+ 
+ 
+    // Temporary until torsion springback is implemented. 
+   // loadedHelixTorsion = 
+    //    finalHelixTorsion; 
+ 
+    const double torsionRecoveryFactor = 
+        1.0 - input.torsionSpringbackRatio; 
+ 
+    
+ 
+    if (!std::isfinite(torsionRecoveryFactor) 
+        || torsionRecoveryFactor <= 1e-12) 
+    { 
+        return false; 
+    } 
+ 
+    loadedHelixTorsion = 
+        finalHelixTorsion 
+        / torsionRecoveryFactor; 
+ 
+    loadedHelixRadius = 
+        helixRadiusFromCurvatureTorsion( 
+            loadedHelixCurvature, 
+            loadedHelixTorsion 
+        ); 
+ 
+    loadedHelixRisePerRadian = 
+        helixRisePerRadianFromCurvatureTorsion( 
+            loadedHelixCurvature, 
+            loadedHelixTorsion 
+        ); 
+ 
+    loadedHelixPitch = 
+        2.0 
+        * 3.14159265358979323846 
+        * loadedHelixRisePerRadian; 
+ 
+    loadedHelixStartFrame = 
+        buildHelixStartFrameForGlobalZAxis( 
+            startFrame.P, 
+            loadedHelixCurvature, 
+            loadedHelixTorsion 
+        ); 
+    const Vec3D loadedLancret = 
+        loadedHelixStartFrame.T 
+        * loadedHelixTorsion 
+        + loadedHelixStartFrame.B 
+        * loadedHelixCurvature; 
+ 
+    const Vec3D loadedAxisDirection = 
+        loadedLancret.normalized(); 
+ 
+    std::cout 
+        << "[MH1.21 LOADED FRAME]" 
+        << " T=(" 
+        << loadedHelixStartFrame.T.x << ", " 
+        << loadedHelixStartFrame.T.y << ", " 
+        << loadedHelixStartFrame.T.z 
+        << ")" 
+        << " B=(" 
+        << loadedHelixStartFrame.B.x << ", " 
+        << loadedHelixStartFrame.B.y << ", " 
+        << loadedHelixStartFrame.B.z 
+        << ")" 
+        << " axis=(" 
+        << loadedAxisDirection.x << ", " 
+        << loadedAxisDirection.y << ", " 
+        << loadedAxisDirection.z 
+        << ")" 
+        << std::endl; 
+ 
+ 
+    const Vec3D globalZ = 
+    { 
+        0.0, 
+        0.0, 
+        1.0 
+    }; 
+ 
+    const double finalAxisDot = 
+        dot( 
+            finalAxisDirection, 
+            globalZ 
+        ); 
+ 
+    const double loadedAxisDot = 
+        dot( 
+            loadedAxisDirection, 
+            globalZ 
+        ); 
+ 
+    const bool finalAccepted = 
+        finalAxisDot >= 1.0 - 1e-12; 
+ 
+    const bool loadedAccepted = 
+        loadedAxisDot >= 1.0 - 1e-12; 
+ 
+    std::cout 
+        << "[MH1.21 AXIS ACCEPTANCE]" 
+        << " finalDot=" 
+        << finalAxisDot 
+        << " loadedDot=" 
+        << loadedAxisDot 
+        << " accepted=" 
+        << ( 
+            finalAccepted 
+            && loadedAccepted 
+            ) 
+        << std::endl; 
+ 
+    loadedHelixRadius = 
+        helixRadiusFromCurvatureTorsion( 
+            loadedHelixCurvature, 
+            loadedHelixTorsion 
+        ); 
+ 
+   
+    loadedHelixRisePerRadian = 
+        helixRisePerRadianFromCurvatureTorsion( 
+            loadedHelixCurvature, 
+            loadedHelixTorsion 
+        ); 
+ 
+    loadedHelixPitch = 
+        2.0 
+        * 3.14159265358979323846 
+        * loadedHelixRisePerRadian; 
+    
+    std::cout 
+        << "[MH1.19A HELIX PARAMETERS]" 
+        << " finalKappa=" 
+        << finalHelixCurvature 
+        << " finalTau=" 
+        << finalHelixTorsion 
+        << " finalRadius=" 
+        << finalHelixRadius 
+        << " finalPitch=" 
+        << finalHelixPitch 
+        << " loadedKappa=" 
+        << loadedHelixCurvature 
+        << " loadedTau=" 
+        << loadedHelixTorsion 
+        << " loadedRadius=" 
+        << loadedHelixRadius 
+        << " loadedPitch=" 
+        << loadedHelixPitch 
+        << std::endl; 
+    const bool loadedTighter = 
+        loadedHelixRadius 
+        < finalHelixRadius; 
+ 
+    const bool curvatureCompensated = 
+        std::abs( 
+            loadedHelixCurvature 
+        ) 
+        > 
+        std::abs( 
+            finalHelixCurvature 
+        ); 
+ 
+    std::cout 
+        << "[MH1.19A HELIX ACCEPTANCE]" 
+        << " loadedTighter=" 
+        << loadedTighter 
+        << " curvatureCompensated=" 
+        << curvatureCompensated 
+        << std::endl; 
+ 
+    predictedFinalCurvature = 
+        stretchEvaluation.predictedFinalCurvature; 
+ 
+    std::cout 
+        << "[STRETCH HELIX SPRINGBACK]" 
+        << " evaluationValid=" 
+        << stretchEvaluation.valid 
+        << " predictionValid=" 
+        << stretchEvaluation.springbackPredictionValid 
+        << " compensationApplied=" 
+        << stretchEvaluation.springbackCompensationApplied 
+        << " targetKappa=" 
+        << targetFinalCurvature 
+        << " loadedKappa=" 
+        << loadedCurvature 
+        << " predictedFinalKappa=" 
+        << predictedFinalCurvature 
+        << " finalError=" 
+        << stretchEvaluation.finalCurvatureError 
+        << " ratio=" 
+        << stretchEvaluation.springbackRatio 
+        << std::endl; 
+ 
+    const bool torsionCompensated = 
+        std::abs(loadedHelixTorsion) 
+    > 
+        std::abs(finalHelixTorsion); 
+    std::cout 
+        << "[MH1.20 TORSION SPRINGBACK]" 
+        << " finalTau=" 
+        << finalHelixTorsion 
+        << " ratio=" 
+        << input.torsionSpringbackRatio 
+        << " loadedTau=" 
+        << loadedHelixTorsion 
+        << " finalPitch=" 
+        << finalHelixPitch 
+        << " loadedPitch=" 
+        << loadedHelixPitch 
+        << " compensated=" 
+        << torsionCompensated 
+        << std::endl; 
+ 
+ 
+    std::cout 
+        << "[STRETCH HELIX MECHANICS]" 
+        << " valid=" 
+        << stretchEvaluation.valid 
+        << " status=" 
+        << stretchBendingEvaluationStatusToString( 
+            stretchEvaluation.status 
+        ) 
+        << " kappa=" 
+        << kinematics.curvature 
+        << " torsion=" 
+        << kinematics.torsion 
+        << " axialStrain=" 
+        << input.axialStretchStrain 
+        << " bendingStrain=" 
+        << stretchEvaluation.bendingStrain 
+        << " innerStrain=" 
+        << stretchEvaluation.innerWallStrain 
+        << " outerStrain=" 
+        << stretchEvaluation.outerWallStrain 
+        << " tension=" 
+        << stretchEvaluation.commandedTension 
+        << std::endl; 
+ 
+ 
+ 
+ 
+ 
+ return 
+        stretchEvaluation.valid; 
+     
+} 
+
+
+Perfect. You already have exactly the quantity we need:
+
+loadedHelixRisePerRadian
+
+and it is computed in the right place from the compensated loaded helix:
+
+loadedHelixRisePerRadian =
+    helixRisePerRadianFromCurvatureTorsion(
+        loadedHelixCurvature,
+        loadedHelixTorsion
+    );
+
+So for MH1.20.8B, do not recompute anything. Just pass this existing
+value into the state advancer.
+
+First change the header.
+
+From:
+
+static void advance(
+    StretchHelixWrappingState& state,
+    double dt,
+    const StretchHelixWrappingInput& input,
+    const StretchHelixWrappingKinematics& kinematics
+);
+
+to:
+
+static void advance(
+    StretchHelixWrappingState& state,
+    double dt,
+    const StretchHelixWrappingInput& input,
+    const StretchHelixWrappingKinematics& kinematics,
+    double formingRisePerRadian
+);
+
+Then change the .cpp definition in exactly the same way:
+
+void StretchHelixWrappingStateAdvancer::advance(
+    StretchHelixWrappingState& state,
+    double dt,
+    const StretchHelixWrappingInput& input,
+    const StretchHelixWrappingKinematics& kinematics,
+    double formingRisePerRadian)
+
+Add validation near the other validation checks:
+
+if (!std::isfinite(formingRisePerRadian))
+{
+    return;
+}
+
+Now make the key change.
+
+Keep:
+
+const double deltaAngle =
+    static_cast<double>(
+        input.rotationDirection
+    )
+    * input.rotationSpeed
+    * actualDt;
+
+but replace:
+
+const double deltaAxial =
+    input.axialSpeed
+    * actualDt;
+
+with:
+
+const double deltaAxial =
+    formingRisePerRadian
+    * deltaAngle;
+
+So the machine motion is now:
+
+rotation increment
+      ↓
+Δθ
+      ↓
+loaded rise/radian
+      ↓
+Δz = b_loaded × Δθ
+
+instead of:
+
+input axial speed
+      ↓
+final/customer pitch
+
+For your current case:
+
+formingRisePerRadian ≈ 9
+
+so:
+
+Δθ = 0.2
+Δz ≈ 1.8
+
+Update the diagnostic too:
+
+std::cout
+    << "[MH1.20.8B FORMING PITCH]"
+    << " deltaAngle="
+    << deltaAngle
+    << " deltaAxial="
+    << deltaAxial
+    << " risePerRadian="
+    << measuredRisePerRadian
+    << " formingRisePerRadian="
+    << formingRisePerRadian
+    << " inputAxialSpeed="
+    << input.axialSpeed
+    << " inputRotationSpeed="
+    << input.rotationSpeed
+    << std::endl;
+
+Now change the production call in StretchHelixFormingProcess::advanceWrapping().
+
+From:
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    input,
+    kinematics
+);
+
+to:
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    input,
+    kinematics,
+    loadedHelixRisePerRadian
+);
+
+That is the important production change.
+
+There is one other call site in your debug acceptance test:
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    input,
+    kinematics
+);
+
+That test is not testing springback compensation; it is testing the generic
+input-based wrapping kinematics. So calculate its rise/radian from the 
+original kinematics:
+
+const double testRisePerRadian =
+    helixRisePerRadianFromCurvatureTorsion(
+        kinematics.curvature,
+        kinematics.torsion
+    );
+
+and pass it:
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    input,
+    kinematics,
+    testRisePerRadian
+);
+
+If that helper isn't visible in AppController, an even simpler test-compatible 
+value is:
+
+const double testRisePerRadian =
+    input.axialSpeed
+    / (
+        static_cast<double>(input.rotationDirection)
+        * input.rotationSpeed
+    );
+
+but I prefer using the helix geometry helper if it is already accessible.
+
+One important detail: because deltaAngle contains rotationDirection, this:
+
+deltaAxial =
+    formingRisePerRadian
+    * deltaAngle;
+
+also transfers the sign of rotation into axial translation. That may be 
+exactly what your handedness convention needs, but we should verify the 
+sign visually and numerically. If your previous axial motion was always
+positive regardless of rotation direction, we may instead need:
+
+deltaAxial =
+    formingRisePerRadian
+    * std::abs(deltaAngle);
+
+Do not choose that prematurely. Run the current signed version first and 
+inspect whether the helix winds in the same axial direction as before.
+
+After compiling, the acceptance diagnostic we want is approximately:
+
+[MH1.20.8B FORMING PITCH]
+deltaAngle=0.2
+deltaAxial=1.8
+risePerRadian=9
+formingRisePerRadian=9
+inputAxialSpeed=20
+inputRotationSpeed=2
+
+Then the most important visual acceptance is:
+
+wrapping finishes
+      ↓
+LoadedHold begins
+      ↓
+NO axial flash
+NO sudden compression
+      ↓
+unloading begins smoothly
+κ_loaded → κ_final
+τ_loaded → τ_final
+
+One cleanup note for later: in rebuildStretchEvaluation() you currently
+calculate loadedHelixRadius, loadedHelixRisePerRadian, and loadedHelixPitch 
+twice. It is harmless but redundant. Leave it alone until MH1.20.8B passes;
+then we can remove the duplicate block safely.
+
+dzisiaj 19:26
+OK I have exactly  double helixRisePerRadianFromCurvatureTorsion( 
+     double curvature, 
+     double torsion) 
+ { 
+     const double denominator = 
+         curvature * curvature 
+         + torsion * torsion; 
+ 
+     if (!std::isfinite(denominator) 
+         || denominator <= 1e-18) 
+     { 
+         return 0.0; 
+     } 
+ 
+     return 
+         torsion 
+         / denominator; 
+ } in namespace of StrechHelixFormingProcess.cpp. Guide me where  prepare 
+ that helper const double testRisePerRadian =
+    helixRisePerRadianFromCurvatureTorsion(
+        kinematics.curvature,
+        kinematics.torsion
+    ); to be visible in AppController. Now it isn't visible in AppController.
+
+Because helixRisePerRadianFromCurvatureTorsion() currently lives in the 
+anonymous/local namespace of StretchHelixFormingProcess.cpp, it is 
+intentionally visible only inside that .cpp file. I would not move it 
+into AppController just to satisfy a debug test.
+
+For this phase, the cleanest small solution is to let the AppController 
+test derive the same original screw ratio directly from its test input.
+
+1. Leave the existing helper exactly where it is
+
+Do not change this:
+
+double helixRisePerRadianFromCurvatureTorsion(
+    double curvature,
+    double torsion)
+{
+    const double denominator =
+        curvature * curvature
+        + torsion * torsion;
+
+    if (!std::isfinite(denominator)
+        || denominator <= 1e-18)
+    {
+        return 0.0;
+    }
+
+    return
+        torsion
+        / denominator;
+}
+
+It belongs with the helix geometry calculations for now.
+
+2. In the AppController debug test, calculate the test ratio locally
+
+In:
+
+void AppController::
+debugTestStretchHelixWrappingTimeProgression()
+
+find this area:
+
+const double expectedWrappedLength =
+    std::min(
+        input.pipeArcLength,
+        kinematics.centerlineSpeed * dt
+    );
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    input,
+    kinematics
+);
+
+Insert the test rise between those two blocks:
+
+const double expectedWrappedLength =
+    std::min(
+        input.pipeArcLength,
+        kinematics.centerlineSpeed * dt
+    );
+
+// =====================================================
+// MH1.20.8B
+//
+// This debug test uses the original machine commands,
+// not the springback-compensated manufacturing helix.
+//
+// Therefore its forming rise per radian comes directly
+// from the original axial / rotational command ratio.
+// =====================================================
+
+const double signedRotationSpeed =
+    static_cast<double>(
+        input.rotationDirection
+    )
+    * input.rotationSpeed;
+
+if (!std::isfinite(signedRotationSpeed)
+    || std::abs(signedRotationSpeed) <= 1e-12)
+{
+    std::cout
+        << "[STRETCH HELIX TIME ACCEPTANCE]"
+        << " accepted=0"
+        << " reason=InvalidRotationSpeed"
+        << std::endl;
+
+    return;
+}
+
+const double testRisePerRadian =
+    input.axialSpeed
+    / signedRotationSpeed;
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    input,
+    kinematics,
+    testRisePerRadian
+);
+3. Why this is appropriate for this test
+
+There are now two different contexts.
+
+Production forming:
+
+StretchHelixFormingProcess
+        │
+        │ springback compensation
+        ▼
+loadedHelixRisePerRadian ≈ 9
+        │
+        ▼
+StateAdvancer
+
+Debug test:
+
+AppController test
+        │
+        │ original machine commands
+        │ axialSpeed = 20
+        │ rotationSpeed = 2
+        ▼
+testRisePerRadian = 20 / 2 = 10
+        │
+        ▼
+StateAdvancer
+
+So the generic StateAdvancer doesn't need to know whether 9 came
+from springback compensation or 10 came from original commands. 
+It simply receives:
+
+formingRisePerRadian
+
+and applies it.
+
+4. Production call remains different
+
+Inside:
+
+StretchHelixFormingProcess::advanceWrapping()
+
+you already have the correct compensated member available, so use:
+
+StretchHelixWrappingStateAdvancer::advance(
+    state,
+    dt,
+    input,
+    kinematics,
+    loadedHelixRisePerRadian
+);
+
+That's the important one for the visualization.
+
+5. Don't create a duplicate helper in AppController
+
+I specifically would not add another:
+
+double helixRisePerRadianFromCurvatureTorsion(...)
+
+to AppController.cpp.
+
+Otherwise we'd start creating this:
+
+StretchHelixFormingProcess.cpp
+    └── helix geometry formula
+
+AppController.cpp
+    └── same helix geometry formula   ← duplication
+
+another test later
+    └── same formula again            ← technical debt
+
+If later several production components genuinely need these formulas, 
+then we should promote them into a shared helix-geometry utility. 
+But that's a separate architectural cleanup, not necessary for MH1.20.8B.
+
+For now make only these two call-site changes:
+
+production:
+    loadedHelixRisePerRadian ≈ 9
+
+debug acceptance:
+    testRisePerRadian ≈ 10
+
+Then compile. The first console output I want to inspect is the production
+[MH1.20.8B FORMING PITCH] line. It should finally change 
+from risePerRadian=10 to approximately 
+risePerRadian=9.
+
+============================================================
+===============================================================
+=============================================================
+
+Yes. Since build succeeds and the visualization no longer shows the axial flash,
+I would mark MH1.20.8B = PASS.
+
+The next phases I’d predict are:
+
+MH1.20.9 — instantaneous unloading geometry validation. Verify that for
+intermediate unloading fractions, the current (κ, τ) produces the expected 
+radius, pitch, and global-Z helix axis—not just correct endpoint values.
+MH1.20.10 — LoadedHold continuity acceptance. Numerically compare 
+he final wrapping geometry against the first LoadedHold geometry.
+We want essentially zero position jump and very high tangent
+agreement at the transition. This will formally prove what you
+just confirmed visually.
+MH1.20.11 — Complete/final-reference acceptance. At unloading fraction 1.0,
+compare the entire current geometry against the final CAD/reference helix
+: node count, endpoint error, perhaps maximum/average node-position error, 
+and frame/tangent agreement.
+MH1.20.12 — cleanup and source-of-truth consolidation. Remove temporary
+diagnostics
+and duplicated calculations in rebuildStretchEvaluation()—you currently compute
+loadedHelixRadius, loadedHelixRisePerRadian, and loadedHelixPitch twice.
+We should do this only after all geometry acceptance checks pass.
+
+After those, I’d consider the first springback-aware stretch-helix milestone 
+essentially closed:
+
+Customer final helix
+        ↓
+final κ, τ
+        ↓
+springback compensation
+        ↓
+loaded κ, τ
+        ↓
+loaded support/tool geometry
+        ↓
+loaded wrapping kinematics
+        ↓
+LoadedHold continuity
+        ↓
+κ/τ unloading
+        ↓
+final CAD geometry
+
+I recommend we start MH1.20.9 now, but keep it diagnostic-only at first.
+No physics changes.
+
+The first acceptance should test three quantities during unloading:
+
+current κ, τ
+     ↓
+theoretical current radius
+theoretical current pitch
+theoretical current axis
+     ↓
+integrated current geometry
+     ↓
+measured radius / pitch / axis
+
+That gives us a strong check that the interpolation mathematics 
+and SpatialCurveIntegrator agree throughout the unloading path, 
+not merely at fraction=1.
+
+===============================================================
+===================================================================
+
+
+MH1.20.9 theoretical validation is passing.
+
+Your unloading state behaves exactly as expected:
+
+fraction 0.828
+radius ≈ 500.436
+pitch  ≈ 61.6536
+axis   = global Z
+
+fraction 0.972
+radius ≈ 508.418
+pitch  ≈ 62.637
+
+fraction 1.0
+radius = 510
+pitch  = 62.8319
+axis   ≈ global Z
+
+The trend is correct:
+
+loaded state
+R ≈ 459
+pitch ≈ 56.55
+   ↓ unloading
+R increases
+pitch increases
+   ↓
+final state
+R = 510
+pitch = 62.8319
+
+And the axis remains stable:
+
+axis ≈ (0,0,1)
+dotZ = 1
+accepted = 1
+
+So I would mark MH1.20.9A — theoretical instantaneous helix + axis = PASS.
+
+The next sub-phase should be MH1.20.9B — measured geometry validation.
+This is more important, because so far we have only confirmed that our 
+formulas produce sensible theoretical values. Now we should prove that
+the actual currentNodes geometry produced by the integrator has the same radius.
+
+Conceptually:
+
+current κ, τ
+      ↓
+theoreticalRadius
+      ↓
+SpatialCurveIntegrator
+      ↓
+currentNodes
+      ↓
+measure radius from nodes
+      ↓
+compare
+
+I suggest we start only with radius first:
+
+measuredAvgRadius
+measuredMinRadius
+measuredMaxRadius
+theoreticalRadius
+averageError
+radialSpread
+accepted
+
+We already have similar code from [MH1.19A LOADED RADIUS CHECK], so the safest 
+approach is to reuse that measurement logic rather than invent a second method.
+
+After radius passes at intermediate unloading fractions, we can add
+MH1.20.9C — measured pitch/axial rise validation.
+
+So yes: MH1.20.9A PASS. Next: MH1.20.9B measured current geometry radius.
+
+===========================================================================
+============================================================================
+
+
+Yes. For MH1.20.9B, keep it narrow: measure the actual radius of currentNodes
+during unloading and compare it with the theoretical currentRadius.
+
+Use the same axis geometry idea as MH1.19A. Since your helix axis is global Z 
+and the current start frame is built from startFrame.P, the axis point should
+be based on the current theoretical radius.
+
+Right after you have:
+
+const double currentRadius =
+    helixRadiusFromCurvatureTorsion(
+        currentCurvature,
+        currentTorsion
+    );
+
+and after the current geometry has been rebuilt into currentNodes, add this 
+diagnostic block:
+
+const Vec3D currentAxisPoint =
+    startFrame.P
+    - currentHelixStartFrame.N
+    * currentRadius;
+
+const Vec3D currentAxisDirection =
+    currentLancret.normalized();
+
+double radiusSum = 0.0;
+double radiusMin =
+    std::numeric_limits<double>::max();
+
+double radiusMax = 0.0;
+
+std::size_t radiusSampleCount = 0;
+
+for (const PipeNode& node : currentNodes)
+{
+    const Vec3D relative =
+        node.P - currentAxisPoint;
+
+    const double axialProjection =
+        dot(
+            relative,
+            currentAxisDirection
+        );
+
+    const Vec3D radialVector =
+        relative
+        - currentAxisDirection
+        * axialProjection;
+
+    const double measuredRadius =
+        radialVector.length();
+
+    if (!std::isfinite(measuredRadius))
+    {
+        continue;
+    }
+
+    radiusSum += measuredRadius;
+
+    radiusMin =
+        std::min(
+            radiusMin,
+            measuredRadius
+        );
+
+    radiusMax =
+        std::max(
+            radiusMax,
+            measuredRadius
+        );
+
+    ++radiusSampleCount;
+}
+
+Then calculate the acceptance values:
+
+double radiusAverage = 0.0;
+double radiusAverageError = 0.0;
+double radiusSpread = 0.0;
+
+bool radiusAccepted = false;
+
+if (radiusSampleCount > 0)
+{
+    radiusAverage =
+        radiusSum
+        / static_cast<double>(
+            radiusSampleCount
+        );
+
+    radiusAverageError =
+        std::abs(
+            radiusAverage
+            - currentRadius
+        );
+
+    radiusSpread =
+        radiusMax
+        - radiusMin;
+
+    const double averageTolerance = 0.01;
+    const double spreadTolerance = 0.01;
+
+    radiusAccepted =
+        radiusAverageError
+            <= averageTolerance
+        &&
+        radiusSpread
+            <= spreadTolerance;
+}
+
+Then print:
+
+std::cout
+    << "[MH1.20.9B CURRENT RADIUS]"
+    << " fraction="
+    << unloadingFraction
+    << " theoretical="
+    << currentRadius
+    << " measuredAvg="
+    << radiusAverage
+    << " measuredMin="
+    << radiusMin
+    << " measuredMax="
+    << radiusMax
+    << " averageError="
+    << radiusAverageError
+    << " spread="
+    << radiusSpread
+    << " samples="
+    << radiusSampleCount
+    << " accepted="
+    << radiusAccepted
+    << std::endl;
+
+One important check before compiling: confirm your axis-point sign.
+Earlier your loaded helix axis was:
+
+start point ≈ (0,-500,0)
+axis point ≈ (-459,-500,0)
+
+With your current frame convention:
+
+currentHelixStartFrame.N = {-1,0,0}
+
+that means the correct expression may actually be:
+
+const Vec3D currentAxisPoint =
+    startFrame.P
+    + currentHelixStartFrame.N
+    * currentRadius;
+
+because:
+
+(0,-500,0)
++
+(-1,0,0) * 459
+=
+(-459,-500,0)
+
+So use this version for your current convention:
+
+const Vec3D currentAxisPoint =
+    startFrame.P
+    + currentHelixStartFrame.N
+    * currentRadius;
+
+Expected output near the end should look roughly like:
+
+[MH1.20.9B CURRENT RADIUS]
+fraction=0.828
+theoretical=500.436
+measuredAvg≈500.436
+measuredMin≈500.435
+measuredMax≈500.437
+averageError≈very small
+spread≈very small
+samples=26001
+accepted=1
+
+and finally:
+
+fraction=1
+theoretical=510
+measuredAvg≈510
+accepted=1
+
+Do not add pitch measurement yet. First run this and show me 2–3
+[MH1.20.9B CURRENT RADIUS]
+lines.
