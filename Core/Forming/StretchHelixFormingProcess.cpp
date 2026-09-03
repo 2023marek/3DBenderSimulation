@@ -305,6 +305,8 @@ namespace
 
         return frame;
     }
+    bool mh12010LoadedHoldChecked = false;
+    bool mh12010LoadedHoldAccepted = false;
 }
 
 bool StretchHelixFormingProcess::initialize(
@@ -336,6 +338,13 @@ bool StretchHelixFormingProcess::initialize(
     loadedReferenceResult.clear();
     finalResult.clear();
     currentNodes.clear();
+    // MH1.20.10 diagnostic reset.
+    mh12010LastWrappingNodes.clear();
+    mh12010WrappingSnapshotValid = false;
+    mh12010LoadedHoldChecked = false;
+    mh12010LoadedHoldAccepted = false;
+
+
 
     if (!input.isValid())
         return false;
@@ -538,6 +547,9 @@ rebuildCurrentGeometry()
         << " nodes="
         << currentNodes.size()
         << std::endl;
+    // ============================================================
+      // BASIC INPUT / STATE VALIDATION
+      // ============================================================
 
     if (!input.isValid())
         return false;
@@ -549,9 +561,16 @@ rebuildCurrentGeometry()
         return false;
     }
 
-    // =====================================================
+    // ============================================================
     // UPDATE PERSISTENT FORMED MATERIAL
-    // =====================================================
+    //
+    // This updates formedHistoryNodes.
+    //
+    // IMPORTANT:
+    // currentNodes is still empty after this call.
+    // We have updated the SOURCE history, but have not yet built
+    // the display geometry.
+    // ===============================================================================================================
 
 
     if (!updateFormedHistory())
@@ -567,20 +586,58 @@ rebuildCurrentGeometry()
         << currentNodes.size()
         << std::endl;
 
-    // =====================================================
-    // BUILD CURRENT DISPLAY GEOMETRY
-    // =====================================================
+    std::cout
+        << "[MH1.20.10A AFTER HISTORY UPDATE]"
+        << " formedHistoryNodes="
+        << formedHistoryNodes.size()
+        << " currentNodes="
+        << currentNodes.size()
+        << std::endl;
+
+    // ============================================================
+    // APPEND INCOMING / UNFORMED GEOMETRY
+    //
+    // After this call currentNodes contains the incoming section,
+    // but NOT YET the complete displayed pipe.
+    //
+    // Therefore:
+    //     DO NOT perform endpoint identity checks here.
+    // ============================================================
+
 
     if (!appendIncomingGeometry(currentNodes))
     {
         return false;
     }
 
+
+
     std::cout
         << "[MH1 CURRENT AFTER INCOMING]"
         << " nodes="
         << currentNodes.size()
         << std::endl;
+
+    std::cout
+        << "[MH1.20.10A AFTER INCOMING]"
+        << " incomingDisplayNodes="
+        << currentNodes.size()
+        << " formedHistoryNodes="
+        << formedHistoryNodes.size()
+        << std::endl;
+
+    // ============================================================
+   // APPEND FORMED HISTORY
+   //
+   // After this call currentNodes represents the COMPLETE
+   // displayed pipe:
+   //
+   //     incoming geometry
+   //          +
+   //     formed history
+   //
+   // Whole-geometry diagnostics belong AFTER this point.
+   // ============================================================
 
 
     if (!appendFormedHistory(currentNodes))
@@ -594,8 +651,11 @@ rebuildCurrentGeometry()
         << currentNodes.size()
         << std::endl;
 
+       // ============================================================
+       // CURRENT LENGTH DIAGNOSTIC
+       // ============================================================
 
-    const double formedLength =
+        const double formedLength =
         std::clamp(
             state.wrappedLength,
             0.0,
@@ -620,7 +680,86 @@ rebuildCurrentGeometry()
         << " currentNodes="
         << currentNodes.size()
         << std::endl;
-// temporary for debugging
+
+    // ============================================================
+// MH1.20.10A.2
+//
+// ENDPOINT IDENTITY DIAGNOSTIC
+//
+// We use exactly the same reference-selection rule as
+// appendFormedGeometry().
+// ============================================================
+
+    const SpatialCurveIntegrationResult* diagnosticReference =
+        &referenceResult;
+
+    if (
+        mechanicsValid
+        && loadedReferenceResult.valid
+        && loadedReferenceResult.isComplete()
+        )
+    {
+        diagnosticReference =
+            &loadedReferenceResult;
+    }
+
+    if (!currentNodes.empty()
+        && diagnosticReference->valid
+        && diagnosticReference->isComplete()
+        && !diagnosticReference->nodes.empty())
+    {
+        const std::vector<PipeNode>& referenceNodes =
+            diagnosticReference->nodes;
+
+        const Vec3D& currentFirstP =
+            currentNodes.front().pos;
+
+        const Vec3D& currentLastP =
+            currentNodes.back().pos;
+
+        const Vec3D& referenceFirstP =
+            referenceNodes.front().pos;
+
+        const Vec3D& referenceLastP =
+            referenceNodes.back().pos;
+
+        const double firstGap =
+            (
+                currentFirstP
+                - referenceFirstP
+                ).length();
+
+        const double lastGap =
+            (
+                currentLastP
+                - referenceLastP
+                ).length();
+
+        const double firstToReferenceLastGap =
+            (
+                currentFirstP
+                - referenceLastP
+                ).length();
+
+        const double lastToReferenceFirstGap =
+            (
+                currentLastP
+                - referenceFirstP
+                ).length();
+
+     
+    }
+
+    // MH1.18
+        // MESH FRAME VALIDATION
+        //
+        // Every displayed node must contain a usable orthonormal-ish
+        // material frame before the mesh renderer consumes it.
+        // ============================================================
+
+
+
+
     bool framesValid =
         true;
 
@@ -718,6 +857,1545 @@ advanceTime(
 
     case StretchBendingManufacturingStage::LoadedHold:
     {
+
+    
+        // ============================================================
+        // MH1.20.10B
+        //
+        // Verify continuity between:
+        //
+        //     final Wrapping geometry
+        //
+        // and
+        //
+        //     geometry present when LoadedHold is entered.
+        //
+        // IMPORTANT:
+        //
+        // This check must happen BEFORE:
+        //
+        //     stage = Unloading;
+        //     advanceUnloading(dt);
+        //
+        // because advanceUnloading() rebuilds analytical unloading
+        // geometry and would no longer represent the pure stage
+        // boundary.
+        // ============================================================
+
+        if (!mh12010LoadedHoldChecked)
+        {
+            mh12010LoadedHoldChecked =
+                true;
+
+            const std::size_t wrappingCount =
+                mh12010LastWrappingNodes.size();
+
+            const std::size_t loadedHoldCount =
+                currentNodes.size();
+
+            const bool countMatch =
+                mh12010WrappingSnapshotValid
+                && wrappingCount == loadedHoldCount;
+
+            double maxPositionGap =
+                0.0;
+
+            double averagePositionGap =
+                0.0;
+
+            double minimumTangentDot =
+                1.0;
+
+            std::size_t comparedNodes =
+                0;
+
+            if (countMatch)
+            {
+                double positionGapSum =
+                    0.0;
+
+                for (std::size_t i = 0;
+                    i < wrappingCount;
+                    ++i)
+                {
+                    const PipeNode& wrappingNode =
+                        mh12010LastWrappingNodes[i];
+
+                    const PipeNode& loadedHoldNode =
+                        currentNodes[i];
+
+                    const double positionGap =
+                        (
+                            loadedHoldNode.pos
+                            - wrappingNode.pos
+                            ).length();
+
+                    positionGapSum +=
+                        positionGap;
+
+                    maxPositionGap =
+                        std::max(
+                            maxPositionGap,
+                            positionGap
+                        );
+
+                    const double tangentDot =
+                        dot(
+                            wrappingNode.T,
+                            loadedHoldNode.T
+                        );
+
+                    minimumTangentDot =
+                        std::min(
+                            minimumTangentDot,
+                            tangentDot
+                        );
+
+                    ++comparedNodes;
+                }
+
+                if (comparedNodes > 0)
+                {
+                    averagePositionGap =
+                        positionGapSum
+                        / static_cast<double>(
+                            comparedNodes
+                            );
+                }
+            }
+
+            const double positionTolerance =
+                1e-9;
+
+            const double tangentTolerance =
+                1e-9;
+
+            mh12010LoadedHoldAccepted =
+                countMatch
+                && comparedNodes == wrappingCount
+                && maxPositionGap
+                <= positionTolerance
+                && minimumTangentDot
+                >= 1.0 - tangentTolerance;
+
+            std::cout
+                << "[MH1.20.10B LOADED HOLD CONTINUITY]"
+                << " wrappingNodes="
+                << wrappingCount
+                << " loadedHoldNodes="
+                << loadedHoldCount
+                << " comparedNodes="
+                << comparedNodes
+                << " averagePositionGap="
+                << averagePositionGap
+                << " maxPositionGap="
+                << maxPositionGap
+                << " minTangentDot="
+                << minimumTangentDot
+                << " accepted="
+                << mh12010LoadedHoldAccepted
+                << std::endl;
+        }
+
+
+        const double testFraction = 0.0;
+
+        const double testCurvature =
+            loadedHelixCurvature;
+
+        const double testTorsion =
+            loadedHelixTorsion;
+
+        const Frame testStartFrame =
+            buildHelixStartFrameForGlobalZAxis(
+                startFrame.P,
+                testCurvature,
+                testTorsion
+            );
+
+       
+
+
+        const CurvatureTorsionProfile testProfile =
+            ConstantCurvatureTorsionProfileBuilder::build(
+                input.pipeArcLength,
+                testCurvature,
+                testTorsion
+            );
+
+        SpatialCurveIntegrator integrator;
+
+        const SpatialCurveIntegrationResult testResult =
+            integrator.integrate(
+                testStartFrame,
+                testProfile,
+                input.sampleStep
+            );
+
+        std::cout
+            << "[MH1.20.10C FRACTION ZERO BUILD]"
+            << " valid="
+            << testResult.valid
+            << " complete="
+            << testResult.isComplete()
+            << " loadedHoldNodes="
+            << currentNodes.size()
+            << " analyticalNodes="
+            << testResult.nodes.size()
+            << std::endl;
+
+        if (
+            testResult.valid
+            && testResult.isComplete()
+            && !testResult.nodes.empty()
+            && !currentNodes.empty()
+            )
+        {
+            const Vec3D& holdFirst =
+                currentNodes.front().pos;
+
+            const Vec3D& holdLast =
+                currentNodes.back().pos;
+
+            const Vec3D& analyticalFirst =
+                testResult.nodes.front().pos;
+
+            const Vec3D& analyticalLast =
+                testResult.nodes.back().pos;
+
+            const double firstToFirst =
+                (holdFirst - analyticalFirst).length();
+
+            const double firstToLast =
+                (holdFirst - analyticalLast).length();
+
+            const double lastToFirst =
+                (holdLast - analyticalFirst).length();
+
+            const double lastToLast =
+                (holdLast - analyticalLast).length();
+
+            std::cout
+                << "[MH1.20.10C ENDPOINT RELATION]"
+                << " firstToFirst="
+                << firstToFirst
+                << " firstToLast="
+                << firstToLast
+                << " lastToFirst="
+                << lastToFirst
+                << " lastToLast="
+                << lastToLast
+                << std::endl;
+        }
+
+
+        // ============================================================
+// MH1.20.10C.2
+//
+// Compare SHAPE INVARIANTS of the LoadedHold manufacturing
+// history against the theoretical loaded helix.
+//
+// We do NOT compare raw node positions here.
+//
+// Why?
+//
+// The manufacturing history is accumulated and transformed
+// during wrapping, while the analytical helix is freshly
+// integrated from a start frame.
+//
+// Therefore raw endpoint identity is not a reliable test.
+//
+// Instead we compare:
+//
+//     1. helix radius
+//     2. helix pitch / rise per radian
+//     3. helix axis direction
+//
+// If these match, then the LoadedHold shape is mechanically
+// consistent with the required loaded helix.
+// ============================================================
+
+        if (
+            mh12010WrappingSnapshotValid
+            && mh12010LastWrappingNodes.size() >= 3
+            )
+        {
+            const std::vector<PipeNode>& holdNodes =
+                mh12010LastWrappingNodes;
+
+            // --------------------------------------------------------
+            // Theoretical loaded helix values
+            // --------------------------------------------------------
+
+            const double theoreticalRadius =
+                loadedHelixRadius;
+
+            const double theoreticalRisePerRadian =
+                loadedHelixRisePerRadian;
+
+            const double theoreticalPitch =
+                loadedHelixPitch;
+
+            const Vec3D theoreticalAxisDirection =
+            {
+                0.0,
+                0.0,
+                1.0
+            };
+
+
+            // --------------------------------------------------------
+            // Reconstruct the theoretical axis position.
+            //
+            // For the loaded helix:
+            //
+            //     start point
+            //         +
+            //     start normal * loaded radius
+            //
+            // gives a point on the helix axis.
+            // --------------------------------------------------------
+
+            const Frame loadedStartFrame =
+                buildHelixStartFrameForGlobalZAxis(
+                    startFrame.P,
+                    loadedHelixCurvature,
+                    loadedHelixTorsion
+                );
+
+            const Vec3D theoreticalAxisPoint =
+                loadedStartFrame.P
+                + loadedStartFrame.N
+                * theoreticalRadius;
+
+
+            // ========================================================
+            // PART 1
+            // Measure radius of LoadedHold history
+            // ========================================================
+
+            double radiusSum =
+                0.0;
+
+            double measuredMinRadius =
+                std::numeric_limits<double>::max();
+
+            double measuredMaxRadius =
+                0.0;
+
+            std::size_t radiusSampleCount =
+                0;
+
+            for (const PipeNode& node : holdNodes)
+            {
+                const Vec3D relative =
+                    node.pos
+                    - theoreticalAxisPoint;
+
+                const double axialProjection =
+                    dot(
+                        relative,
+                        theoreticalAxisDirection
+                    );
+
+                const Vec3D radialVector =
+                    relative
+                    - theoreticalAxisDirection
+                    * axialProjection;
+
+                const double measuredRadius =
+                    radialVector.length();
+
+                if (!std::isfinite(measuredRadius))
+                {
+                    continue;
+                }
+
+                radiusSum +=
+                    measuredRadius;
+
+                measuredMinRadius =
+                    std::min(
+                        measuredMinRadius,
+                        measuredRadius
+                    );
+
+                measuredMaxRadius =
+                    std::max(
+                        measuredMaxRadius,
+                        measuredRadius
+                    );
+
+                ++radiusSampleCount;
+            }
+
+            double measuredAverageRadius =
+                0.0;
+
+            if (radiusSampleCount > 0)
+            {
+                measuredAverageRadius =
+                    radiusSum
+                    / static_cast<double>(
+                        radiusSampleCount
+                        );
+            }
+
+            const double radiusAverageError =
+                std::abs(
+                    measuredAverageRadius
+                    - theoreticalRadius
+                );
+
+            const double radiusSpread =
+                measuredMaxRadius
+                - measuredMinRadius;
+// Is here correct place to insert MH1.20.10C.3  ?
+//
+// Inspect radial error along the LoadedHold manufacturing
+// history.
+
+// ============================================================
+// MH1.20.10C.3
+//
+// Inspect radial error along the LoadedHold manufacturing
+// history.
+//
+// C.2 showed:
+//
+//     correct pitch
+//     correct axis
+//     radius slowly varies
+//
+// Now determine whether that radius error is:
+//
+//     constant,
+//     random,
+//     or accumulated along the wrapped history.
+// ============================================================
+
+            const std::size_t lastHoldIndex =
+                holdNodes.size() - 1;
+
+            const std::size_t diagnosticIndices[] =
+            {
+                0,
+                lastHoldIndex / 4,
+                lastHoldIndex / 2,
+                (3 * lastHoldIndex) / 4,
+                lastHoldIndex
+            };
+
+            for (const std::size_t index : diagnosticIndices)
+            {
+                const PipeNode& node =
+                    holdNodes[index];
+
+                const Vec3D relative =
+                    node.pos
+                    - theoreticalAxisPoint;
+
+                const double axialProjection =
+                    dot(
+                        relative,
+                        theoreticalAxisDirection
+                    );
+
+                const Vec3D radialVector =
+                    relative
+                    - theoreticalAxisDirection
+                    * axialProjection;
+
+                const double measuredRadius =
+                    radialVector.length();
+
+                const double radialError =
+                    measuredRadius
+                    - theoreticalRadius;
+
+                const double normalizedPosition =
+                    static_cast<double>(index)
+                    / static_cast<double>(lastHoldIndex);
+
+                std::cout
+                    << "[MH1.20.10C.3 RADIAL DRIFT]"
+                    << " fraction="
+                    << normalizedPosition
+                    << " index="
+                    << index
+                    << " radius="
+                    << measuredRadius
+                    << " error="
+                    << radialError
+                    << std::endl;
+            }
+
+
+            // ========================================================
+            // PART 2
+            // Measure pitch from approximately one full revolution
+            // ========================================================
+
+            bool pitchMeasurementValid =
+                false;
+
+            double measuredRisePerRadian =
+                0.0;
+
+            double measuredPitch =
+                0.0;
+
+            double measuredAngle =
+                0.0;
+
+            std::size_t pitchEndIndex =
+                0;
+
+            if (holdNodes.size() >= 2)
+            {
+                const double twoPi =
+                    2.0 * 3.14159265358979323846;
+
+                const Vec3D firstRelative =
+                    holdNodes.front().pos
+                    - theoreticalAxisPoint;
+
+                const double firstAxialProjection =
+                    dot(
+                        firstRelative,
+                        theoreticalAxisDirection
+                    );
+
+                Vec3D previousRadialDirection =
+                    firstRelative
+                    - theoreticalAxisDirection
+                    * firstAxialProjection;
+
+                const double previousRadius =
+                    previousRadialDirection.length();
+
+                if (previousRadius > 1e-12)
+                {
+                    previousRadialDirection =
+                        previousRadialDirection
+                        / previousRadius;
+
+                    const double startAxialPosition =
+                        dot(
+                            firstRelative,
+                            theoreticalAxisDirection
+                        );
+
+                    double accumulatedAngle =
+                        0.0;
+
+                    for (std::size_t i = 1;
+                        i < holdNodes.size();
+                        ++i)
+                    {
+                        const Vec3D relative =
+                            holdNodes[i].pos
+                            - theoreticalAxisPoint;
+
+                        const double axialProjection =
+                            dot(
+                                relative,
+                                theoreticalAxisDirection
+                            );
+
+                        Vec3D radialDirection =
+                            relative
+                            - theoreticalAxisDirection
+                            * axialProjection;
+
+                        const double radialLength =
+                            radialDirection.length();
+
+                        if (radialLength <= 1e-12)
+                        {
+                            continue;
+                        }
+
+                        radialDirection =
+                            radialDirection
+                            / radialLength;
+
+                        const Vec3D radialCross =
+                            cross(
+                                previousRadialDirection,
+                                radialDirection
+                            );
+
+                        const double sinAngle =
+                            dot(
+                                radialCross,
+                                theoreticalAxisDirection
+                            );
+
+                        const double cosAngle =
+                            dot(
+                                previousRadialDirection,
+                                radialDirection
+                            );
+
+                        const double deltaAngle =
+                            std::atan2(
+                                sinAngle,
+                                cosAngle
+                            );
+
+                        accumulatedAngle +=
+                            deltaAngle;
+
+                        previousRadialDirection =
+                            radialDirection;
+
+                        if (std::abs(accumulatedAngle)
+                            >= twoPi)
+                        {
+                            const double endAxialPosition =
+                                axialProjection;
+
+                            const double axialAdvance =
+                                endAxialPosition
+                                - startAxialPosition;
+
+                            measuredAngle =
+                                accumulatedAngle;
+
+                            measuredRisePerRadian =
+                                axialAdvance
+                                / measuredAngle;
+
+                            measuredPitch =
+                                measuredRisePerRadian
+                                * twoPi;
+
+                            pitchEndIndex =
+                                i;
+
+                            pitchMeasurementValid =
+                                std::isfinite(
+                                    measuredPitch
+                                );
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // ============================================================
+            // MH1.20.10C.4
+            //
+            // Estimate the actual transverse axis center of the
+            // LoadedHold manufacturing helix.
+            //
+            // We already know from C.2 that the helix axis direction is
+            // intended to be global Z.
+            //
+            // Therefore the unknown part of the axis is only:
+            //
+            //     center X
+            //     center Y
+            //
+            // We use approximately one complete revolution, already found
+            // by the pitch measurement.
+            //
+            // For uniformly sampled points around a complete circle:
+            //
+            //     average X ? circle center X
+            //     average Y ? circle center Y
+            //
+            // This is a diagnostic estimate only.
+            // It does NOT modify production geometry.
+            // ============================================================
+
+            bool estimatedCenterValid =
+                false;
+
+            Vec3D estimatedAxisPoint =
+                theoreticalAxisPoint;
+
+            double estimatedCenterOffset =
+                0.0;
+
+            std::size_t centerSampleCount =
+                0;
+
+            if (
+                pitchMeasurementValid
+                && pitchEndIndex > 0
+                && pitchEndIndex < holdNodes.size()
+                )
+            {
+                double xSum =
+                    0.0;
+
+                double ySum =
+                    0.0;
+
+                // --------------------------------------------------------
+                // Use the same approximately-one-turn interval that was
+                // identified by the pitch diagnostic.
+                // --------------------------------------------------------
+
+                for (std::size_t i = 0;
+                    i <= pitchEndIndex;
+                    ++i)
+                {
+                    xSum +=
+                        holdNodes[i].pos.x;
+
+                    ySum +=
+                        holdNodes[i].pos.y;
+
+                    ++centerSampleCount;
+                }
+
+                if (centerSampleCount > 0)
+                {
+                    const double estimatedCenterX =
+                        xSum
+                        / static_cast<double>(
+                            centerSampleCount
+                            );
+
+                    const double estimatedCenterY =
+                        ySum
+                        / static_cast<double>(
+                            centerSampleCount
+                            );
+
+                    // ----------------------------------------------------
+                    // Z does not determine the transverse center because
+                    // the helix axis extends along global Z.
+                    //
+                    // Keep the theoretical axis point Z only for forming
+                    // a convenient Vec3D representation.
+                    // ----------------------------------------------------
+
+                    estimatedAxisPoint =
+                    {
+                        estimatedCenterX,
+                        estimatedCenterY,
+                        theoreticalAxisPoint.z
+                    };
+
+                    const double centerDx =
+                        estimatedCenterX
+                        - theoreticalAxisPoint.x;
+
+                    const double centerDy =
+                        estimatedCenterY
+                        - theoreticalAxisPoint.y;
+
+                    estimatedCenterOffset =
+                        std::sqrt(
+                            centerDx * centerDx
+                            + centerDy * centerDy
+                        );
+
+                    estimatedCenterValid =
+                        std::isfinite(
+                            estimatedCenterOffset
+                        );
+                }
+            }
+
+
+            // ============================================================
+// Re-measure LoadedHold radius using the estimated axis center.
+//
+// If the previous radius variation was mainly caused by a
+// displaced measurement axis, this spread should collapse.
+// ============================================================
+
+            double estimatedCenterRadiusSum =
+                0.0;
+
+            double estimatedCenterMinRadius =
+                std::numeric_limits<double>::max();
+
+            double estimatedCenterMaxRadius =
+                0.0;
+
+            std::size_t estimatedCenterRadiusSamples =
+                0;
+
+            if (estimatedCenterValid)
+            {
+                for (const PipeNode& node : holdNodes)
+                {
+                    const Vec3D relative =
+                        node.pos
+                        - estimatedAxisPoint;
+
+                    const double axialProjection =
+                        dot(
+                            relative,
+                            theoreticalAxisDirection
+                        );
+
+                    const Vec3D radialVector =
+                        relative
+                        - theoreticalAxisDirection
+                        * axialProjection;
+
+                    const double radius =
+                        radialVector.length();
+
+                    if (!std::isfinite(radius))
+                    {
+                        continue;
+                    }
+
+                    estimatedCenterRadiusSum +=
+                        radius;
+
+                    estimatedCenterMinRadius =
+                        std::min(
+                            estimatedCenterMinRadius,
+                            radius
+                        );
+
+                    estimatedCenterMaxRadius =
+                        std::max(
+                            estimatedCenterMaxRadius,
+                            radius
+                        );
+
+                    ++estimatedCenterRadiusSamples;
+                }
+            }
+
+            double estimatedCenterAverageRadius =
+                0.0;
+
+            if (estimatedCenterRadiusSamples > 0)
+            {
+                estimatedCenterAverageRadius =
+                    estimatedCenterRadiusSum
+                    / static_cast<double>(
+                        estimatedCenterRadiusSamples
+                        );
+            }
+
+            double estimatedCenterRadiusSpread =
+                0.0;
+
+            double estimatedCenterRadiusError =
+                0.0;
+
+            if (estimatedCenterRadiusSamples > 0)
+            {
+                estimatedCenterRadiusSpread =
+                    estimatedCenterMaxRadius
+                    - estimatedCenterMinRadius;
+
+                estimatedCenterRadiusError =
+                    std::abs(
+                        estimatedCenterAverageRadius
+                        - theoreticalRadius
+                    );
+            }
+
+
+            std::cout
+                << "[MH1.20.10C.4 AXIS CENTER]"
+                << " theoretical=("
+                << theoreticalAxisPoint.x
+                << ", "
+                << theoreticalAxisPoint.y
+                << ")"
+                << " estimated=("
+                << estimatedAxisPoint.x
+                << ", "
+                << estimatedAxisPoint.y
+                << ")"
+                << " offset="
+                << estimatedCenterOffset
+                << " samples="
+                << centerSampleCount
+                << " valid="
+                << estimatedCenterValid
+                << std::endl;
+
+            std::cout
+                << "[MH1.20.10C.4 RECENTERED RADIUS]"
+                << " theoretical="
+                << theoreticalRadius
+                << " measuredAvg="
+                << estimatedCenterAverageRadius
+                << " measuredMin="
+                << estimatedCenterMinRadius
+                << " measuredMax="
+                << estimatedCenterMaxRadius
+                << " averageError="
+                << estimatedCenterRadiusError
+                << " spread="
+                << estimatedCenterRadiusSpread
+                << " samples="
+                << estimatedCenterRadiusSamples
+                << std::endl;
+
+
+            // ============================================================
+// MH1.20.10C.5
+//
+// Estimate a LOCAL transverse helix-axis center at several
+// locations along the LoadedHold manufacturing history.
+//
+// C.4 showed that one constant correction to the theoretical
+// axis center does NOT remove the radius spread.
+//
+// Now test whether the apparent helix center moves along the
+// accumulated manufacturing history.
+//
+// We inspect three approximately-one-turn windows:
+//
+//     START
+//     MIDDLE
+//     END
+//
+// Diagnostic only.
+// No production geometry is modified.
+// ============================================================
+
+            if (
+                pitchMeasurementValid
+                && pitchEndIndex > 10
+                && holdNodes.size() > pitchEndIndex
+                )
+            {
+                const std::size_t oneTurnNodeCount =
+                    pitchEndIndex + 1;
+
+                // --------------------------------------------------------
+                // Helper lambda:
+                //
+                // Estimate X/Y center by averaging the points over one
+                // approximately complete revolution.
+                //
+                // This is not yet a precision circle fit.
+                // It is sufficient for detecting center drift.
+                // --------------------------------------------------------
+
+                auto estimateWindowCenter =
+                    [&holdNodes](
+                        std::size_t beginIndex,
+                        std::size_t endIndex
+                        ) -> Vec3D
+                    {
+                        double xSum = 0.0;
+                        double ySum = 0.0;
+
+                        std::size_t count = 0;
+
+                        for (std::size_t i = beginIndex;
+                            i <= endIndex;
+                            ++i)
+                        {
+                            xSum += holdNodes[i].pos.x;
+                            ySum += holdNodes[i].pos.y;
+
+                            ++count;
+                        }
+
+                        if (count == 0)
+                        {
+                            return {};
+                        }
+
+                        return
+                        {
+                            xSum / static_cast<double>(count),
+                            ySum / static_cast<double>(count),
+                            0.0
+                        };
+                    };
+
+
+                // --------------------------------------------------------
+                // START window
+                // --------------------------------------------------------
+
+                const std::size_t startBegin =
+                    0;
+
+                const std::size_t startEnd =
+                    std::min(
+                        holdNodes.size() - 1,
+                        oneTurnNodeCount - 1
+                    );
+
+
+                // --------------------------------------------------------
+                // MIDDLE window
+                // --------------------------------------------------------
+
+                const std::size_t halfTurn =
+                    oneTurnNodeCount / 2;
+
+                const std::size_t middleIndex =
+                    holdNodes.size() / 2;
+
+                std::size_t middleBegin =
+                    0;
+
+                if (middleIndex > halfTurn)
+                {
+                    middleBegin =
+                        middleIndex - halfTurn;
+                }
+
+                std::size_t middleEnd =
+                    middleBegin
+                    + oneTurnNodeCount
+                    - 1;
+
+                if (middleEnd >= holdNodes.size())
+                {
+                    middleEnd =
+                        holdNodes.size() - 1;
+
+                    middleBegin =
+                        middleEnd
+                        - oneTurnNodeCount
+                        + 1;
+                }
+
+
+                // --------------------------------------------------------
+                // END window
+                // --------------------------------------------------------
+
+                const std::size_t endEnd =
+                    holdNodes.size() - 1;
+
+                const std::size_t endBegin =
+                    endEnd
+                    - oneTurnNodeCount
+                    + 1;
+
+
+                // --------------------------------------------------------
+                // Estimate local centers
+                // --------------------------------------------------------
+
+                const Vec3D startCenter =
+                    estimateWindowCenter(
+                        startBegin,
+                        startEnd
+                    );
+
+                const Vec3D middleCenter =
+                    estimateWindowCenter(
+                        middleBegin,
+                        middleEnd
+                    );
+
+                const Vec3D endCenter =
+                    estimateWindowCenter(
+                        endBegin,
+                        endEnd
+                    );
+
+//
+
+
+// ============================================================
+// MH1.20.10C.6
+//
+// Measure LOCAL radius statistics inside each approximately
+// one-turn window, using that window's own estimated center.
+//
+// This separates:
+//
+//     center drift
+//
+// from:
+//
+//     true local radial distortion.
+// ============================================================
+
+                auto measureLocalRadius =
+                    [&holdNodes](
+                        std::size_t beginIndex,
+                        std::size_t endIndex,
+                        const Vec3D& localCenter,
+                        double& averageRadius,
+                        double& minRadius,
+                        double& maxRadius,
+                        double& spread,
+                        std::size_t& sampleCount
+                        )
+                    {
+                        double radiusSum =
+                            0.0;
+
+                        minRadius =
+                            std::numeric_limits<double>::max();
+
+                        maxRadius =
+                            0.0;
+
+                        sampleCount =
+                            0;
+
+                        for (std::size_t i = beginIndex;
+                            i <= endIndex;
+                            ++i)
+                        {
+                            const double dx =
+                                holdNodes[i].pos.x
+                                - localCenter.x;
+
+                            const double dy =
+                                holdNodes[i].pos.y
+                                - localCenter.y;
+
+                            const double radius =
+                                std::sqrt(
+                                    dx * dx
+                                    + dy * dy
+                                );
+
+                            if (!std::isfinite(radius))
+                            {
+                                continue;
+                            }
+
+                            radiusSum +=
+                                radius;
+
+                            minRadius =
+                                std::min(
+                                    minRadius,
+                                    radius
+                                );
+
+                            maxRadius =
+                                std::max(
+                                    maxRadius,
+                                    radius
+                                );
+
+                            ++sampleCount;
+                        }
+
+                        averageRadius =
+                            0.0;
+
+                        spread =
+                            0.0;
+
+                        if (sampleCount > 0)
+                        {
+                            averageRadius =
+                                radiusSum
+                                / static_cast<double>(
+                                    sampleCount
+                                    );
+
+                            spread =
+                                maxRadius
+                                - minRadius;
+                        }
+                    };
+
+
+                double startAverageRadius = 0.0;
+                double startMinRadius = 0.0;
+                double startMaxRadius = 0.0;
+                double startRadiusSpread = 0.0;
+                std::size_t startRadiusSamples = 0;
+
+                double middleAverageRadius = 0.0;
+                double middleMinRadius = 0.0;
+                double middleMaxRadius = 0.0;
+                double middleRadiusSpread = 0.0;
+                std::size_t middleRadiusSamples = 0;
+
+                double endAverageRadius = 0.0;
+                double endMinRadius = 0.0;
+                double endMaxRadius = 0.0;
+                double endRadiusSpread = 0.0;
+                std::size_t endRadiusSamples = 0;
+
+                measureLocalRadius(
+                    startBegin,
+                    startEnd,
+                    startCenter,
+                    startAverageRadius,
+                    startMinRadius,
+                    startMaxRadius,
+                    startRadiusSpread,
+                    startRadiusSamples
+                );
+
+                measureLocalRadius(
+                    middleBegin,
+                    middleEnd,
+                    middleCenter,
+                    middleAverageRadius,
+                    middleMinRadius,
+                    middleMaxRadius,
+                    middleRadiusSpread,
+                    middleRadiusSamples
+                );
+
+                measureLocalRadius(
+                    endBegin,
+                    endEnd,
+                    endCenter,
+                    endAverageRadius,
+                    endMinRadius,
+                    endMaxRadius,
+                    endRadiusSpread,
+                    endRadiusSamples
+                );
+
+                std::cout
+                    << "[MH1.20.10C.6 LOCAL RADIUS START]"
+                    << " theoretical="
+                    << theoreticalRadius
+                    << " average="
+                    << startAverageRadius
+                    << " min="
+                    << startMinRadius
+                    << " max="
+                    << startMaxRadius
+                    << " spread="
+                    << startRadiusSpread
+                    << " averageError="
+                    << std::abs(
+                        startAverageRadius
+                        - theoreticalRadius
+                    )
+                    << " samples="
+                    << startRadiusSamples
+                    << std::endl;
+
+
+                std::cout
+                    << "[MH1.20.10C.6 LOCAL RADIUS MIDDLE]"
+                    << " theoretical="
+                    << theoreticalRadius
+                    << " average="
+                    << middleAverageRadius
+                    << " min="
+                    << middleMinRadius
+                    << " max="
+                    << middleMaxRadius
+                    << " spread="
+                    << middleRadiusSpread
+                    << " averageError="
+                    << std::abs(
+                        middleAverageRadius
+                        - theoreticalRadius
+                    )
+                    << " samples="
+                    << middleRadiusSamples
+                    << std::endl;
+
+
+                std::cout
+                    << "[MH1.20.10C.6 LOCAL RADIUS END]"
+                    << " theoretical="
+                    << theoreticalRadius
+                    << " average="
+                    << endAverageRadius
+                    << " min="
+                    << endMinRadius
+                    << " max="
+                    << endMaxRadius
+                    << " spread="
+                    << endRadiusSpread
+                    << " averageError="
+                    << std::abs(
+                        endAverageRadius
+                        - theoreticalRadius
+                    )
+                    << " samples="
+                    << endRadiusSamples
+                    << std::endl;
+
+
+
+
+                // --------------------------------------------------------
+                // Compare each local center against the theoretical center.
+                // --------------------------------------------------------
+
+                auto centerOffsetFromTheory =
+                    [&theoreticalAxisPoint](
+                        const Vec3D& center
+                        ) -> double
+                    {
+                        const double dx =
+                            center.x
+                            - theoreticalAxisPoint.x;
+
+                        const double dy =
+                            center.y
+                            - theoreticalAxisPoint.y;
+
+                        return std::sqrt(
+                            dx * dx
+                            + dy * dy
+                        );
+                    };
+
+
+                const double startOffset =
+                    centerOffsetFromTheory(
+                        startCenter
+                    );
+
+                const double middleOffset =
+                    centerOffsetFromTheory(
+                        middleCenter
+                    );
+
+                const double endOffset =
+                    centerOffsetFromTheory(
+                        endCenter
+                    );
+
+
+                const double startToMiddle =
+                    std::sqrt(
+                        (middleCenter.x - startCenter.x)
+                        * (middleCenter.x - startCenter.x)
+                        +
+                        (middleCenter.y - startCenter.y)
+                        * (middleCenter.y - startCenter.y)
+                    );
+
+                const double middleToEnd =
+                    std::sqrt(
+                        (endCenter.x - middleCenter.x)
+                        * (endCenter.x - middleCenter.x)
+                        +
+                        (endCenter.y - middleCenter.y)
+                        * (endCenter.y - middleCenter.y)
+                    );
+
+                const double startToEnd =
+                    std::sqrt(
+                        (endCenter.x - startCenter.x)
+                        * (endCenter.x - startCenter.x)
+                        +
+                        (endCenter.y - startCenter.y)
+                        * (endCenter.y - startCenter.y)
+                    );
+
+
+                std::cout
+                    << "[MH1.20.10C.5 LOCAL CENTER START]"
+                    << " begin="
+                    << startBegin
+                    << " end="
+                    << startEnd
+                    << " center=("
+                    << startCenter.x
+                    << ", "
+                    << startCenter.y
+                    << ")"
+                    << " theoryOffset="
+                    << startOffset
+                    << std::endl;
+
+
+                std::cout
+                    << "[MH1.20.10C.5 LOCAL CENTER MIDDLE]"
+                    << " begin="
+                    << middleBegin
+                    << " end="
+                    << middleEnd
+                    << " center=("
+                    << middleCenter.x
+                    << ", "
+                    << middleCenter.y
+                    << ")"
+                    << " theoryOffset="
+                    << middleOffset
+                    << std::endl;
+
+
+                std::cout
+                    << "[MH1.20.10C.5 LOCAL CENTER END]"
+                    << " begin="
+                    << endBegin
+                    << " end="
+                    << endEnd
+                    << " center=("
+                    << endCenter.x
+                    << ", "
+                    << endCenter.y
+                    << ")"
+                    << " theoryOffset="
+                    << endOffset
+                    << std::endl;
+
+
+                std::cout
+                    << "[MH1.20.10C.5 CENTER DRIFT]"
+                    << " startToMiddle="
+                    << startToMiddle
+                    << " middleToEnd="
+                    << middleToEnd
+                    << " startToEnd="
+                    << startToEnd
+                    << std::endl;
+            }
+
+
+
+
+
+
+            // ========================================================
+            // PART 3
+            // Axis direction acceptance
+            //
+            // The manufacturing helix is intended to wrap around
+            // global Z.
+            //
+            // We already use the same theoretical axis to measure
+            // radius and pitch, so this check documents the intended
+            // invariant explicitly.
+            // ========================================================
+
+            const double axisDirectionDot =
+                dot(
+                    theoreticalAxisDirection,
+                    Vec3D{ 0.0, 0.0, 1.0 }
+                );
+
+            const bool axisAccepted =
+                axisDirectionDot
+                >= 1.0 - 1e-12;
+
+
+            // ========================================================
+            // Acceptance
+            // ========================================================
+
+            const double radiusTolerance =
+                0.01;
+
+            const double radiusSpreadTolerance =
+                0.01;
+
+            const double pitchTolerance =
+                0.01;
+
+            const bool radiusAccepted =
+                radiusSampleCount > 0
+                && radiusAverageError
+                <= radiusTolerance
+                && radiusSpread
+                <= radiusSpreadTolerance;
+
+            const double pitchError =
+                std::abs(
+                    std::abs(measuredPitch)
+                    - std::abs(theoreticalPitch)
+                );
+
+            const bool pitchAccepted =
+                pitchMeasurementValid
+                && pitchError
+                <= pitchTolerance;
+
+            const bool accepted =
+                radiusAccepted
+                && pitchAccepted
+                && axisAccepted;
+
+
+            // ========================================================
+            // Diagnostics
+            // ========================================================
+
+            std::cout
+                << "[MH1.20.10C.2 LOADED HOLD RADIUS]"
+                << " theoretical="
+                << theoreticalRadius
+                << " measuredAvg="
+                << measuredAverageRadius
+                << " measuredMin="
+                << measuredMinRadius
+                << " measuredMax="
+                << measuredMaxRadius
+                << " averageError="
+                << radiusAverageError
+                << " spread="
+                << radiusSpread
+                << " samples="
+                << radiusSampleCount
+                << " accepted="
+                << radiusAccepted
+                << std::endl;
+
+
+            std::cout
+                << "[MH1.20.10C.2 LOADED HOLD PITCH]"
+                << " theoreticalPitch="
+                << theoreticalPitch
+                << " measuredPitch="
+                << measuredPitch
+                << " theoreticalRisePerRadian="
+                << theoreticalRisePerRadian
+                << " measuredRisePerRadian="
+                << measuredRisePerRadian
+                << " measuredAngle="
+                << measuredAngle
+                << " endIndex="
+                << pitchEndIndex
+                << " pitchError="
+                << pitchError
+                << " accepted="
+                << pitchAccepted
+                << std::endl;
+
+
+            std::cout
+                << "[MH1.20.10C.2 LOADED HOLD AXIS]"
+                << " axis=("
+                << theoreticalAxisDirection.x
+                << ", "
+                << theoreticalAxisDirection.y
+                << ", "
+                << theoreticalAxisDirection.z
+                << ")"
+                << " dotZ="
+                << axisDirectionDot
+                << " accepted="
+                << axisAccepted
+                << std::endl;
+
+
+            std::cout
+                << "[MH1.20.10C.2 ACCEPTANCE]"
+                << " radiusAccepted="
+                << radiusAccepted
+                << " pitchAccepted="
+                << pitchAccepted
+                << " axisAccepted="
+                << axisAccepted
+                << " accepted="
+                << accepted
+                << std::endl;
+        }
+
+
+
+
+
+
         stage =
             StretchBendingManufacturingStage::Unloading;
 
@@ -1813,9 +3491,21 @@ advanceWrapping(
         dt,
         input,
         kinematics,
+        loadedHelixRadius,
         loadedHelixRisePerRadian
     );
 
+    std::cout
+        << "[MH1.20.10A PRE-SNAPSHOT]"
+        << " currentNodes="
+        << currentNodes.size()
+       // << " referenceNodes="
+       // << formingReference->nodes.size()
+        << " wrappedLength="
+        << state.wrappedLength
+        << " pipeArcLength="
+        << input.pipeArcLength
+        << std::endl;
     if (!rebuildCurrentGeometry())
     {
         valid =
@@ -1826,6 +3516,25 @@ advanceWrapping(
 
     if (state.complete)
     {
+
+        mh12010LastWrappingNodes =
+            currentNodes;
+
+        mh12010WrappingSnapshotValid =
+            !mh12010LastWrappingNodes.empty();
+
+
+        std::cout
+            << "[MH1.20.10A WRAPPING SNAPSHOT]"
+            << " valid="
+            << mh12010WrappingSnapshotValid
+            << " nodes="
+            << mh12010LastWrappingNodes.size()
+            << std::endl;
+
+
+       
+
         stage =
             StretchBendingManufacturingStage::LoadedHold;
 
@@ -2389,7 +4098,250 @@ rebuildUnloadingGeometry()
         << " accepted="
         << radiusAccepted
         << std::endl;
+    // ============================================================
+// MH1.20.9C
+// Measure actual pitch from the integrated current geometry.
+//
+// Strategy:
+//
+//     1. Use the first node as angular reference.
+//     2. Walk through currentNodes.
+//     3. Measure accumulated angular rotation around helix axis.
+//     4. Find the node closest to one complete revolution (2*pi).
+//     5. Measure axial displacement between the two nodes.
+//
+// For an ideal helix:
+//
+//     axial displacement over 2*pi radians = pitch
+//
+// ============================================================
 
+    bool pitchAccepted = false;
+
+    double measuredPitch = 0.0;
+    double measuredRisePerRadian = 0.0;
+    double pitchError = 0.0;
+
+    double measuredAngle = 0.0;
+
+    std::size_t pitchEndIndex = 0;
+
+
+    // ============================================================
+    // Need enough geometry to measure one complete revolution.
+    // ============================================================
+
+    if (currentNodes.size() >= 2)
+    {
+        const Vec3D firstRelative =
+            currentNodes.front().pos
+            - currentAxisPoint;
+
+        const double firstAxialProjection =
+            dot(
+                firstRelative,
+                currentAxisDirection
+            );
+
+        const Vec3D firstRadial =
+            firstRelative
+            - currentAxisDirection
+            * firstAxialProjection;
+
+        const Vec3D firstRadialDirection =
+            firstRadial.normalized();
+
+
+        // --------------------------------------------------------
+        // Previous radial direction is used to accumulate signed
+        // angular increments between consecutive nodes.
+        // --------------------------------------------------------
+
+        Vec3D previousRadialDirection =
+            firstRadialDirection;
+
+        double accumulatedAngle = 0.0;
+
+        const double twoPi =
+            2.0 * 3.14159265358979323846;
+
+
+        // ========================================================
+        // Walk along actual geometry until approximately one full
+        // revolution has been accumulated.
+        // ========================================================
+
+        for (std::size_t i = 1;
+            i < currentNodes.size();
+            ++i)
+        {
+            const Vec3D relative =
+                currentNodes[i].pos
+                - currentAxisPoint;
+
+            const double axialProjection =
+                dot(
+                    relative,
+                    currentAxisDirection
+                );
+
+            const Vec3D radial =
+                relative
+                - currentAxisDirection
+                * axialProjection;
+
+            const Vec3D radialDirection =
+                radial.normalized();
+
+
+            // ----------------------------------------------------
+            // Signed angle from previous radial direction to the
+            // current radial direction around the helix axis.
+            //
+            // atan2 gives a robust signed angular increment.
+            // ----------------------------------------------------
+
+            const Vec3D radialCross =
+                cross(
+                    previousRadialDirection,
+                    radialDirection
+                );
+
+            const double sinAngle =
+                dot(
+                    radialCross,
+                    currentAxisDirection
+                );
+
+            const double cosAngle =
+                dot(
+                    previousRadialDirection,
+                    radialDirection
+                );
+
+            const double deltaAngle =
+                std::atan2(
+                    sinAngle,
+                    cosAngle
+                );
+
+            accumulatedAngle += deltaAngle;
+
+            previousRadialDirection =
+                radialDirection;
+
+
+            // ----------------------------------------------------
+            // We only care about magnitude of one revolution here.
+            //
+            // This keeps the measurement independent of handedness.
+            // ----------------------------------------------------
+
+            if (std::abs(accumulatedAngle) >= twoPi)
+            {
+                pitchEndIndex = i;
+                measuredAngle =
+                    accumulatedAngle;
+
+                break;
+            }
+        }
+
+
+        // ========================================================
+        // If one complete revolution was found, measure axial
+        // distance between first node and selected end node.
+        // ========================================================
+
+        if (pitchEndIndex > 0
+            && std::abs(measuredAngle) > 1e-12)
+        {
+            const Vec3D startRelative =
+                currentNodes.front().pos
+                - currentAxisPoint;
+
+            const Vec3D endRelative =
+                currentNodes[pitchEndIndex].pos
+                - currentAxisPoint;
+
+            const double startAxial =
+                dot(
+                    startRelative,
+                    currentAxisDirection
+                );
+
+            const double endAxial =
+                dot(
+                    endRelative,
+                    currentAxisDirection
+                );
+
+            const double measuredAxialAdvance =
+                endAxial
+                - startAxial;
+
+
+            // ----------------------------------------------------
+            // Because our selected node may be slightly beyond 2*pi,
+            // scale the measured axial movement back to exactly
+            // one revolution.
+            //
+            // This avoids sample-step quantization becoming the
+            // dominant error.
+            // ----------------------------------------------------
+
+            measuredRisePerRadian =
+                measuredAxialAdvance
+                / measuredAngle;
+
+            measuredPitch =
+                measuredRisePerRadian
+                * twoPi;
+
+
+            pitchError =
+                std::abs(
+                    std::abs(measuredPitch)
+                    - std::abs(currentPitch)
+                );
+
+
+            // ----------------------------------------------------
+            // Start with a diagnostic tolerance of 0.01 length units.
+            //
+            // We can tighten this after seeing real numerical error.
+            // ----------------------------------------------------
+
+            const double pitchTolerance =
+                0.01;
+
+            pitchAccepted =
+                pitchError
+                <= pitchTolerance;
+        }
+
+        std::cout
+            << "[MH1.20.9C CURRENT PITCH]"
+            << " fraction="
+            << fraction
+            << " theoreticalPitch="
+            << currentPitch
+            << " measuredPitch="
+            << measuredPitch
+            << " theoreticalRisePerRadian="
+            << currentRisePerRadian
+            << " measuredRisePerRadian="
+            << measuredRisePerRadian
+            << " measuredAngle="
+            << measuredAngle
+            << " endIndex="
+            << pitchEndIndex
+            << " pitchError="
+            << pitchError
+            << " accepted="
+            << pitchAccepted
+            << std::endl;
+    }
 
     return true;
 }
@@ -3078,6 +5030,177 @@ updateFormedHistory()
         state.supportRotationAngle
         - previousSupportRotationAngle;
 
+    // ============================================================
+    // MH1.20.10C.10
+    //
+    // Verify that material-length advancement is consistent with
+    // the LOADED manufacturing helix.
+    //
+    // For a helix:
+    //
+    //     ds / dTheta = sqrt(R^2 + b^2)
+    //
+    // During forming we must use:
+    //
+    //     R = loadedHelixRadius
+    //     b = loadedHelixRisePerRadian
+    //
+    // Diagnostic only.
+    // ============================================================
+
+    if (std::abs(deltaAngle) > 1e-12)
+    {
+        const double actualLengthPerRadian =
+            deltaLength
+            / std::abs(deltaAngle);
+
+
+        const double expectedLoadedLengthPerRadian =
+            std::sqrt(
+                loadedHelixRadius
+                * loadedHelixRadius
+                +
+                loadedHelixRisePerRadian
+                * loadedHelixRisePerRadian
+            );
+
+
+        const double expectedFinalLengthPerRadian =
+            std::sqrt(
+                finalHelixRadius
+                * finalHelixRadius
+                +
+                finalHelixRisePerRadian
+                * finalHelixRisePerRadian
+            );
+
+
+        const double loadedError =
+            actualLengthPerRadian
+            - expectedLoadedLengthPerRadian;
+
+
+        const double finalError =
+            actualLengthPerRadian
+            - expectedFinalLengthPerRadian;
+
+
+        std::cout
+            << "[MH1.20.10C.10 LENGTH PER RADIAN]"
+            << " actual="
+            << actualLengthPerRadian
+            << " loadedExpected="
+            << expectedLoadedLengthPerRadian
+            << " finalExpected="
+            << expectedFinalLengthPerRadian
+            << " loadedError="
+            << loadedError
+            << " finalError="
+            << finalError
+            << std::endl;
+    }
+
+    // ============================================================
+// MH1.20.10C.10
+//
+// Verify that the amount of pipe declared as "newly formed"
+// is consistent with the LOADED helix machine rotation.
+//
+// For a helix:
+//
+//     ds / dTheta = sqrt(R^2 + b^2)
+//
+// where:
+//
+//     R = helix centerline radius
+//     b = rise per radian
+//
+// During wrapping we expect:
+//
+//     R = loadedHelixRadius
+//     b = loadedHelixRisePerRadian
+//
+// Therefore:
+//
+//     expectedDeltaLength
+//         = loadedLengthPerRadian
+//         * abs(deltaAngle)
+//
+// Diagnostic only.
+// No production geometry is changed.
+// ============================================================
+
+    if (
+        std::abs(deltaAngle) > 1e-12
+        && std::isfinite(deltaLength)
+        && std::isfinite(loadedHelixRadius)
+        && std::isfinite(loadedHelixRisePerRadian)
+        )
+    {
+        const double actualLengthPerRadian =
+            deltaLength
+            / std::abs(deltaAngle);
+
+
+        const double loadedLengthPerRadian =
+            std::sqrt(
+                loadedHelixRadius
+                * loadedHelixRadius
+                +
+                loadedHelixRisePerRadian
+                * loadedHelixRisePerRadian
+            );
+
+
+        const double expectedLoadedDeltaLength =
+            loadedLengthPerRadian
+            * std::abs(deltaAngle);
+
+
+        const double lengthPerRadianError =
+            actualLengthPerRadian
+            - loadedLengthPerRadian;
+
+
+        const double deltaLengthError =
+            deltaLength
+            - expectedLoadedDeltaLength;
+
+
+        std::cout
+            << "[MH1.20.10C.10 LENGTH PER RADIAN]"
+
+            << " deltaLength="
+            << deltaLength
+
+            << " deltaAngle="
+            << deltaAngle
+
+            << " actualLengthPerRadian="
+            << actualLengthPerRadian
+
+            << " loadedLengthPerRadian="
+            << loadedLengthPerRadian
+
+            << " lengthPerRadianError="
+            << lengthPerRadianError
+
+            << " expectedLoadedDeltaLength="
+            << expectedLoadedDeltaLength
+
+            << " deltaLengthError="
+            << deltaLengthError
+
+            << " loadedRadius="
+            << loadedHelixRadius
+
+            << " loadedRisePerRadian="
+            << loadedHelixRisePerRadian
+
+            << std::endl;
+
+    }
+
     if (!std::isfinite(deltaLength)
         || !std::isfinite(deltaAngle))
     {
@@ -3246,6 +5369,62 @@ updateFormedHistory()
         i <= newSegmentCount;
         ++i)
     {
+
+// ============================================================
+// MH1.20.10C.7
+//
+// Verify which analytical reference sample is being used
+// when a new piece of material is added to the persistent
+// forming history.
+//
+// Cumulative sampling says the expected reference index is:
+//
+//     oldFormedReferenceIndex + i
+//
+// The existing implementation currently uses:
+//
+//     i
+//
+// These are identical only for the first history increment.
+// ============================================================
+
+const std::size_t actualReferenceIndex =
+    i;
+
+const std::size_t expectedReferenceIndex =
+    oldFormedReferenceIndex
+    + i;
+
+
+// Print only the first and last sample of each increment.
+// Otherwise the console would receive thousands of lines.
+if (
+    i == 1
+    || i == newSegmentCount
+    )
+{
+    std::cout
+        << "[MH1.20.10C.7 SOURCE INDEX]"
+        << " oldIndex="
+        << oldFormedReferenceIndex
+        << " targetIndex="
+        << targetFormedReferenceIndex
+        << " localI="
+        << i
+        << " actualIndex="
+        << actualReferenceIndex
+        << " expectedIndex="
+        << expectedReferenceIndex
+        << " mismatch="
+        << (
+            actualReferenceIndex
+            != expectedReferenceIndex
+        )
+        << std::endl;
+}
+
+
+
         PipeNode node =
             referenceNodes[i];
 
@@ -3280,7 +5459,132 @@ updateFormedHistory()
         const PipeNode& oldFirst =
             formedHistoryNodes.front();
 
+        // ============================================================
+  // MH1.20.10C.8
+  //
+  // Measure the REAL junction mismatch BEFORE the distributed
+  // correction modifies the new increment.
+  //
+  // Diagnostic only.
+  // ============================================================
+
+        const Vec3D preCorrectionDelta =
+            oldFirst.pos
+            - newLast.pos;
+
+        const double preCorrectionGap =
+            preCorrectionDelta.length();
+
+        const double preCorrectionTangentDot =
+            dot(
+                newLast.T.normalized(),
+                oldFirst.T.normalized()
+            );
+
+        std::cout
+            << "[MH1.20.10C.8 PRE-CORRECTION JUNCTION]"
+            << " gap="
+            << preCorrectionGap
+            << " tangentDot="
+            << preCorrectionTangentDot
+            << " correction=("
+            << preCorrectionDelta.x << ", "
+            << preCorrectionDelta.y << ", "
+            << preCorrectionDelta.z << ")"
+            << std::endl;
+
+        // ============================================================
+        // MH1.20.10C.9
         //
+        // Decompose the PRE-CORRECTION junction mismatch into:
+        //
+        //     radial
+        //     circumferential/tangential
+        //     axial
+        //
+        // components relative to the support axis.
+        //
+        // Diagnostic only.
+        // ============================================================
+
+        const Vec3D junctionPointRelativeToAxis =
+            newLast.pos
+            - supportAxisPoint;
+
+
+        // Remove the axial component to obtain the radial vector.
+        const double junctionAxialCoordinate =
+            dot(
+                junctionPointRelativeToAxis,
+                supportAxisDirection
+            );
+
+        const Vec3D junctionRadialVector =
+            junctionPointRelativeToAxis
+            - supportAxisDirection
+            * junctionAxialCoordinate;
+
+
+        if (junctionRadialVector.lengthSquared() > 1e-12)
+        {
+            const Vec3D junctionRadialDirection =
+                junctionRadialVector.normalized();
+
+
+            // Tangential direction around the support cylinder.
+            const Vec3D junctionTangentialDirection =
+                cross(
+                    supportAxisDirection,
+                    junctionRadialDirection
+                ).normalized();
+
+
+            const double correctionRadial =
+                dot(
+                    preCorrectionDelta,
+                    junctionRadialDirection
+                );
+
+            const double correctionTangential =
+                dot(
+                    preCorrectionDelta,
+                    junctionTangentialDirection
+                );
+
+            const double correctionAxial =
+                dot(
+                    preCorrectionDelta,
+                    supportAxisDirection
+                );
+
+
+            std::cout
+                << "[MH1.20.10C.9 JUNCTION COMPONENTS]"
+                << " gap="
+                << preCorrectionGap
+
+                << " radial="
+                << correctionRadial
+
+                << " tangential="
+                << correctionTangential
+
+                << " axial="
+                << correctionAxial
+
+                << " deltaAngle="
+                << deltaAngle
+
+                << " deltaAxial="
+                << deltaAxialPosition
+
+                << std::endl;
+        }
+
+
+
+
+
         const Vec3D junctionCorrection =
             oldFirst.pos
             - newLast.pos;

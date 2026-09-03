@@ -12,6 +12,7 @@ public:
         double dt,
         const StretchHelixWrappingInput& input,
         const StretchHelixWrappingKinematics& kinematics,
+        double formingCenterlineRadius,
         double formingRisePerRadian
     );
 };

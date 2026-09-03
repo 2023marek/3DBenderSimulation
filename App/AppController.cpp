@@ -5826,6 +5826,9 @@ advanceDebugStretchHelixWrappingTime(
         << " referenceNodes="
         << referenceNodes.size()
         << std::endl;
+   
+
+
 
     const StretchHelixWrappingState& state =
         debugStretchHelixProcess.getState();
@@ -5988,16 +5991,33 @@ debugTestStretchHelixWrappingTimeProgression()
 
         return;
     }
-
     const double testRisePerRadian =
         input.axialSpeed
         / signedRotationSpeed;
+
+
+    // ============================================================
+    // MH1.20.10C.11
+    //
+    // The state advancer now needs both:
+    //
+    //     forming centerline radius
+    //     forming rise per radian
+    //
+    // For this diagnostic/test path, use the kinematic centerline
+    // radius that belongs to this test setup.
+    // ============================================================
+
+    const double testFormingCenterlineRadius =
+        kinematics.centerlineRadius;
+
 
     StretchHelixWrappingStateAdvancer::advance(
         state,
         dt,
         input,
         kinematics,
+        testFormingCenterlineRadius,
         testRisePerRadian
     );
 

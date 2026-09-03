@@ -8,6 +8,7 @@ void StretchHelixWrappingStateAdvancer::advance(
     double dt,
     const StretchHelixWrappingInput& input,
     const StretchHelixWrappingKinematics& kinematics,
+    double formingCenterlineRadius,
     double formingRisePerRadian)
 {
     if (!state.valid)
@@ -48,9 +49,72 @@ void StretchHelixWrappingStateAdvancer::advance(
             - state.wrappedLength
         );
 
-    const double requestedAdvance =
-        kinematics.centerlineSpeed
+    // ============================================================
+// MH1.20.10C.11
+//
+// Advance material length using the LOADED forming helix.
+//
+// For a helix:
+//
+//     ds / dTheta = sqrt(R^2 + b^2)
+//
+// where:
+//
+//     R = forming centerline radius
+//     b = forming rise per radian
+//
+// Support rotation is still commanded by:
+//
+//     rotationSpeed
+//
+// Therefore:
+//
+//     requestedDeltaAngle
+//         = rotationSpeed * dt
+//
+// and:
+//
+//     requestedAdvance
+//         = formingLengthPerRadian
+//         * abs(requestedDeltaAngle)
+//
+// This keeps:
+//
+//     material advance
+//     support rotation
+//     axial motion
+//
+// all consistent with the same LOADED helix.
+// ============================================================
+
+    const double formingLengthPerRadian =
+        std::sqrt(
+            formingCenterlineRadius
+            * formingCenterlineRadius
+            +
+            formingRisePerRadian
+            * formingRisePerRadian
+        );
+
+    if (!std::isfinite(formingLengthPerRadian)
+        || formingLengthPerRadian <= 1e-12)
+    {
+        return;
+    }
+
+
+    const double requestedDeltaAngle =
+        static_cast<double>(
+            input.rotationDirection
+            )
+        * input.rotationSpeed
         * dt;
+
+
+    const double requestedAdvance =
+        formingLengthPerRadian
+        * std::abs(requestedDeltaAngle);
+
 
     const double actualAdvance =
         std::min(
@@ -58,9 +122,29 @@ void StretchHelixWrappingStateAdvancer::advance(
             requestedAdvance
         );
 
-    const double actualDt =
+
+    // Convert the actually consumed material length back into
+    // the actual rotation angle required for this timestep.
+    //
+    // This matters for the final partial timestep.
+    const double actualAngleMagnitude =
         actualAdvance
-        / kinematics.centerlineSpeed;
+        / formingLengthPerRadian;
+
+
+    const double actualDeltaAngle =
+        static_cast<double>(
+            input.rotationDirection
+            )
+        * actualAngleMagnitude;
+
+
+    // actualDt remains useful for elapsed process time.
+    const double actualDt =
+        std::abs(input.rotationSpeed) > 1e-12
+        ? actualAngleMagnitude
+        / std::abs(input.rotationSpeed)
+        : 0.0;
 
     // =====================================================
     // ADVANCE WRAPPED PIPE
@@ -106,11 +190,7 @@ void StretchHelixWrappingStateAdvancer::advance(
 // =====================================================
 
     const double deltaAngle =
-        static_cast<double>(
-            input.rotationDirection
-            )
-        * input.rotationSpeed
-        * actualDt;
+        actualDeltaAngle;
 
     const double deltaAxial =
         formingRisePerRadian

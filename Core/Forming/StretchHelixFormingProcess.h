@@ -156,6 +156,28 @@ private:
     std::vector<PipeNode>
         currentNodes;
 
+
+    // ============================================================
+// MH1.20.10
+//
+// Temporary diagnostic snapshot of the LAST geometry produced
+// while the process is still in Wrapping.
+//
+// This allows us to compare:
+//
+//     final Wrapping geometry
+//
+// against:
+//
+//     first LoadedHold geometry
+//
+// without relying on visual inspection.
+// ============================================================
+
+    std::vector<PipeNode> mh12010LastWrappingNodes;
+
+    bool mh12010WrappingSnapshotValid = false;
+
     bool valid =
         false;
 
