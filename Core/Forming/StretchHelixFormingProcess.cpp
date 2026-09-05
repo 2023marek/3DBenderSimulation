@@ -307,6 +307,9 @@ namespace
     }
     bool mh12010LoadedHoldChecked = false;
     bool mh12010LoadedHoldAccepted = false;
+
+
+    
 }
 
 bool StretchHelixFormingProcess::initialize(
@@ -344,6 +347,21 @@ bool StretchHelixFormingProcess::initialize(
     mh12010LoadedHoldChecked = false;
     mh12010LoadedHoldAccepted = false;
 
+    mh12010C18PreviousHistoryFrontPosition =
+        Vec3D{};
+
+    mh12010C18PreviousHistoryFrontValid =
+        false;
+
+    mh12010C19FrontLocalSourceIndex = 0;
+
+    mh12010C19FrontRepresentedLocalLength = 0.0;
+
+    mh12010C19FrontActualDeltaLength = 0.0;
+
+    mh12010C19FrontOriginValid = false;
+
+    
 
 
     if (!input.isValid())
@@ -5223,6 +5241,147 @@ updateFormedHistory()
         state.supportAxialPosition
         - previousSupportAxialPosition;
 
+
+    // ============================================================
+    // VALIDATE MOTION INPUTS FIRST
+    // ============================================================
+
+    if (!std::isfinite(deltaAxialPosition))
+    {
+        return false;
+    }
+
+    if (supportAxisDirection.lengthSquared() < 1e-12)
+    {
+        return false;
+    }
+
+    supportAxisDirection =
+        supportAxisDirection.normalized();
+
+
+    // ============================================================
+    // MH1.20.10C.18A
+    // ============================================================
+
+    Vec3D mh12010C18FrontBeforeMotion;
+
+    bool mh12010C18FrontBeforeMotionValid = false;
+
+    if (!formedHistoryNodes.empty())
+    {
+        mh12010C18FrontBeforeMotion =
+            formedHistoryNodes.front().pos;
+
+        mh12010C18FrontBeforeMotionValid =
+            true;
+
+        if (mh12010C18PreviousHistoryFrontValid)
+        {
+            const double persistenceGap =
+                (
+                    mh12010C18FrontBeforeMotion
+                    - mh12010C18PreviousHistoryFrontPosition
+                    ).length();
+
+            std::cout
+                << "[MH1.20.10C.18A FRONT PERSISTENCE]"
+                << " gap="
+                << persistenceGap
+                << " historyNodes="
+                << formedHistoryNodes.size()
+                << std::endl;
+        }
+    }
+
+
+    // ============================================================
+// MH1.20.10C.19D
+//
+// Report the semantic origin carried by the history front
+// entering this timestep.
+//
+// Diagnostic only.
+// ============================================================
+
+    if (
+        mh12010C19FrontOriginValid
+        && !formedHistoryNodes.empty()
+        )
+    {
+        std::cout
+            << "[MH1.20.10C.19D INCOMING HISTORY FRONT SEMANTICS]"
+
+            << " storedSourceIndex="
+            << mh12010C19FrontLocalSourceIndex
+
+            << " storedRepresentedLocalLength="
+            << mh12010C19FrontRepresentedLocalLength
+
+            << " previousDeltaLength="
+            << mh12010C19FrontActualDeltaLength
+
+            << std::endl;
+    }
+
+
+
+    // ============================================================
+    // MH1.20.10C.18B
+    //
+    // Predict where the old history front SHOULD move under the
+    // exact same rigid support motion used by production.
+    //
+    // We calculate this prediction BEFORE production modifies the
+    // stored nodes.
+    //
+    // Diagnostic only.
+    // ============================================================
+
+    Vec3D mh12010C18PredictedFrontAfterMotion;
+
+    bool mh12010C18PredictionValid = false;
+
+    if (
+        mh12010C18FrontBeforeMotionValid
+        && !formedHistoryNodes.empty()
+        )
+    {
+        // Exact copy of the real front node.
+        PipeNode diagnosticNode =
+            formedHistoryNodes.front();
+
+
+        if (std::abs(deltaAngle) > 1e-12)
+        {
+            RigidTransformUtils::
+                rotateNodeAroundAxis(
+                    diagnosticNode,
+                    supportAxisPoint,
+                    supportAxisDirection,
+                    deltaAngle
+                );
+
+            diagnosticNode.pos +=
+                supportAxisDirection
+                * deltaAxialPosition;
+        }
+
+
+        mh12010C18PredictedFrontAfterMotion =
+            diagnosticNode.pos;
+
+        mh12010C18PredictionValid = true;
+    }
+
+
+
+
+
+
+
+
+
     if (!std::isfinite(deltaAxialPosition))
     {
         return false;
@@ -5253,6 +5412,13 @@ updateFormedHistory()
                 supportAxisDirection
                 * deltaAxialPosition;
         }
+
+
+
+
+
+
+
     if (deltaLength <= 1e-12)
     {
         previousWrappedLength =
@@ -5263,6 +5429,10 @@ updateFormedHistory()
 
         return true;
     }
+
+
+
+
 
     const SpatialCurveIntegrationResult* formingReference =
         &referenceResult;
@@ -5329,6 +5499,320 @@ updateFormedHistory()
     const std::size_t newSegmentCount =
         targetFormedReferenceIndex
         - previousFormedReferenceIndex;
+
+    // ============================================================
+    // MH1.20.10C.20A — per-update diagnostic state
+    //
+    // These values belong only to THIS updateFormedHistory() call.
+    //
+    // They are deliberately local rather than namespace/member
+    // state so that a later timestep cannot accidentally reuse
+    // an older prediction.
+    //
+    // Diagnostic only.
+    // ============================================================
+
+    double mh12010C20SemanticPhase = 0.0;
+
+    double mh12010C20QuantizationError = 0.0;
+
+    double mh12010C20PredictedGap = 0.0;
+
+    bool mh12010C20PredictionValid = false;
+    // ============================================================
+// MH1.20.10C.12
+//
+// Diagnose residual junction error caused by converting the
+// continuous wrapped-length advance into an integer number of
+// reference-curve segments.
+//
+// Continuous manufacturing motion gives:
+//
+//     deltaLength
+//
+// But history growth uses:
+//
+//     newSegmentCount
+//
+// which is derived from rounded cumulative reference indices.
+//
+// Therefore the actual reference arc length represented by the
+// new discrete increment may differ slightly from deltaLength.
+//
+// If this difference tracks the remaining C.8 tangential gap,
+// then the residual junction error is primarily sampling /
+// index quantization rather than a mechanics error.
+//
+// Diagnostic only.
+// ============================================================
+
+    if (
+        newSegmentCount > 0
+        && referenceNodes.size() >= 2
+        )
+    {
+        // --------------------------------------------------------
+        // Measure the actual arc length represented by the local
+        // reference-template nodes that will be used below:
+        //
+        //     referenceNodes[1]
+        //     ...
+        //     referenceNodes[newSegmentCount]
+        //
+        // We deliberately measure the real sampled geometry rather
+        // than assuming input.sampleStep is exact.
+        // --------------------------------------------------------
+
+        double discreteReferenceLength = 0.0;
+
+        for (std::size_t i = 1;
+            i <= newSegmentCount;
+            ++i)
+        {
+            const Vec3D segment =
+                referenceNodes[i].pos
+                - referenceNodes[i - 1].pos;
+
+            discreteReferenceLength +=
+                segment.length();
+        }
+
+
+        const double quantizationError =
+            discreteReferenceLength
+            - deltaLength;
+        // C.20A needs the same value later, outside this C.12 scope.
+        mh12010C20QuantizationError =
+            quantizationError;
+
+        const double absoluteQuantizationError =
+            std::abs(quantizationError);
+
+
+        // --------------------------------------------------------
+        // Also report the ideal continuous reference-index advance.
+        //
+        // This tells us where the continuous material front lies
+        // between two discrete sampled indices.
+        // --------------------------------------------------------
+
+        const double continuousIndex =
+            formedFraction
+            * static_cast<double>(
+                lastReferenceIndex
+                );
+
+
+        const double roundedIndex =
+            static_cast<double>(
+                targetFormedReferenceIndex
+                );
+
+
+        const double indexRoundingError =
+            roundedIndex
+            - continuousIndex;
+
+
+        std::cout
+            << "[MH1.20.10C.12 SAMPLE QUANTIZATION]"
+
+            << " deltaLength="
+            << deltaLength
+
+            << " oldIndex="
+            << oldFormedReferenceIndex
+
+            << " targetIndex="
+            << targetFormedReferenceIndex
+
+            << " newSegments="
+            << newSegmentCount
+
+            << " continuousIndex="
+            << continuousIndex
+
+            << " roundedIndex="
+            << roundedIndex
+
+            << " indexRoundingError="
+            << indexRoundingError
+
+            << " discreteReferenceLength="
+            << discreteReferenceLength
+
+            << " quantizationError="
+            << quantizationError
+
+            << " absQuantizationError="
+            << absoluteQuantizationError
+
+            << std::endl;
+
+
+
+        // ============================================================
+        // MH1.20.10C.12B
+        //
+        // Test whether the remaining junction gap is explained by:
+        //
+        //     one reference segment
+        //     minus
+        //     current increment quantization error.
+        //
+        // The history representation intentionally does not store
+        // referenceNodes[0] in the new increment. We want to determine
+        // whether that one-sample convention explains the remaining
+        // pre-correction junction offset.
+        //
+        // Diagnostic only.
+        // ============================================================
+
+        const double firstReferenceSegmentLength =
+            (
+                referenceNodes[1].pos
+                - referenceNodes[0].pos
+                ).length();
+
+
+        const double predictedJunctionGap =
+            std::abs(
+                firstReferenceSegmentLength
+                - quantizationError
+            );
+
+
+        std::cout
+            << "[MH1.20.10C.12B ONE-SAMPLE PREDICTION]"
+
+            << " firstSegmentLength="
+            << firstReferenceSegmentLength
+
+            << " quantizationError="
+            << quantizationError
+
+            << " predictedGap="
+            << predictedJunctionGap
+
+            << std::endl;
+
+
+        const double representedCumulativeLength =
+            (
+                static_cast<double>(
+                    targetFormedReferenceIndex
+                    )
+                /
+                static_cast<double>(
+                    lastReferenceIndex
+                    )
+                )
+            * input.pipeArcLength;
+
+        const double cumulativeLengthError =
+            representedCumulativeLength
+            - currentWrappedLength;
+
+        std::cout
+            << "[MH1.20.10C.12 CUMULATIVE QUANTIZATION]"
+            << " wrappedLength="
+            << currentWrappedLength
+            << " representedLength="
+            << representedCumulativeLength
+            << " cumulativeError="
+            << cumulativeLengthError
+            << std::endl;
+
+     
+
+
+        // ============================================================
+    // MH1.20.10C.20A — prediction
+    // ============================================================
+
+        if (referenceNodes.size() >= 2)
+        {
+            mh12010C20SemanticPhase =
+                (
+                    referenceNodes[1].pos
+                    - referenceNodes[0].pos
+                    ).length();
+
+            mh12010C20PredictedGap =
+                std::abs(
+                    mh12010C20SemanticPhase
+                    - mh12010C20QuantizationError
+                );
+
+            mh12010C20PredictionValid = true;
+        }
+
+
+    }
+
+    // ============================================================
+// MH1.20.10C.18C
+//
+// Compare the ACTUAL production-moved history front against
+// the independently predicted rigidly transformed front.
+//
+// If this gap is approximately zero, the history transport is
+// correct and the remaining ~0.25 mm phase originates later,
+// in endpoint/topology representation.
+//
+// Diagnostic only.
+// ============================================================
+
+    if (
+        mh12010C18PredictionValid
+        && !formedHistoryNodes.empty()
+        )
+    {
+        const Vec3D actualFrontAfterMotion =
+            formedHistoryNodes.front().pos;
+
+
+        const double rigidMotionGap =
+            (
+                actualFrontAfterMotion
+                - mh12010C18PredictedFrontAfterMotion
+                ).length();
+
+
+        const double actualMotionDistance =
+            (
+                actualFrontAfterMotion
+                - mh12010C18FrontBeforeMotion
+                ).length();
+
+
+        const double predictedMotionDistance =
+            (
+                mh12010C18PredictedFrontAfterMotion
+                - mh12010C18FrontBeforeMotion
+                ).length();
+
+
+        std::cout
+            << "[MH1.20.10C.18C RIGID FRONT TRANSPORT]"
+
+            << " rigidMotionGap="
+            << rigidMotionGap
+
+            << " actualMotionDistance="
+            << actualMotionDistance
+
+            << " predictedMotionDistance="
+            << predictedMotionDistance
+
+            << " deltaAngle="
+            << deltaAngle
+
+            << " deltaAxial="
+            << deltaAxialPosition
+
+            << std::endl;
+    }
 
     // =====================================================
     // NO NEW MATERIAL SAMPLES THIS STEP
@@ -5439,6 +5923,1388 @@ if (
             node
         );
     }
+
+
+    // ============================================================
+    // MH1.20.10C.19A
+    //
+    // Inspect semantic meaning of the freshly built increment.
+    //
+    // Important ordering:
+    //
+    //     newIncrementNodes.front() -> referenceNodes[1]
+    //     newIncrementNodes.back()  -> referenceNodes[newSegmentCount]
+    //
+    // Because the vector is inserted at formedHistoryNodes.begin(),
+    // the NEW history front becomes newIncrementNodes.front(),
+    // not newIncrementNodes.back().
+    //
+    // Diagnostic only.
+    // ============================================================
+
+    if (!newIncrementNodes.empty())
+    {
+        const std::size_t frontLocalSourceIndex = 1;
+
+        const std::size_t backLocalSourceIndex =
+            newSegmentCount;
+
+        double frontRepresentedLocalLength = 0.0;
+
+        double backRepresentedLocalLength = 0.0;
+
+
+        // --------------------------------------------------------
+        // Measure local arc length from referenceNodes[0]
+        // to referenceNodes[1].
+        // --------------------------------------------------------
+
+        if (referenceNodes.size() >= 2)
+        {
+            frontRepresentedLocalLength =
+                (
+                    referenceNodes[1].pos
+                    - referenceNodes[0].pos
+                    ).length();
+        }
+
+
+        // --------------------------------------------------------
+        // Measure local represented arc length from node 0
+        // through node newSegmentCount.
+        // --------------------------------------------------------
+
+        for (
+            std::size_t i = 1;
+            i <= newSegmentCount;
+            ++i
+            )
+        {
+            const Vec3D segment =
+                referenceNodes[i].pos
+                - referenceNodes[i - 1].pos;
+
+            backRepresentedLocalLength +=
+                segment.length();
+        }
+
+
+        std::cout
+            << "[MH1.20.10C.19A NEW INCREMENT SEMANTICS]"
+
+            << " newSegmentCount="
+            << newSegmentCount
+
+            << " frontSourceIndex="
+            << frontLocalSourceIndex
+
+            << " backSourceIndex="
+            << backLocalSourceIndex
+
+            << " frontRepresentedLength="
+            << frontRepresentedLocalLength
+
+            << " backRepresentedLength="
+            << backRepresentedLocalLength
+
+            << " actualDeltaLength="
+            << deltaLength
+
+            << std::endl;
+    }
+
+    // ============================================================
+// MH1.20.10C.19B
+//
+// Explicitly identify which endpoint participates in the
+// history junction.
+//
+// The junction is NOT the new history-front node.
+//
+// It is:
+//
+//     newIncrementNodes.back()
+//               ?
+//     old formedHistoryNodes.front()
+//
+// Diagnostic only.
+// ============================================================
+
+    if (
+        !newIncrementNodes.empty()
+        && !formedHistoryNodes.empty()
+        )
+    {
+        const PipeNode& newIncrementFront =
+            newIncrementNodes.front();
+
+        const PipeNode& newIncrementBack =
+            newIncrementNodes.back();
+
+        const PipeNode& oldHistoryFront =
+            formedHistoryNodes.front();
+
+
+        const double frontToOldHistoryGap =
+            (
+                oldHistoryFront.pos
+                - newIncrementFront.pos
+                ).length();
+
+
+        const double backToOldHistoryGap =
+            (
+                oldHistoryFront.pos
+                - newIncrementBack.pos
+                ).length();
+
+
+        std::cout
+            << "[MH1.20.10C.19B JUNCTION SEMANTICS]"
+
+            << " frontSourceIndex=1"
+
+            << " backSourceIndex="
+            << newSegmentCount
+
+            << " frontToOldHistoryGap="
+            << frontToOldHistoryGap
+
+            << " backToOldHistoryGap="
+            << backToOldHistoryGap
+
+            << " junctionUsesBack=1"
+
+            << std::endl;
+    }
+
+
+    // ============================================================
+// MH1.20.10C.13
+//
+// Inspect the one-node endpoint convention.
+//
+// The local template is conceptually rooted at:
+//
+//     referenceNodes[0]
+//
+// but the new increment actually stores:
+//
+//     referenceNodes[1]
+//     ...
+//     referenceNodes[newSegmentCount]
+//
+// We want to determine which local-template point corresponds
+// geometrically to the front of the previously formed history.
+//
+// Diagnostic only.
+// No geometry is modified.
+// ============================================================
+
+    if (
+        !formedHistoryNodes.empty()
+        && !newIncrementNodes.empty()
+        && referenceNodes.size() >= 2
+        )
+    {
+        const PipeNode& oldHistoryFront =
+            formedHistoryNodes.front();
+
+
+        // --------------------------------------------------------
+        // Reconstruct the LOCAL template origin in exactly the same
+        // coordinate system used to build newIncrementNodes.
+        //
+        // Production increment construction uses:
+        //
+        //     formingPoint
+        //       + (referenceNodes[i].pos - referenceOrigin)
+        //
+        // where:
+        //
+        //     referenceOrigin = referenceNodes.front().pos
+        //
+        // Therefore i == 0 maps exactly to formingPoint.
+        // --------------------------------------------------------
+
+        const Vec3D templateNode0Position =
+            formingPoint
+            + (
+                referenceNodes[0].pos
+                - referenceOrigin
+                );
+
+
+        const Vec3D templateNode1Position =
+            formingPoint
+            + (
+                referenceNodes[1].pos
+                - referenceOrigin
+                );
+
+
+        const Vec3D templateLastPosition =
+            formingPoint
+            + (
+                referenceNodes[newSegmentCount].pos
+                - referenceOrigin
+                );
+
+
+        // --------------------------------------------------------
+        // Compare the old-history front against:
+        //
+        //     local template node 0
+        //     local template node 1
+        //     local template last node
+        //
+        // The third quantity should correspond closely to the
+        // existing C.8 junction comparison.
+        // --------------------------------------------------------
+
+        const double gapToTemplateNode0 =
+            (
+                oldHistoryFront.pos
+                - templateNode0Position
+                ).length();
+
+
+        const double gapToTemplateNode1 =
+            (
+                oldHistoryFront.pos
+                - templateNode1Position
+                ).length();
+
+
+        const double gapToTemplateLast =
+            (
+                oldHistoryFront.pos
+                - templateLastPosition
+                ).length();
+
+
+        // --------------------------------------------------------
+        // Also measure the first template segment itself.
+        // --------------------------------------------------------
+
+        const double firstTemplateSegmentLength =
+            (
+                templateNode1Position
+                - templateNode0Position
+                ).length();
+
+
+        std::cout
+            << "[MH1.20.10C.13 ENDPOINT CONVENTION]"
+
+            << " gapToNode0="
+            << gapToTemplateNode0
+
+            << " gapToNode1="
+            << gapToTemplateNode1
+
+            << " gapToLast="
+            << gapToTemplateLast
+
+            << " firstSegment="
+            << firstTemplateSegmentLength
+
+            << " newSegments="
+            << newSegmentCount
+
+            << std::endl;
+    }
+
+    // ============================================================
+// MH1.20.10C.13B
+//
+// Inspect the sampled endpoint neighborhood at the actual
+// history junction.
+//
+// The junction is created at:
+//
+//     referenceNodes[newSegmentCount]
+//
+// We now compare the old-history front with:
+//
+//     N - 1
+//     N
+//     N + 1
+//
+// This tells us whether the remaining gap is simply the result
+// of choosing one discrete sample around a continuous endpoint.
+//
+// Diagnostic only.
+// ============================================================
+
+    if (
+        !formedHistoryNodes.empty()
+        && newSegmentCount > 0
+        && newSegmentCount + 1 < referenceNodes.size()
+        )
+    {
+        const PipeNode& oldHistoryFront =
+            formedHistoryNodes.front();
+
+        const std::size_t endpointIndex =
+            newSegmentCount;
+
+
+        const Vec3D endpointMinusOne =
+            formingPoint
+            + (
+                referenceNodes[endpointIndex - 1].pos
+                - referenceOrigin
+                );
+
+        const Vec3D endpointCurrent =
+            formingPoint
+            + (
+                referenceNodes[endpointIndex].pos
+                - referenceOrigin
+                );
+
+        const Vec3D endpointPlusOne =
+            formingPoint
+            + (
+                referenceNodes[endpointIndex + 1].pos
+                - referenceOrigin
+                );
+
+
+        const double gapMinusOne =
+            (
+                oldHistoryFront.pos
+                - endpointMinusOne
+                ).length();
+
+        const double gapCurrent =
+            (
+                oldHistoryFront.pos
+                - endpointCurrent
+                ).length();
+
+        const double gapPlusOne =
+            (
+                oldHistoryFront.pos
+                - endpointPlusOne
+                ).length();
+
+
+        std::cout
+            << "[MH1.20.10C.13B ENDPOINT NEIGHBORS]"
+
+            << " endpointIndex="
+            << endpointIndex
+
+            << " gapNMinus1="
+            << gapMinusOne
+
+            << " gapN="
+            << gapCurrent
+
+            << " gapNPlus1="
+            << gapPlusOne
+
+            << std::endl;
+    }
+    // ============================================================
+// MH1.20.10C.14
+//
+// Test the N+1 endpoint hypothesis WITHOUT changing production
+// history topology.
+//
+// Current production increment:
+//
+//     referenceNodes[1]
+//         ...
+//     referenceNodes[N]
+//
+// where:
+//
+//     N = newSegmentCount
+//
+// C.13B showed that the previous history front can sometimes
+// lie much closer to:
+//
+//     referenceNodes[N + 1]
+//
+// than to:
+//
+//     referenceNodes[N]
+//
+// We now test both candidates:
+//
+//     Candidate A:
+//         current production endpoint N
+//
+//     Candidate B:
+//         hypothetical endpoint N + 1
+//
+// For each candidate we compare:
+//
+//     1. junction position gap
+//     2. represented reference arc length
+//     3. error versus continuous deltaLength
+//
+// Diagnostic only.
+// No production nodes are modified.
+// ============================================================
+
+    if (
+        !formedHistoryNodes.empty()
+        && newSegmentCount > 0
+        && newSegmentCount + 1 < referenceNodes.size()
+        )
+    {
+        const PipeNode& oldHistoryFront =
+            formedHistoryNodes.front();
+
+        const std::size_t currentEndpointIndex =
+            newSegmentCount;
+
+        const std::size_t alternativeEndpointIndex =
+            newSegmentCount + 1;
+
+
+        // --------------------------------------------------------
+        // Reconstruct both endpoint candidates in the same local
+        // coordinate system used by newIncrementNodes.
+        // --------------------------------------------------------
+
+        const Vec3D currentEndpointPosition =
+            formingPoint
+            + (
+                referenceNodes[currentEndpointIndex].pos
+                - referenceOrigin
+                );
+
+        const Vec3D alternativeEndpointPosition =
+            formingPoint
+            + (
+                referenceNodes[alternativeEndpointIndex].pos
+                - referenceOrigin
+                );
+
+
+        // --------------------------------------------------------
+        // Junction gaps.
+        // --------------------------------------------------------
+
+        const double currentEndpointGap =
+            (
+                oldHistoryFront.pos
+                - currentEndpointPosition
+                ).length();
+
+        const double alternativeEndpointGap =
+            (
+                oldHistoryFront.pos
+                - alternativeEndpointPosition
+                ).length();
+
+
+        // --------------------------------------------------------
+        // Measure the actual sampled reference length represented
+        // by endpoint N.
+        //
+        // This should agree with the C.12
+        // discreteReferenceLength value.
+        // --------------------------------------------------------
+
+        double currentRepresentedLength = 0.0;
+
+        for (
+            std::size_t i = 1;
+            i <= currentEndpointIndex;
+            ++i
+            )
+        {
+            currentRepresentedLength +=
+                (
+                    referenceNodes[i].pos
+                    - referenceNodes[i - 1].pos
+                    ).length();
+        }
+
+
+        // --------------------------------------------------------
+        // Alternative N+1 represented length.
+        // --------------------------------------------------------
+
+        double alternativeRepresentedLength =
+            currentRepresentedLength;
+
+        alternativeRepresentedLength +=
+            (
+                referenceNodes[alternativeEndpointIndex].pos
+                - referenceNodes[currentEndpointIndex].pos
+                ).length();
+
+
+        // --------------------------------------------------------
+        // Compare both represented lengths with the continuous
+        // material advance for this timestep.
+        // --------------------------------------------------------
+
+        const double currentLengthError =
+            currentRepresentedLength
+            - deltaLength;
+
+        const double alternativeLengthError =
+            alternativeRepresentedLength
+            - deltaLength;
+
+
+        const double currentAbsoluteLengthError =
+            std::abs(currentLengthError);
+
+        const double alternativeAbsoluteLengthError =
+            std::abs(alternativeLengthError);
+
+
+        // --------------------------------------------------------
+        // Which candidate is geometrically closer?
+        // --------------------------------------------------------
+
+        const bool alternativeHasSmallerGap =
+            alternativeEndpointGap
+            < currentEndpointGap;
+
+        const bool alternativeHasSmallerLengthError =
+            alternativeAbsoluteLengthError
+            < currentAbsoluteLengthError;
+
+
+        std::cout
+            << "[MH1.20.10C.14 N+1 HYPOTHESIS]"
+
+            << " N="
+            << currentEndpointIndex
+
+            << " gapN="
+            << currentEndpointGap
+
+            << " gapNPlus1="
+            << alternativeEndpointGap
+
+            << " lengthN="
+            << currentRepresentedLength
+
+            << " lengthNPlus1="
+            << alternativeRepresentedLength
+
+            << " deltaLength="
+            << deltaLength
+
+            << " lengthErrorN="
+            << currentLengthError
+
+            << " lengthErrorNPlus1="
+            << alternativeLengthError
+
+            << " absLengthErrorN="
+            << currentAbsoluteLengthError
+
+            << " absLengthErrorNPlus1="
+            << alternativeAbsoluteLengthError
+
+            << " nPlus1SmallerGap="
+            << alternativeHasSmallerGap
+
+            << " nPlus1SmallerLengthError="
+            << alternativeHasSmallerLengthError
+
+            << std::endl;
+    }
+
+
+
+    // ============================================================
+// MH1.20.10C.15
+//
+// Inspect whether the OLD formed-history front is already
+// carrying a one-sample endpoint offset relative to the
+// cumulative bookkeeping index.
+//
+// Important:
+// previousFormedReferenceIndex is cumulative MATERIAL/SAMPLE
+// bookkeeping.
+//
+// formedHistoryNodes.front() is a SPATIAL history node.
+//
+// These are not automatically guaranteed to represent the
+// exact same endpoint convention.
+//
+// We compare the old history front against hypothetical local
+// endpoints implied by:
+//
+//     old index
+//     old index + 1
+//
+// expressed RELATIVE to the current local forming template.
+//
+// Diagnostic only.
+// No production geometry is modified.
+// ============================================================
+
+    if (
+        !formedHistoryNodes.empty()
+        && oldFormedReferenceIndex > 0
+        && oldFormedReferenceIndex + 1 < referenceNodes.size()
+        )
+    {
+        const PipeNode& oldHistoryFront =
+            formedHistoryNodes.front();
+
+
+        // --------------------------------------------------------
+        // The previous timestep had already formed:
+        //
+        //     oldFormedReferenceIndex
+        //
+        // reference segments.
+        //
+        // The current timestep advances by:
+        //
+        //     deltaLength
+        //
+        // while the previously formed history has first been moved
+        // by the current machine delta.
+        //
+        // Therefore, to inspect endpoint CONVENTION rather than
+        // absolute cumulative placement, compare the old history
+        // front against local template distances around the current
+        // increment endpoint.
+        //
+        // Current production new increment ends at:
+        //
+        //     N = newSegmentCount
+        //
+        // If the old history front internally represents one extra
+        // sample, it should align more closely with N+1.
+        // --------------------------------------------------------
+
+        const std::size_t endpointN =
+            newSegmentCount;
+
+        const std::size_t endpointNPlus1 =
+            newSegmentCount + 1;
+
+
+        if (endpointNPlus1 < referenceNodes.size())
+        {
+            const Vec3D candidateN =
+                formingPoint
+                + (
+                    referenceNodes[endpointN].pos
+                    - referenceOrigin
+                    );
+
+            const Vec3D candidateNPlus1 =
+                formingPoint
+                + (
+                    referenceNodes[endpointNPlus1].pos
+                    - referenceOrigin
+                    );
+
+
+            const double gapToN =
+                (
+                    oldHistoryFront.pos
+                    - candidateN
+                    ).length();
+
+            const double gapToNPlus1 =
+                (
+                    oldHistoryFront.pos
+                    - candidateNPlus1
+                    ).length();
+
+
+            // ----------------------------------------------------
+            // Now inspect the bookkeeping convention itself.
+            //
+            // History node count tells us how many explicit nodes
+            // have actually been stored.
+            //
+            // If one explicit endpoint is missing/implicit, we may
+            // observe a stable relationship such as:
+            //
+            //     historyNodes == oldIndex
+            //
+            // instead of:
+            //
+            //     historyNodes == oldIndex + 1
+            //
+            // ----------------------------------------------------
+
+            const std::size_t historyNodeCount =
+                formedHistoryNodes.size();
+
+            const long long countMinusOldIndex =
+                static_cast<long long>(
+                    historyNodeCount
+                    )
+                -
+                static_cast<long long>(
+                    oldFormedReferenceIndex
+                    );
+
+
+            // ----------------------------------------------------
+            // Sample spacing around the candidate endpoint.
+            // ----------------------------------------------------
+
+            const double endpointSampleLength =
+                (
+                    referenceNodes[endpointNPlus1].pos
+                    - referenceNodes[endpointN].pos
+                    ).length();
+
+
+            // ----------------------------------------------------
+            // Classification:
+            //
+            // If N+1 is closer than N AND the node-count convention
+            // consistently lacks the explicit +1 endpoint, that is
+            // evidence that the spatial old-history front is one
+            // sample ahead of the bookkeeping/storage convention.
+            // ----------------------------------------------------
+
+            const bool oldFrontPrefersNPlus1 =
+                gapToNPlus1 < gapToN;
+
+
+            std::cout
+                << "[MH1.20.10C.15 OLD HISTORY FRONT CONVENTION]"
+
+                << " oldIndex="
+                << oldFormedReferenceIndex
+
+                << " historyNodes="
+                << historyNodeCount
+
+                << " historyNodesMinusOldIndex="
+                << countMinusOldIndex
+
+                << " newSegments="
+                << newSegmentCount
+
+                << " gapToN="
+                << gapToN
+
+                << " gapToNPlus1="
+                << gapToNPlus1
+
+                << " endpointSampleLength="
+                << endpointSampleLength
+
+                << " prefersNPlus1="
+                << oldFrontPrefersNPlus1
+
+                << std::endl;
+        }
+    }
+
+   
+    // ============================================================
+    // MH1.20.10C.16
+    //
+    // Continuous sampled-endpoint interpolation.
+    //
+    // Instead of forcing the new increment endpoint onto an
+    // integer reference node, reconstruct the continuous endpoint
+    // implied by the actual material advance:
+    //
+    //     deltaLength
+    //
+    // We walk along the LOCAL reference template until the segment
+    // containing deltaLength is found, then linearly interpolate
+    // inside that segment.
+    //
+    // This tests whether the remaining junction gap is caused by
+    // discrete sample quantization rather than mechanics.
+    //
+    // Diagnostic only.
+    // No production geometry is modified.
+    // ============================================================
+
+    if (
+        !formedHistoryNodes.empty()
+        && referenceNodes.size() >= 2
+        && deltaLength > 0.0
+        )
+    {
+        const PipeNode& oldHistoryFront =
+            formedHistoryNodes.front();
+
+        double accumulatedReferenceLength = 0.0;
+
+        bool continuousEndpointFound = false;
+
+        Vec3D continuousEndpointPosition;
+
+        std::size_t continuousSegmentStartIndex = 0;
+        std::size_t continuousSegmentEndIndex = 0;
+
+        double interpolationFraction = 0.0;
+
+
+        // --------------------------------------------------------
+        // Find the reference segment that contains deltaLength.
+        //
+        // Example:
+        //
+        //     ref[366] ---- ref[367] ---- ref[368]
+        //
+        // If deltaLength lies between ref[367] and ref[368],
+        // interpolate inside that segment instead of choosing
+        // either integer endpoint.
+        // --------------------------------------------------------
+
+        for (
+            std::size_t i = 1;
+            i < referenceNodes.size();
+            ++i
+            )
+        {
+            const Vec3D segmentVector =
+                referenceNodes[i].pos
+                - referenceNodes[i - 1].pos;
+
+            const double segmentLength =
+                segmentVector.length();
+
+            if (
+                !std::isfinite(segmentLength)
+                || segmentLength <= 1e-12
+                )
+            {
+                continue;
+            }
+
+            const double nextAccumulatedLength =
+                accumulatedReferenceLength
+                + segmentLength;
+
+
+            // ----------------------------------------------------
+            // deltaLength lies inside this sampled segment.
+            // ----------------------------------------------------
+
+            if (
+                deltaLength
+                <= nextAccumulatedLength
+                )
+            {
+                const double distanceIntoSegment =
+                    deltaLength
+                    - accumulatedReferenceLength;
+
+                interpolationFraction =
+                    distanceIntoSegment
+                    / segmentLength;
+
+                interpolationFraction =
+                    std::clamp(
+                        interpolationFraction,
+                        0.0,
+                        1.0
+                    );
+
+
+                const Vec3D localStart =
+                    referenceNodes[i - 1].pos
+                    - referenceOrigin;
+
+                const Vec3D localEnd =
+                    referenceNodes[i].pos
+                    - referenceOrigin;
+
+
+                const Vec3D interpolatedLocalPosition =
+                    localStart
+                    + (
+                        localEnd
+                        - localStart
+                        )
+                    * interpolationFraction;
+
+
+                continuousEndpointPosition =
+                    formingPoint
+                    + interpolatedLocalPosition;
+
+
+                continuousSegmentStartIndex =
+                    i - 1;
+
+                continuousSegmentEndIndex =
+                    i;
+
+                continuousEndpointFound = true;
+
+                break;
+            }
+
+
+            accumulatedReferenceLength =
+                nextAccumulatedLength;
+        }
+
+
+        if (continuousEndpointFound)
+        {
+            const double continuousEndpointGap =
+                (
+                    oldHistoryFront.pos
+                    - continuousEndpointPosition
+                    ).length();
+
+
+            // ----------------------------------------------------
+            // Compare with the currently used discrete endpoint.
+            // ----------------------------------------------------
+
+            const std::size_t discreteEndpointIndex =
+                newSegmentCount;
+
+            double discreteEndpointGap =
+                0.0;
+
+            bool discreteEndpointValid =
+                discreteEndpointIndex
+                < referenceNodes.size();
+
+            if (discreteEndpointValid)
+            {
+                const Vec3D discreteEndpointPosition =
+                    formingPoint
+                    + (
+                        referenceNodes[discreteEndpointIndex].pos
+                        - referenceOrigin
+                        );
+
+                discreteEndpointGap =
+                    (
+                        oldHistoryFront.pos
+                        - discreteEndpointPosition
+                        ).length();
+            }
+
+
+            // ----------------------------------------------------
+            // Diagnostic acceptance:
+            //
+            // We are NOT requiring zero yet.
+            //
+            // First we simply ask whether interpolation improves
+            // the spatial junction over the integer endpoint.
+            // ----------------------------------------------------
+
+            const bool interpolationImprovesGap =
+                discreteEndpointValid
+                && continuousEndpointGap
+                < discreteEndpointGap;
+
+
+            std::cout
+                << "[MH1.20.10C.16 CONTINUOUS ENDPOINT]"
+
+                << " deltaLength="
+                << deltaLength
+
+                << " segmentStart="
+                << continuousSegmentStartIndex
+
+                << " segmentEnd="
+                << continuousSegmentEndIndex
+
+                << " interpolationFraction="
+                << interpolationFraction
+
+                << " discreteIndex="
+                << discreteEndpointIndex
+
+                << " discreteGap="
+                << discreteEndpointGap
+
+                << " continuousGap="
+                << continuousEndpointGap
+
+                << " improvesGap="
+                << interpolationImprovesGap
+
+                << std::endl;
+
+
+
+        }
+
+      
+    }
+
+
+
+
+    // ============================================================
+// MH1.20.10C.17
+//
+// Cumulative continuous endpoint phase.
+//
+// C.16 showed that interpolating ONLY the current deltaLength
+// leaves an almost constant ~one-sample spatial gap.
+//
+// Now compare the cumulative continuous formed boundary at:
+//
+//     previousWrappedLength
+//     currentWrappedLength
+//
+// against the actual old-history front after machine motion.
+//
+// The goal is to detect a persistent endpoint phase offset
+// between:
+//
+//     cumulative material bookkeeping
+//
+// and
+//
+//     formedHistoryNodes.front()
+//
+// Diagnostic only.
+// No production geometry is modified.
+// ============================================================
+
+    if (
+        !formedHistoryNodes.empty()
+        && referenceNodes.size() >= 2
+        && input.pipeArcLength > 1e-12
+        )
+    {
+        const PipeNode& oldHistoryFront =
+            formedHistoryNodes.front();
+
+        // --------------------------------------------------------
+        // Helper-style local lambda:
+        //
+        // Given a cumulative arc length from the beginning of the
+        // reference curve, find its continuous interpolated
+        // position in the reference samples.
+        //
+        // The returned position is still in REFERENCE coordinates.
+        // --------------------------------------------------------
+
+        auto interpolateReferenceAtArcLength =
+            [&referenceNodes](
+                double requestedArcLength,
+                Vec3D& interpolatedPosition,
+                std::size_t& segmentStartIndex,
+                std::size_t& segmentEndIndex,
+                double& segmentFraction
+                ) -> bool
+            {
+                if (
+                    referenceNodes.size() < 2
+                    || !std::isfinite(requestedArcLength)
+                    || requestedArcLength < 0.0
+                    )
+                {
+                    return false;
+                }
+
+                double accumulatedLength = 0.0;
+
+                for (
+                    std::size_t i = 1;
+                    i < referenceNodes.size();
+                    ++i
+                    )
+                {
+                    const Vec3D segmentVector =
+                        referenceNodes[i].pos
+                        - referenceNodes[i - 1].pos;
+
+                    const double segmentLength =
+                        segmentVector.length();
+
+                    if (
+                        !std::isfinite(segmentLength)
+                        || segmentLength <= 1e-12
+                        )
+                    {
+                        continue;
+                    }
+
+                    const double nextAccumulatedLength =
+                        accumulatedLength
+                        + segmentLength;
+
+                    if (
+                        requestedArcLength
+                        <= nextAccumulatedLength
+                        )
+                    {
+                        const double distanceIntoSegment =
+                            requestedArcLength
+                            - accumulatedLength;
+
+                        segmentFraction =
+                            distanceIntoSegment
+                            / segmentLength;
+
+                        segmentFraction =
+                            std::clamp(
+                                segmentFraction,
+                                0.0,
+                                1.0
+                            );
+
+                        interpolatedPosition =
+                            referenceNodes[i - 1].pos
+                            + (
+                                referenceNodes[i].pos
+                                - referenceNodes[i - 1].pos
+                                )
+                            * segmentFraction;
+
+                        segmentStartIndex =
+                            i - 1;
+
+                        segmentEndIndex =
+                            i;
+
+                        return true;
+                    }
+
+                    accumulatedLength =
+                        nextAccumulatedLength;
+                }
+
+                return false;
+            };
+
+
+        // --------------------------------------------------------
+        // Reconstruct the continuous cumulative boundary at the
+        // PREVIOUS and CURRENT wrapped lengths.
+        //
+        // These are material-space cumulative arc lengths.
+        // --------------------------------------------------------
+
+        Vec3D previousContinuousReferencePosition;
+        Vec3D currentContinuousReferencePosition;
+
+        std::size_t previousSegmentStart = 0;
+        std::size_t previousSegmentEnd = 0;
+
+        std::size_t currentSegmentStart = 0;
+        std::size_t currentSegmentEnd = 0;
+
+        double previousSegmentFraction = 0.0;
+        double currentSegmentFraction = 0.0;
+
+
+        const bool previousContinuousValid =
+            interpolateReferenceAtArcLength(
+                previousWrappedLength,
+                previousContinuousReferencePosition,
+                previousSegmentStart,
+                previousSegmentEnd,
+                previousSegmentFraction
+            );
+
+        const bool currentContinuousValid =
+            interpolateReferenceAtArcLength(
+                currentWrappedLength,
+                currentContinuousReferencePosition,
+                currentSegmentStart,
+                currentSegmentEnd,
+                currentSegmentFraction
+            );
+
+
+        if (
+            previousContinuousValid
+            && currentContinuousValid
+            )
+        {
+            // ----------------------------------------------------
+            // Continuous material advance measured directly on the
+            // sampled reference.
+            // ----------------------------------------------------
+
+            const double cumulativeContinuousAdvance =
+                (
+                    currentContinuousReferencePosition
+                    - previousContinuousReferencePosition
+                    ).length();
+
+
+            // ----------------------------------------------------
+            // Compare the INDEX phases.
+            //
+            // These values show where the continuous cumulative
+            // boundary lies relative to its surrounding samples.
+            // ----------------------------------------------------
+
+            const double previousContinuousIndex =
+                static_cast<double>(
+                    previousSegmentStart
+                    )
+                + previousSegmentFraction;
+
+            const double currentContinuousIndex =
+                static_cast<double>(
+                    currentSegmentStart
+                    )
+                + currentSegmentFraction;
+
+
+            const double previousBookkeepingPhase =
+                static_cast<double>(
+                    oldFormedReferenceIndex
+                    )
+                - previousContinuousIndex;
+
+            const double currentBookkeepingPhase =
+                static_cast<double>(
+                    targetFormedReferenceIndex
+                    )
+                - currentContinuousIndex;
+
+
+            // ----------------------------------------------------
+            // Now inspect the spatial endpoint phase.
+            //
+            // The old history front has already been moved by this
+            // timestep's machine motion.
+            //
+            // Build the CURRENT local-template continuous endpoint
+            // using cumulative phase information.
+            //
+            // The current increment begins at formingPoint, so the
+            // amount of NEW material represented continuously is:
+            //
+            //     currentWrappedLength
+            //       - previousWrappedLength
+            //
+            // but the cumulative interpolation phases tell us how
+            // each boundary sits between integer samples.
+            //
+            // The phase shift across the timestep is:
+            //
+            //     current phase - previous phase
+            //
+            // ----------------------------------------------------
+
+            const double continuousIndexAdvance =
+                currentContinuousIndex
+                - previousContinuousIndex;
+
+            const double bookkeepingIndexAdvance =
+                static_cast<double>(
+                    targetFormedReferenceIndex
+                    - oldFormedReferenceIndex
+                    );
+
+            const double indexAdvanceError =
+                bookkeepingIndexAdvance
+                - continuousIndexAdvance;
+
+
+            // ----------------------------------------------------
+            // Convert one-sample reference spacing near the current
+            // boundary into a physical magnitude for comparison.
+            // ----------------------------------------------------
+
+            double localSampleLength = 0.0;
+
+            if (
+                currentSegmentEnd
+                < referenceNodes.size()
+                )
+            {
+                localSampleLength =
+                    (
+                        referenceNodes[currentSegmentEnd].pos
+                        - referenceNodes[currentSegmentStart].pos
+                        ).length();
+            }
+
+
+            // ----------------------------------------------------
+            // C.16 already reconstructed the continuous endpoint
+            // from deltaLength.
+            //
+            // Rebuild the same concept here, but predict its phase
+            // using the DIFFERENCE between previous and current
+            // cumulative interpolation phases.
+            //
+            // A stable ~1-sample phase relationship should become
+            // visible in these values.
+            // ----------------------------------------------------
+
+            const double phaseDifference =
+                currentSegmentFraction
+                - previousSegmentFraction;
+
+
+            std::cout
+                << "[MH1.20.10C.17 CUMULATIVE PHASE]"
+
+                << " previousWrappedLength="
+                << previousWrappedLength
+
+                << " currentWrappedLength="
+                << currentWrappedLength
+
+                << " oldIndex="
+                << oldFormedReferenceIndex
+
+                << " targetIndex="
+                << targetFormedReferenceIndex
+
+                << " previousContinuousIndex="
+                << previousContinuousIndex
+
+                << " currentContinuousIndex="
+                << currentContinuousIndex
+
+                << " previousFraction="
+                << previousSegmentFraction
+
+                << " currentFraction="
+                << currentSegmentFraction
+
+                << " previousBookkeepingPhase="
+                << previousBookkeepingPhase
+
+                << " currentBookkeepingPhase="
+                << currentBookkeepingPhase
+
+                << " phaseDifference="
+                << phaseDifference
+
+                << " continuousIndexAdvance="
+                << continuousIndexAdvance
+
+                << " bookkeepingIndexAdvance="
+                << bookkeepingIndexAdvance
+
+                << " indexAdvanceError="
+                << indexAdvanceError
+
+                << " localSampleLength="
+                << localSampleLength
+
+                << " cumulativeContinuousAdvance="
+                << cumulativeContinuousAdvance
+
+                << std::endl;
+        }
+    }
+
     // =====================================================
 // MH1.17 — JUNCTION DIAGNOSTIC
 //
@@ -5480,6 +7346,620 @@ if (
                 newLast.T.normalized(),
                 oldFirst.T.normalized()
             );
+
+        // ============================================================
+        // MH1.20.10C.20A — acceptance
+        //
+        // Compare prediction against the actual pre-correction
+        // junction gap.
+        // ============================================================
+
+        if (mh12010C20PredictionValid)
+        {
+            const double predictionError =
+                std::abs(
+                    preCorrectionGap
+                    - mh12010C20PredictedGap
+                );
+
+            std::cout
+                << "[MH1.20.10C.20A SEMANTIC PHASE MODEL]"
+
+                << " semanticPhase="
+                << mh12010C20SemanticPhase
+
+                << " quantizationError="
+                << mh12010C20QuantizationError
+
+
+                << " predictedGap="
+                << mh12010C20PredictedGap
+
+                << " measuredGap="
+                << preCorrectionGap
+
+                << " predictionError="
+                << predictionError
+
+                << std::endl;
+        }
+        // ============================================================
+// MH1.20.10C.20B.1
+//
+// VECTOR SEMANTIC-PHASE HYPOTHESIS
+//
+// C.20A showed that the scalar junction gap is approximately:
+//
+//     | semanticPhase - quantizationError |
+//
+// Now reconstruct the corresponding point directly on the
+// sampled LOCAL helix template.
+//
+// C.19 tells us that the persistent history front carries
+// approximately one local sample of semantic phase.
+//
+// Therefore test:
+//
+//     semanticTargetArcLength
+//         = deltaLength + semanticPhase
+//
+// Then:
+//
+//     predictedVector
+//         = semanticTargetPosition - newLast.pos
+//
+// Compare that against the REAL C.8 vector:
+//
+//     actualVector
+//         = oldFirst.pos - newLast.pos
+//
+// Diagnostic only.
+// No production geometry is modified.
+// ============================================================
+
+        if (
+            mh12010C20PredictionValid
+            && referenceNodes.size() >= 2
+            )
+        {
+            const double semanticTargetArcLength =
+                deltaLength
+                + mh12010C20SemanticPhase;
+
+
+            bool semanticTargetFound = false;
+
+            Vec3D semanticTargetPosition;
+
+            std::size_t semanticSegmentStart = 0;
+            std::size_t semanticSegmentEnd = 0;
+
+            double semanticInterpolationFraction = 0.0;
+
+            double accumulatedSemanticLength = 0.0;
+
+
+            // --------------------------------------------------------
+            // Walk along the LOCAL sampled reference until the
+            // semantic target arc length is reached.
+            //
+            // This deliberately uses measured segment lengths rather
+            // than assuming input.sampleStep is exactly 0.25.
+            // --------------------------------------------------------
+
+            for (
+                std::size_t i = 1;
+                i < referenceNodes.size();
+                ++i
+                )
+            {
+                const Vec3D segmentVector =
+                    referenceNodes[i].pos
+                    - referenceNodes[i - 1].pos;
+
+                const double segmentLength =
+                    segmentVector.length();
+
+
+                if (
+                    !std::isfinite(segmentLength)
+                    || segmentLength <= 1e-12
+                    )
+                {
+                    continue;
+                }
+
+
+                const double nextAccumulatedLength =
+                    accumulatedSemanticLength
+                    + segmentLength;
+
+
+                if (
+                    semanticTargetArcLength
+                    <= nextAccumulatedLength
+                    )
+                {
+                    const double distanceIntoSegment =
+                        semanticTargetArcLength
+                        - accumulatedSemanticLength;
+
+
+                    semanticInterpolationFraction =
+                        distanceIntoSegment
+                        / segmentLength;
+
+
+                    semanticInterpolationFraction =
+                        std::clamp(
+                            semanticInterpolationFraction,
+                            0.0,
+                            1.0
+                        );
+
+
+                    const Vec3D localStart =
+                        referenceNodes[i - 1].pos
+                        - referenceOrigin;
+
+
+                    const Vec3D localEnd =
+                        referenceNodes[i].pos
+                        - referenceOrigin;
+
+
+                    const Vec3D interpolatedLocalPosition =
+                        localStart
+                        + (
+                            localEnd
+                            - localStart
+                            )
+                        * semanticInterpolationFraction;
+
+
+                    semanticTargetPosition =
+                        formingPoint
+                        + interpolatedLocalPosition;
+
+
+                    semanticSegmentStart =
+                        i - 1;
+
+                    semanticSegmentEnd =
+                        i;
+
+
+                    semanticTargetFound = true;
+
+                    break;
+                }
+
+
+                accumulatedSemanticLength =
+                    nextAccumulatedLength;
+            }
+
+
+            if (semanticTargetFound)
+            {
+                // ----------------------------------------------------
+                // Predicted semantic-phase correction vector.
+                //
+                // Starts at the SAME discrete endpoint used by
+                // production:
+                //
+                //     newLast.pos
+                //
+                // and points toward the semantic continuous target.
+                // ----------------------------------------------------
+
+                const Vec3D predictedSemanticDelta =
+                    semanticTargetPosition
+                    - newLast.pos;
+
+
+                // ----------------------------------------------------
+                // REAL production mismatch measured by C.8:
+                //
+                //     oldFirst - newLast
+                // ----------------------------------------------------
+
+                const Vec3D actualSemanticDelta =
+                    preCorrectionDelta;
+
+
+                // ----------------------------------------------------
+                // Vector prediction error.
+                //
+                // Perfect agreement would give:
+                //
+                //     actualSemanticDelta
+                //       - predictedSemanticDelta
+                //         = (0,0,0)
+                // ----------------------------------------------------
+
+                const Vec3D semanticVectorError =
+                    actualSemanticDelta
+                    - predictedSemanticDelta;
+
+
+                const double predictedVectorLength =
+                    predictedSemanticDelta.length();
+
+
+                const double actualVectorLength =
+                    actualSemanticDelta.length();
+
+
+                const double semanticVectorErrorLength =
+                    semanticVectorError.length();
+
+
+                // ============================================================
+                // MH1.20.10C.20B.2
+                //
+                // Decompose the predicted and actual junction vectors into
+                // helix-local:
+                //
+                //     radial
+                //     tangential
+                //     axial
+                //
+                // This tests whether the semantic-phase model predicts not only
+                // the total 3D vector, but also its physical direction.
+                //
+                // Diagnostic only.
+                // No production geometry is modified.
+                // ============================================================
+
+
+                // ------------------------------------------------------------
+                // Tangential direction
+                //
+                // Interpolate the tangent direction from the same reference
+                // segment used for the semantic target.
+                // ------------------------------------------------------------
+
+                Vec3D semanticTangent =
+                    referenceNodes[semanticSegmentStart].T
+                    + (
+                        referenceNodes[semanticSegmentEnd].T
+                        - referenceNodes[semanticSegmentStart].T
+                        )
+                    * semanticInterpolationFraction;
+
+
+                if (semanticTangent.lengthSquared() > 1e-12)
+                {
+                    semanticTangent =
+                        semanticTangent.normalized();
+                }
+
+
+                // ------------------------------------------------------------
+                // Axial direction
+                //
+                // The loaded helix axis is the required support axis.
+                // ------------------------------------------------------------
+
+                Vec3D semanticAxial =
+                    requiredSupportAxisFrame.T;
+
+                if (semanticAxial.lengthSquared() > 1e-12)
+                {
+                    semanticAxial =
+                        semanticAxial.normalized();
+                }
+
+
+                // ------------------------------------------------------------
+                // Radial direction
+                //
+                // For a helix:
+                //
+                //     radial ? tangent
+                //     radial ? axis
+                //
+                // We construct it from:
+                //
+                //     radial = tangent × axis
+                //
+                // Sign is not important for this diagnostic as long as the same
+                // basis is used for predicted and actual vectors.
+                // ------------------------------------------------------------
+
+                Vec3D semanticRadial =
+                    cross(
+                        semanticTangent,
+                        semanticAxial
+                    );
+
+                if (semanticRadial.lengthSquared() > 1e-12)
+                {
+                    semanticRadial =
+                        semanticRadial.normalized();
+                }
+
+
+                // ------------------------------------------------------------
+                // Re-orthogonalize tangential direction.
+                //
+                // Because the interpolated tangent may contain tiny numerical
+                // error, rebuild a clean tangent from the radial/axial pair.
+                // ------------------------------------------------------------
+
+                semanticTangent =
+                    cross(
+                        semanticAxial,
+                        semanticRadial
+                    );
+
+                if (semanticTangent.lengthSquared() > 1e-12)
+                {
+                    semanticTangent =
+                        semanticTangent.normalized();
+                }
+
+
+                // ------------------------------------------------------------
+                // Project PREDICTED vector.
+                // ------------------------------------------------------------
+
+                const double predictedRadial =
+                    dot(
+                        predictedSemanticDelta,
+                        semanticRadial
+                    );
+
+                const double predictedTangential =
+                    dot(
+                        predictedSemanticDelta,
+                        semanticTangent
+                    );
+
+                const double predictedAxial =
+                    dot(
+                        predictedSemanticDelta,
+                        semanticAxial
+                    );
+
+
+                // ------------------------------------------------------------
+                // Project ACTUAL vector.
+                // ------------------------------------------------------------
+
+                const double actualRadial =
+                    dot(
+                        actualSemanticDelta,
+                        semanticRadial
+                    );
+
+                const double actualTangential =
+                    dot(
+                        actualSemanticDelta,
+                        semanticTangent
+                    );
+
+                const double actualAxial =
+                    dot(
+                        actualSemanticDelta,
+                        semanticAxial
+                    );
+
+
+                // ------------------------------------------------------------
+                // Component prediction errors.
+                // ------------------------------------------------------------
+
+                const double radialError =
+                    actualRadial
+                    - predictedRadial;
+
+                const double tangentialError =
+                    actualTangential
+                    - predictedTangential;
+
+                const double axialError =
+                    actualAxial
+                    - predictedAxial;
+
+
+                // ------------------------------------------------------------
+                // Diagnostic output.
+                // ------------------------------------------------------------
+
+                std::cout
+                    << "[MH1.20.10C.20B.2 VECTOR COMPONENTS]"
+
+                    << " predictedRadial="
+                    << predictedRadial
+
+                    << " actualRadial="
+                    << actualRadial
+
+                    << " radialError="
+                    << radialError
+
+                    << " predictedTangential="
+                    << predictedTangential
+
+                    << " actualTangential="
+                    << actualTangential
+
+                    << " tangentialError="
+                    << tangentialError
+
+                    << " predictedAxial="
+                    << predictedAxial
+
+                    << " actualAxial="
+                    << actualAxial
+
+                    << " axialError="
+                    << axialError
+
+                    << std::endl;
+
+
+
+
+
+                std::cout
+                    << "[MH1.20.10C.20B.1 VECTOR SEMANTIC MODEL]"
+
+                    << " targetArcLength="
+                    << semanticTargetArcLength
+
+                    << " segmentStart="
+                    << semanticSegmentStart
+
+                    << " segmentEnd="
+                    << semanticSegmentEnd
+
+                    << " fraction="
+                    << semanticInterpolationFraction
+
+                    << " predictedVector=("
+                    << predictedSemanticDelta.x << ", "
+                    << predictedSemanticDelta.y << ", "
+                    << predictedSemanticDelta.z << ")"
+
+                    << " actualVector=("
+                    << actualSemanticDelta.x << ", "
+                    << actualSemanticDelta.y << ", "
+                    << actualSemanticDelta.z << ")"
+
+                    << " predictedLength="
+                    << predictedVectorLength
+
+                    << " actualLength="
+                    << actualVectorLength
+
+                    << " vectorError=("
+                    << semanticVectorError.x << ", "
+                    << semanticVectorError.y << ", "
+                    << semanticVectorError.z << ")"
+
+                    << " vectorErrorLength="
+                    << semanticVectorErrorLength
+
+                    << std::endl;
+
+                // ============================================================
+                // MH1.20.10C.20B.3
+                //
+                // VECTOR DIRECTION ACCEPTANCE
+                //
+                // C.20B.1 proved that the predicted semantic vector closely
+                // matches the actual junction vector.
+                //
+                // C.20B.2 proved that both vectors have the same physical
+                // radial / tangential / axial character.
+                //
+                // Now compare only their DIRECTIONS.
+                //
+                // For normalized vectors:
+                //
+                //     dot = +1   -> same direction
+                //     dot =  0   -> perpendicular
+                //     dot = -1   -> opposite direction
+                //
+                // Diagnostic only.
+                // ============================================================
+
+                const double predictedDirectionLength =
+                    predictedSemanticDelta.length();
+
+                const double actualDirectionLength =
+                    actualSemanticDelta.length();
+
+                bool directionComparisonValid = false;
+
+                double directionDot = 0.0;
+                double directionAngleRadians = 0.0;
+
+
+                if (
+                    std::isfinite(predictedDirectionLength)
+                    && std::isfinite(actualDirectionLength)
+                    && predictedDirectionLength > 1e-12
+                    && actualDirectionLength > 1e-12
+                    )
+                {
+                    const Vec3D predictedDirection =
+                        predictedSemanticDelta
+                        / predictedDirectionLength;
+
+                    const Vec3D actualDirection =
+                        actualSemanticDelta
+                        / actualDirectionLength;
+
+
+                    directionDot =
+                        dot(
+                            predictedDirection,
+                            actualDirection
+                        );
+
+
+                    // Numerical protection against values such as:
+                    //
+                    //     1.0000000000000002
+                    //
+                    // which would make acos() invalid.
+                    directionDot =
+                        std::clamp(
+                            directionDot,
+                            -1.0,
+                            1.0
+                        );
+
+
+                    directionAngleRadians =
+                        std::acos(
+                            directionDot
+                        );
+
+
+                    directionComparisonValid = true;
+                }
+
+
+                // ------------------------------------------------------------
+                // For now, keep acceptance simple.
+                //
+                // We do NOT choose a final production tolerance yet.
+                // This threshold is only for diagnostic confirmation that the
+                // two vectors are effectively collinear.
+                // ------------------------------------------------------------
+
+                const bool directionAccepted =
+                    directionComparisonValid
+                    && directionDot >= 0.99999;
+
+
+                std::cout
+                    << "[MH1.20.10C.20B.3 VECTOR DIRECTION]"
+
+                    << " valid="
+                    << directionComparisonValid
+
+                    << " dot="
+                    << directionDot
+
+                    << " angleRadians="
+                    << directionAngleRadians
+
+                    << " accepted="
+                    << directionAccepted
+
+                    << std::endl;
+
+
+            }
+
+
+        }
 
         std::cout
             << "[MH1.20.10C.8 PRE-CORRECTION JUNCTION]"
@@ -5679,11 +8159,98 @@ if (
             << std::endl;
     }
 
+
+
+
     formedHistoryNodes.insert(
         formedHistoryNodes.begin(),
         newIncrementNodes.begin(),
         newIncrementNodes.end()
     );
+
+    // ============================================================
+    // MH1.20.10C.19C
+    //
+    // Record the semantic origin of the node that has NOW become
+    // formedHistoryNodes.front().
+    //
+    // Because insertion preserves newIncrementNodes ordering,
+    // this should always correspond to referenceNodes[1].
+    //
+    // Diagnostic only.
+    // ============================================================
+
+    if (!formedHistoryNodes.empty())
+    {
+        mh12010C19FrontLocalSourceIndex = 1;
+
+        mh12010C19FrontRepresentedLocalLength =
+            (
+                referenceNodes[1].pos
+                - referenceNodes[0].pos
+                ).length();
+
+        mh12010C19FrontActualDeltaLength =
+            deltaLength;
+
+        mh12010C19FrontOriginValid =
+            true;
+
+
+        std::cout
+            << "[MH1.20.10C.19C NEW HISTORY FRONT ORIGIN]"
+
+            << " sourceIndex="
+            << mh12010C19FrontLocalSourceIndex
+
+            << " representedLocalLength="
+            << mh12010C19FrontRepresentedLocalLength
+
+            << " timestepDeltaLength="
+            << mh12010C19FrontActualDeltaLength
+
+            << " historyNodes="
+            << formedHistoryNodes.size()
+
+            << std::endl;
+    }
+
+
+    // ============================================================
+// MH1.20.10C.18D
+//
+// Store the newly established history front so that the next
+// call can verify persistence and rigid transport.
+//
+// Diagnostic only.
+// ============================================================
+
+    if (!formedHistoryNodes.empty())
+    {
+        mh12010C18PreviousHistoryFrontPosition =
+            formedHistoryNodes.front().pos;
+
+        mh12010C18PreviousHistoryFrontValid =
+            true;
+
+
+        std::cout
+            << "[MH1.20.10C.18D FRONT SNAPSHOT]"
+
+            << " historyNodes="
+            << formedHistoryNodes.size()
+
+            << " front=("
+            << mh12010C18PreviousHistoryFrontPosition.x
+            << ", "
+            << mh12010C18PreviousHistoryFrontPosition.y
+            << ", "
+            << mh12010C18PreviousHistoryFrontPosition.z
+            << ")"
+
+            << std::endl;
+    } 
+
 
     previousWrappedLength =
         currentWrappedLength;

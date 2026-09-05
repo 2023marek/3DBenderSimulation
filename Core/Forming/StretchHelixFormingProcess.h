@@ -180,9 +180,32 @@ private:
 
     bool valid =
         false;
+    // ------------------------------------------------------------
+    // MH1.20.10C.18
+    //
+    // Track the exact formed-history front from the end of one
+    // update into the beginning of the next update.
+    //
+    // Diagnostic only.
+    // ------------------------------------------------------------
 
+    std::size_t mh12010C19FrontLocalSourceIndex = 0;
+
+    double mh12010C19FrontRepresentedLocalLength = 0.0;
+
+    double mh12010C19FrontActualDeltaLength = 0.0;
+
+    bool mh12010C19FrontOriginValid = false;
+
+
+    Vec3D mh12010C18PreviousHistoryFrontPosition;
+
+    bool mh12010C18PreviousHistoryFrontValid = false;
     StretchBendingEvaluationResult
         stretchEvaluation;
+
+
+
 
     double targetFinalCurvature =
         0.0;
