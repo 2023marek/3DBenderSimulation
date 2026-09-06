@@ -7954,9 +7954,892 @@ if (
                     << directionAccepted
 
                     << std::endl;
+                // ============================================================
+                // MH1.20.10C.21A
+                //
+                // NON-DEFORMING JUNCTION CONSTRUCTION HYPOTHESIS
+                //
+                // C.20 proved that the old history junction lies almost exactly
+                // at the semantic continuous target on the helix.
+                //
+                // Instead of distributing a positional correction through all
+                // new nodes, test whether the complete fresh increment can be
+                // moved by ONE rigid helix screw transform:
+                //
+                //     1. rotate about the loaded support / helix axis
+                //     2. translate along that same axis
+                //
+                // A rigid screw transform preserves:
+                //
+                //     - segment lengths
+                //     - local curvature
+                //     - local torsion
+                //     - helix radius
+                //     - internal node spacing
+                //
+                // Diagnostic only.
+                // newIncrementNodes itself is NOT modified.
+                // ============================================================
 
+                Vec3D c21AxisDirection =
+                    requiredSupportAxisFrame.T;
+
+                const Vec3D c21AxisPoint =
+                    requiredSupportAxisFrame.P;
+
+                bool c21RigidCandidateValid = false;
+
+
+                if (c21AxisDirection.lengthSquared() > 1e-12)
+                {
+                    c21AxisDirection =
+                        c21AxisDirection.normalized();
+
+
+                    // --------------------------------------------------------
+                    // Source endpoint:
+                    //
+                    //     current discrete junction-side endpoint
+                    // --------------------------------------------------------
+
+                    const Vec3D sourceRelative =
+                        newLast.pos
+                        - c21AxisPoint;
+
+
+                    const double sourceAxialCoordinate =
+                        dot(
+                            sourceRelative,
+                            c21AxisDirection
+                        );
+
+
+                    const Vec3D sourceRadial =
+                        sourceRelative
+                        - c21AxisDirection
+                        * sourceAxialCoordinate;
+
+
+                    // --------------------------------------------------------
+                    // Target endpoint:
+                    //
+                    //     semantic continuous target found in C.20B
+                    // --------------------------------------------------------
+
+                    const Vec3D targetRelative =
+                        semanticTargetPosition
+                        - c21AxisPoint;
+
+
+                    const double targetAxialCoordinate =
+                        dot(
+                            targetRelative,
+                            c21AxisDirection
+                        );
+
+
+                    const Vec3D targetRadial =
+                        targetRelative
+                        - c21AxisDirection
+                        * targetAxialCoordinate;
+
+
+                    if (
+                        sourceRadial.lengthSquared() > 1e-12
+                        && targetRadial.lengthSquared() > 1e-12
+                        )
+                    {
+                        const Vec3D sourceRadialUnit =
+                            sourceRadial.normalized();
+
+                        const Vec3D targetRadialUnit =
+                            targetRadial.normalized();
+
+
+                        // ----------------------------------------------------
+                        // Signed rotation required to move the discrete
+                        // endpoint around the helix axis toward the semantic
+                        // target.
+                        //
+                        // atan2 gives the sign automatically.
+                        // ----------------------------------------------------
+
+                        const double rotationSin =
+                            dot(
+                                c21AxisDirection,
+                                cross(
+                                    sourceRadialUnit,
+                                    targetRadialUnit
+                                )
+                            );
+
+
+                        const double rotationCos =
+                            std::clamp(
+                                dot(
+                                    sourceRadialUnit,
+                                    targetRadialUnit
+                                ),
+                                -1.0,
+                                1.0
+                            );
+
+
+                        const double c21RotationAngle =
+                            std::atan2(
+                                rotationSin,
+                                rotationCos
+                            );
+
+
+                        // ----------------------------------------------------
+                        // Matching translation along the helix axis.
+                        // ----------------------------------------------------
+
+                        const double c21AxialTranslation =
+                            targetAxialCoordinate
+                            - sourceAxialCoordinate;
+
+
+                        // ----------------------------------------------------
+                        // IMPORTANT:
+                        //
+                        // Work on a COPY.
+                        //
+                        // Production newIncrementNodes remains untouched.
+                        // ----------------------------------------------------
+
+                        std::vector<PipeNode> c21RigidCandidate =
+                            newIncrementNodes;
+
+
+                        for (PipeNode& node : c21RigidCandidate)
+                        {
+                            RigidTransformUtils::rotateNodeAroundAxis(
+                                node,
+                                c21AxisPoint,
+                                c21AxisDirection,
+                                c21RotationAngle
+                            );
+
+                            node.pos +=
+                                c21AxisDirection
+                                * c21AxialTranslation;
+                        }
+
+
+                        if (!c21RigidCandidate.empty())
+                        {
+                            const PipeNode& candidateLast =
+                                c21RigidCandidate.back();
+
+
+                            // ------------------------------------------------
+                            // Test 1:
+                            //
+                            // Did the rigid candidate reach our mathematical
+                            // semantic target?
+                            // ------------------------------------------------
+
+                            const double targetGap =
+                                (
+                                    semanticTargetPosition
+                                    - candidateLast.pos
+                                    ).length();
+
+
+                            // ------------------------------------------------
+                            // Test 2:
+                            //
+                            // How close is that rigid candidate to the REAL
+                            // persistent old history front?
+                            //
+                            // Based on C.20 we expect only the tiny remaining
+                            // ~sub-micron semantic-model residual here.
+                            // ------------------------------------------------
+
+                            const double historyGap =
+                                (
+                                    oldFirst.pos
+                                    - candidateLast.pos
+                                    ).length();
+
+
+                            // ------------------------------------------------
+                            // Tangent continuity against real old history.
+                            //
+                            // rotateNodeAroundAxis() should rotate the node
+                            // frame rigidly as well.
+                            // ------------------------------------------------
+
+                            double tangentDot = 0.0;
+
+                            if (
+                                candidateLast.T.lengthSquared() > 1e-12
+                                && oldFirst.T.lengthSquared() > 1e-12
+                                )
+                            {
+                                tangentDot =
+                                    dot(
+                                        candidateLast.T.normalized(),
+                                        oldFirst.T.normalized()
+                                    );
+                            }
+                            // ============================================================
+                            // MH1.20.10C.21B
+                            //
+                            // RIGID-SHAPE PRESERVATION ACCEPTANCE
+                            //
+                            // C21.A applies one rigid screw transform to a COPY of the
+                            // fresh increment.
+                            //
+                            // A true rigid transform must preserve:
+                            //
+                            //     1. total polyline length
+                            //     2. every individual segment length
+                            //     3. radius of every node from the helix/support axis
+                            //
+                            // Diagnostic only.
+                            // Production geometry is still untouched.
+                            // ============================================================
+
+                            if (
+                                c21RigidCandidate.size() == newIncrementNodes.size()
+                                && c21RigidCandidate.size() >= 2
+                                )
+                            {
+                                double originalTotalLength = 0.0;
+                                double candidateTotalLength = 0.0;
+
+                                double maxSegmentLengthError = 0.0;
+
+                                double originalRadiusSum = 0.0;
+                                double candidateRadiusSum = 0.0;
+
+                                double maxRadiusError = 0.0;
+
+                                std::size_t radiusSampleCount = 0;
+
+
+                                for (
+                                    std::size_t i = 0;
+                                    i < newIncrementNodes.size();
+                                    ++i
+                                    )
+                                {
+                                    // ----------------------------------------------------
+                                    // Radius from the support axis:
+                                    //
+                                    // radialVector =
+                                    //     point - axisProjection(point)
+                                    // ----------------------------------------------------
+
+                                    const Vec3D originalRelative =
+                                        newIncrementNodes[i].pos
+                                        - c21AxisPoint;
+
+                                    const double originalAxialCoordinate =
+                                        dot(
+                                            originalRelative,
+                                            c21AxisDirection
+                                        );
+
+                                    const Vec3D originalRadialVector =
+                                        originalRelative
+                                        - c21AxisDirection
+                                        * originalAxialCoordinate;
+
+                                    const double originalRadius =
+                                        originalRadialVector.length();
+
+
+                                    const Vec3D candidateRelative =
+                                        c21RigidCandidate[i].pos
+                                        - c21AxisPoint;
+
+                                    const double candidateAxialCoordinate =
+                                        dot(
+                                            candidateRelative,
+                                            c21AxisDirection
+                                        );
+
+                                    const Vec3D candidateRadialVector =
+                                        candidateRelative
+                                        - c21AxisDirection
+                                        * candidateAxialCoordinate;
+
+                                    const double candidateRadius =
+                                        candidateRadialVector.length();
+
+
+                                    if (
+                                        std::isfinite(originalRadius)
+                                        && std::isfinite(candidateRadius)
+                                        )
+                                    {
+                                        originalRadiusSum +=
+                                            originalRadius;
+
+                                        candidateRadiusSum +=
+                                            candidateRadius;
+
+                                        const double radiusError =
+                                            std::abs(
+                                                candidateRadius
+                                                - originalRadius
+                                            );
+
+                                        maxRadiusError =
+                                            std::max(
+                                                maxRadiusError,
+                                                radiusError
+                                            );
+
+                                        ++radiusSampleCount;
+                                    }
+
+
+                                    // ----------------------------------------------------
+                                    // Segment-length preservation.
+                                    // ----------------------------------------------------
+
+                                    if (i > 0)
+                                    {
+                                        const double originalSegmentLength =
+                                            (
+                                                newIncrementNodes[i].pos
+                                                - newIncrementNodes[i - 1].pos
+                                                ).length();
+
+                                        const double candidateSegmentLength =
+                                            (
+                                                c21RigidCandidate[i].pos
+                                                - c21RigidCandidate[i - 1].pos
+                                                ).length();
+
+
+                                        originalTotalLength +=
+                                            originalSegmentLength;
+
+                                        candidateTotalLength +=
+                                            candidateSegmentLength;
+
+
+                                        const double segmentLengthError =
+                                            std::abs(
+                                                candidateSegmentLength
+                                                - originalSegmentLength
+                                            );
+
+
+                                        maxSegmentLengthError =
+                                            std::max(
+                                                maxSegmentLengthError,
+                                                segmentLengthError
+                                            );
+                                    }
+                                }
+
+
+                                const double totalLengthError =
+                                    std::abs(
+                                        candidateTotalLength
+                                        - originalTotalLength
+                                    );
+
+
+                                double originalAverageRadius = 0.0;
+                                double candidateAverageRadius = 0.0;
+                                double averageRadiusError = 0.0;
+
+
+                                if (radiusSampleCount > 0)
+                                {
+                                    originalAverageRadius =
+                                        originalRadiusSum
+                                        / static_cast<double>(
+                                            radiusSampleCount
+                                            );
+
+                                    candidateAverageRadius =
+                                        candidateRadiusSum
+                                        / static_cast<double>(
+                                            radiusSampleCount
+                                            );
+
+                                    averageRadiusError =
+                                        std::abs(
+                                            candidateAverageRadius
+                                            - originalAverageRadius
+                                        );
+                                }
+
+
+                                // --------------------------------------------------------
+                                // Diagnostic acceptance.
+                                //
+                                // These tolerances are deliberately very tight because
+                                // this is supposed to be a rigid transformation.
+                                //
+                                // We can tune them later if needed, but ideally the errors
+                                // should be close to machine precision.
+                                // --------------------------------------------------------
+
+                                const bool totalLengthAccepted =
+                                    totalLengthError <= 1e-9;
+
+                                const bool segmentLengthsAccepted =
+                                    maxSegmentLengthError <= 1e-9;
+
+                                const bool radiusAccepted =
+                                    maxRadiusError <= 1e-9;
+
+
+                                const bool rigidShapeAccepted =
+                                    totalLengthAccepted
+                                    && segmentLengthsAccepted
+                                    && radiusAccepted;
+
+
+                                std::cout
+                                    << "[MH1.20.10C.21B RIGID SHAPE]"
+
+                                    << " originalLength="
+                                    << originalTotalLength
+
+                                    << " candidateLength="
+                                    << candidateTotalLength
+
+                                    << " totalLengthError="
+                                    << totalLengthError
+
+                                    << " maxSegmentLengthError="
+                                    << maxSegmentLengthError
+
+                                    << " originalAvgRadius="
+                                    << originalAverageRadius
+
+                                    << " candidateAvgRadius="
+                                    << candidateAverageRadius
+
+                                    << " averageRadiusError="
+                                    << averageRadiusError
+
+                                    << " maxRadiusError="
+                                    << maxRadiusError
+
+                                    << " accepted="
+                                    << rigidShapeAccepted
+
+                                    << std::endl;
+                            }
+
+
+                            // ============================================================
+                            // MH1.20.10C.21C
+                            //
+                            // EXACT OLD-HISTORY JUNCTION PLACEMENT HYPOTHESIS
+                            //
+                            // C21A targeted the semantic continuous helix point.
+                            //
+                            // Now test the more direct construction:
+                            //
+                            //     source = newLast.pos
+                            //     target = oldFirst.pos
+                            //
+                            // Compute ONE rigid screw transform which maps the fresh
+                            // increment junction endpoint directly onto the persistent
+                            // history junction.
+                            //
+                            // The transform consists of:
+                            //
+                            //     1. signed rotation about the support / helix axis
+                            //     2. axial translation along that axis
+                            //
+                            // Apply it only to a COPY.
+                            //
+                            // Diagnostic only.
+                            // Production newIncrementNodes remains unchanged.
+                            // ============================================================
+
+                            Vec3D c21cAxisDirection =
+                                requiredSupportAxisFrame.T;
+
+                            const Vec3D c21cAxisPoint =
+                                requiredSupportAxisFrame.P;
+
+
+                            if (c21cAxisDirection.lengthSquared() > 1e-12)
+                            {
+                                c21cAxisDirection =
+                                    c21cAxisDirection.normalized();
+
+
+                                // --------------------------------------------------------
+                                // SOURCE:
+                                // discrete junction-side endpoint of the fresh increment
+                                // --------------------------------------------------------
+
+                                const Vec3D sourceRelative =
+                                    newLast.pos
+                                    - c21cAxisPoint;
+
+                                const double sourceAxialCoordinate =
+                                    dot(
+                                        sourceRelative,
+                                        c21cAxisDirection
+                                    );
+
+                                const Vec3D sourceRadial =
+                                    sourceRelative
+                                    - c21cAxisDirection
+                                    * sourceAxialCoordinate;
+
+
+                                // --------------------------------------------------------
+                                // TARGET:
+                                // actual persistent history junction point
+                                // --------------------------------------------------------
+
+                                const Vec3D targetRelative =
+                                    oldFirst.pos
+                                    - c21cAxisPoint;
+
+                                const double targetAxialCoordinate =
+                                    dot(
+                                        targetRelative,
+                                        c21cAxisDirection
+                                    );
+
+                                const Vec3D targetRadial =
+                                    targetRelative
+                                    - c21cAxisDirection
+                                    * targetAxialCoordinate;
+
+
+                                if (
+                                    sourceRadial.lengthSquared() > 1e-12
+                                    && targetRadial.lengthSquared() > 1e-12
+                                    )
+                                {
+                                    const Vec3D sourceRadialUnit =
+                                        sourceRadial.normalized();
+
+                                    const Vec3D targetRadialUnit =
+                                        targetRadial.normalized();
+
+
+                                    // ----------------------------------------------------
+                                    // Signed rotation around the helix axis.
+                                    // ----------------------------------------------------
+
+                                    const double rotationSin =
+                                        dot(
+                                            c21cAxisDirection,
+                                            cross(
+                                                sourceRadialUnit,
+                                                targetRadialUnit
+                                            )
+                                        );
+
+                                    const double rotationCos =
+                                        std::clamp(
+                                            dot(
+                                                sourceRadialUnit,
+                                                targetRadialUnit
+                                            ),
+                                            -1.0,
+                                            1.0
+                                        );
+
+                                    const double c21cRotationAngle =
+                                        std::atan2(
+                                            rotationSin,
+                                            rotationCos
+                                        );
+
+
+                                    // ----------------------------------------------------
+                                    // Axial shift needed to map source to target.
+                                    // ----------------------------------------------------
+
+                                    const double c21cAxialTranslation =
+                                        targetAxialCoordinate
+                                        - sourceAxialCoordinate;
+
+
+                                    // ----------------------------------------------------
+                                    // COPY ONLY.
+                                    // ----------------------------------------------------
+
+                                    std::vector<PipeNode> c21cCandidate =
+                                        newIncrementNodes;
+
+
+                                    for (PipeNode& node : c21cCandidate)
+                                    {
+                                        RigidTransformUtils::rotateNodeAroundAxis(
+                                            node,
+                                            c21cAxisPoint,
+                                            c21cAxisDirection,
+                                            c21cRotationAngle
+                                        );
+
+                                        node.pos +=
+                                            c21cAxisDirection
+                                            * c21cAxialTranslation;
+                                    }
+
+
+                                    if (!c21cCandidate.empty())
+                                    {
+                                        const PipeNode& candidateLast =
+                                            c21cCandidate.back();
+
+
+                                        // ------------------------------------------------
+                                        // Exact endpoint closure check.
+                                        // ------------------------------------------------
+
+                                        const Vec3D endpointDelta =
+                                            oldFirst.pos
+                                            - candidateLast.pos;
+
+                                        const double endpointGap =
+                                            endpointDelta.length();
+
+
+                                        // ------------------------------------------------
+                                        // Tangent continuity.
+                                        // ------------------------------------------------
+
+                                        double tangentDot = 0.0;
+
+                                        if (
+                                            candidateLast.T.lengthSquared() > 1e-12
+                                            && oldFirst.T.lengthSquared() > 1e-12
+                                            )
+                                        {
+                                            tangentDot =
+                                                dot(
+                                                    candidateLast.T.normalized(),
+                                                    oldFirst.T.normalized()
+                                                );
+                                        }
+
+
+                                        // ------------------------------------------------
+                                        // Radius preservation / compatibility.
+                                        //
+                                        // The source and target must lie at the same
+                                        // radius for a perfect rigid screw mapping.
+                                        // ------------------------------------------------
+
+                                        const double sourceRadius =
+                                            sourceRadial.length();
+
+                                        const double targetRadius =
+                                            targetRadial.length();
+
+                                        const double radialCompatibilityError =
+                                            std::abs(
+                                                targetRadius
+                                                - sourceRadius
+                                            );
+
+
+                                        std::cout
+                                            << "[MH1.20.10C.21C EXACT HISTORY PLACEMENT]"
+
+                                            << " rotationAngle="
+                                            << c21cRotationAngle
+
+                                            << " axialTranslation="
+                                            << c21cAxialTranslation
+
+                                            << " sourceRadius="
+                                            << sourceRadius
+
+                                            << " targetRadius="
+                                            << targetRadius
+
+                                            << " radialCompatibilityError="
+                                            << radialCompatibilityError
+
+                                            << " endpointGap="
+                                            << endpointGap
+
+                                            << " tangentDot="
+                                            << tangentDot
+
+                                            << std::endl;
+
+
+
+
+                                        // ============================================================
+                                        // MH1.20.10C.21D
+                                        //
+                                        // RADIAL RESIDUAL ORIGIN ANALYSIS
+                                        //
+                                        // C21C proved that the remaining endpoint gap is essentially
+                                        // equal to the source/target radial incompatibility.
+                                        //
+                                        // Now identify WHICH geometry carries the radial deviation:
+                                        //
+                                        //     sourceRadius   = fresh discrete newLast
+                                        //     targetRadius   = persistent oldFirst
+                                        //     semanticRadius = C20 semantic continuous target
+                                        //
+                                        // Compare all three against the theoretical loaded helix radius.
+                                        //
+                                        // Diagnostic only.
+                                        // ============================================================
+
+
+                                        // ------------------------------------------------------------
+                                        // Theoretical loaded radius.
+                                        //
+                                        // This should already be the authoritative loaded helix radius
+                                        // used by the forming process.
+                                        // ------------------------------------------------------------
+
+                                        const double theoreticalLoadedRadius =
+                                            loadedHelixRadius;
+
+
+                                        // ------------------------------------------------------------
+                                        // Semantic-target radius.
+                                        // ------------------------------------------------------------
+
+                                        const Vec3D semanticRelative =
+                                            semanticTargetPosition
+                                            - c21cAxisPoint;
+
+                                        const double semanticAxialCoordinate =
+                                            dot(
+                                                semanticRelative,
+                                                c21cAxisDirection
+                                            );
+
+                                        const Vec3D semanticRadialVector =
+                                            semanticRelative
+                                            - c21cAxisDirection
+                                            * semanticAxialCoordinate;
+
+                                        const double semanticRadius =
+                                            semanticRadialVector.length();
+
+
+                                        // ------------------------------------------------------------
+                                        // Signed deviations from theoretical loaded radius.
+                                        //
+                                        // Positive:
+                                        //     point lies slightly OUTSIDE ideal loaded cylinder.
+                                        //
+                                        // Negative:
+                                        //     point lies slightly INSIDE ideal loaded cylinder.
+                                        // ------------------------------------------------------------
+
+                                        const double sourceRadiusError =
+                                            sourceRadius
+                                            - theoreticalLoadedRadius;
+
+                                        const double targetRadiusError =
+                                            targetRadius
+                                            - theoreticalLoadedRadius;
+
+                                        const double semanticRadiusError =
+                                            semanticRadius
+                                            - theoreticalLoadedRadius;
+
+
+                                        // ------------------------------------------------------------
+                                        // Pairwise radial differences.
+                                        // ------------------------------------------------------------
+
+                                        const double sourceToTargetRadiusDelta =
+                                            targetRadius
+                                            - sourceRadius;
+
+                                        const double sourceToSemanticRadiusDelta =
+                                            semanticRadius
+                                            - sourceRadius;
+
+                                        const double semanticToTargetRadiusDelta =
+                                            targetRadius
+                                            - semanticRadius;
+
+
+                                        // ------------------------------------------------------------
+                                        // Diagnostic output.
+                                        // ------------------------------------------------------------
+
+                                        std::cout
+                                            << "[MH1.20.10C.21D RADIAL ORIGIN]"
+
+                                            << " theoreticalRadius="
+                                            << theoreticalLoadedRadius
+
+                                            << " sourceRadius="
+                                            << sourceRadius
+
+                                            << " sourceError="
+                                            << sourceRadiusError
+
+                                            << " semanticRadius="
+                                            << semanticRadius
+
+                                            << " semanticError="
+                                            << semanticRadiusError
+
+                                            << " targetRadius="
+                                            << targetRadius
+
+                                            << " targetError="
+                                            << targetRadiusError
+
+                                            << " sourceToTargetDelta="
+                                            << sourceToTargetRadiusDelta
+
+                                            << " sourceToSemanticDelta="
+                                            << sourceToSemanticRadiusDelta
+
+                                            << " semanticToTargetDelta="
+                                            << semanticToTargetRadiusDelta
+
+                                            << std::endl;
+                                    }
+                                }
+                            }
+                            std::cout
+                                << "[MH1.20.10C.21A RIGID SCREW CANDIDATE]"
+
+                                << " rotationAngle="
+                                << c21RotationAngle
+
+                                << " axialTranslation="
+                                << c21AxialTranslation
+
+                                << " targetGap="
+                                << targetGap
+
+                                << " historyGap="
+                                << historyGap
+
+                                << " tangentDot="
+                                << tangentDot
+
+                                << std::endl;
+
+
+                            c21RigidCandidateValid = true;
+                        }
+                    }
+                }
 
             }
+
 
 
         }
