@@ -337,15 +337,24 @@ bool StretchHelixFormingProcess::initialize(
     supportAxisFrame =
         newSupportAxisFrame;
 
+
+    formedHistoryNodes.clear();
     referenceResult.clear();
     loadedReferenceResult.clear();
     finalResult.clear();
     currentNodes.clear();
-    // MH1.20.10 diagnostic reset.
     mh12010LastWrappingNodes.clear();
+
+    previousWrappedLength = 0.0;
+    previousSupportRotationAngle = 0.0;
+    previousSupportAxialPosition = 0.0;
+    previousFormedReferenceIndex = 0;
+    
     mh12010WrappingSnapshotValid = false;
     mh12010LoadedHoldChecked = false;
     mh12010LoadedHoldAccepted = false;
+
+   
 
     mh12010C18PreviousHistoryFrontPosition =
         Vec3D{};
@@ -361,8 +370,11 @@ bool StretchHelixFormingProcess::initialize(
 
     mh12010C19FrontOriginValid = false;
 
-    
+    mh12010C21EStoredFrontRadiusError = 0.0;
+    mh12010C21EStoredFrontRadiusValid = false;
 
+    mh12010C21HRigidHistoryNodes.clear();
+    mh12010C21HRigidHistoryValid = false;
 
     if (!input.isValid())
         return false;
@@ -2445,6 +2457,19 @@ void StretchHelixFormingProcess::reset()
 
     formedHistoryNodes.clear();
 
+
+    // ============================================================
+// MH1.20.10C.21H
+//
+// Reset diagnostic rigid shadow history together with the
+// production formed history.
+//
+// The shadow history belongs to one wrapping run only.
+// ============================================================
+
+    mh12010C21HRigidHistoryNodes.clear();
+    mh12010C21HRigidHistoryValid = false;
+
     previousWrappedLength =
         0.0;
 
@@ -3540,7 +3565,1460 @@ advanceWrapping(
 
         mh12010WrappingSnapshotValid =
             !mh12010LastWrappingNodes.empty();
+        // ========================================================
+           // MH1.20.10C.21H.1
+           //
+           // Final node-count acceptance for the diagnostic rigid
+           // shadow history.
+           //
+           // We are still in Wrapping here, but state.complete tells
+           // us that the complete pipe length has been wrapped.
+           // ========================================================
 
+        const long long rigidHistoryCountDifference =
+            static_cast<long long>(
+                mh12010C21HRigidHistoryNodes.size()
+                )
+            - static_cast<long long>(
+                formedHistoryNodes.size()
+                );
+
+        const bool rigidHistoryCountAccepted =
+            rigidHistoryCountDifference == 0;
+
+        std::cout
+            << "[MH1.20.10C.21H.1 FINAL COUNT]"
+            << " productionNodes="
+            << formedHistoryNodes.size()
+            << " rigidHistoryNodes="
+            << mh12010C21HRigidHistoryNodes.size()
+            << " difference="
+            << rigidHistoryCountDifference
+            << " accepted="
+            << rigidHistoryCountAccepted
+            << std::endl;
+        // ============================================================
+// MH1.20.10C.21H.2
+//
+// LoadedHold rigid-history radius acceptance.
+//
+// Measure the diagnostic rigid shadow history against the
+// theoretical LOADED helix centerline radius.
+//
+// IMPORTANT:
+//
+//     Diagnostic only.
+//     Production formedHistoryNodes is NOT modified.
+//
+// ============================================================
+
+        if (
+            mh12010C21HRigidHistoryValid
+            && !mh12010C21HRigidHistoryNodes.empty()
+            )
+        {
+            Vec3D rigidAxisDirection =
+                requiredSupportAxisFrame.T;
+
+            bool rigidRadiusMeasurementValid =
+                false;
+
+            double rigidRadiusSum =
+                0.0;
+
+            double rigidMinimumRadius =
+                std::numeric_limits<double>::max();
+
+            double rigidMaximumRadius =
+                0.0;
+
+            std::size_t rigidRadiusSampleCount =
+                0;
+
+
+            // --------------------------------------------------------
+            // Validate support axis.
+            // --------------------------------------------------------
+
+            if (rigidAxisDirection.lengthSquared() > 1e-12)
+            {
+                rigidAxisDirection =
+                    rigidAxisDirection.normalized();
+
+
+                // ----------------------------------------------------
+                // Measure every rigid-history node from the SAME
+                // support axis used during rigid construction.
+                // ----------------------------------------------------
+
+                for (const PipeNode& node :
+                    mh12010C21HRigidHistoryNodes)
+                {
+                    const Vec3D relative =
+                        node.pos
+                        - requiredSupportAxisFrame.P;
+
+                    const double axialCoordinate =
+                        dot(
+                            relative,
+                            rigidAxisDirection
+                        );
+
+                    const Vec3D radialVector =
+                        relative
+                        - rigidAxisDirection
+                        * axialCoordinate;
+
+                    const double radius =
+                        radialVector.length();
+
+                    if (!std::isfinite(radius))
+                    {
+                        continue;
+                    }
+
+                    rigidRadiusSum +=
+                        radius;
+
+                    rigidMinimumRadius =
+                        std::min(
+                            rigidMinimumRadius,
+                            radius
+                        );
+
+                    rigidMaximumRadius =
+                        std::max(
+                            rigidMaximumRadius,
+                            radius
+                        );
+
+                    ++rigidRadiusSampleCount;
+                }
+
+
+                if (rigidRadiusSampleCount > 0)
+                {
+                    rigidRadiusMeasurementValid =
+                        true;
+                }
+            }
+
+
+            // --------------------------------------------------------
+            // Derived statistics.
+            // --------------------------------------------------------
+
+            double rigidAverageRadius =
+                0.0;
+
+            double rigidRadiusSpread =
+                0.0;
+
+            double rigidAverageRadiusError =
+                0.0;
+
+
+            if (rigidRadiusMeasurementValid)
+            {
+                rigidAverageRadius =
+                    rigidRadiusSum
+                    / static_cast<double>(
+                        rigidRadiusSampleCount
+                        );
+
+                rigidRadiusSpread =
+                    rigidMaximumRadius
+                    - rigidMinimumRadius;
+
+                rigidAverageRadiusError =
+                    std::abs(
+                        rigidAverageRadius
+                        - loadedHelixRadius
+                    );
+            }
+
+
+            // --------------------------------------------------------
+            // Acceptance.
+            //
+            // Keep the same practical scale used earlier for loaded
+            // radius acceptance.
+            // --------------------------------------------------------
+
+            const double rigidRadiusTolerance =
+                0.01;
+
+            const double rigidRadiusSpreadTolerance =
+                0.01;
+
+            const bool rigidRadiusAccepted =
+                rigidRadiusMeasurementValid
+                && rigidAverageRadiusError
+                <= rigidRadiusTolerance
+                && rigidRadiusSpread
+                <= rigidRadiusSpreadTolerance;
+
+
+            std::cout
+                << "[MH1.20.10C.21H.2 RIGID HISTORY RADIUS]"
+                << " theoretical="
+                << loadedHelixRadius
+                << " measuredAvg="
+                << rigidAverageRadius
+                << " measuredMin="
+                << rigidMinimumRadius
+                << " measuredMax="
+                << rigidMaximumRadius
+                << " averageError="
+                << rigidAverageRadiusError
+                << " spread="
+                << rigidRadiusSpread
+                << " samples="
+                << rigidRadiusSampleCount
+                << " valid="
+                << rigidRadiusMeasurementValid
+                << " accepted="
+                << rigidRadiusAccepted
+                << std::endl;
+        }
+        // ============================================================
+        // MH1.20.10C.21H.3
+        //
+        // LoadedHold rigid-history pitch acceptance.
+        //
+        // Measure approximately one complete revolution of the
+        // diagnostic rigid shadow history and compare its axial rise
+        // against the theoretical LOADED helix pitch.
+        //
+        // Diagnostic only.
+        // Production geometry is NOT modified.
+        // ============================================================
+
+        if (
+            mh12010C21HRigidHistoryValid
+            && mh12010C21HRigidHistoryNodes.size() >= 2
+            )
+        {
+            Vec3D rigidAxisDirection =
+                requiredSupportAxisFrame.T;
+
+            bool rigidPitchMeasurementValid =
+                false;
+
+            double rigidMeasuredAngle =
+                0.0;
+
+            double rigidMeasuredRisePerRadian =
+                0.0;
+
+            double rigidMeasuredPitch =
+                0.0;
+
+            double rigidAxialAdvance =
+                0.0;
+
+            std::size_t rigidPitchEndIndex =
+                0;
+
+
+            if (rigidAxisDirection.lengthSquared() > 1e-12)
+            {
+                rigidAxisDirection =
+                    rigidAxisDirection.normalized();
+
+                const double twoPi =
+                    2.0 * 3.14159265358979323846;
+
+
+                // --------------------------------------------------------
+                // Establish radial direction of the first shadow node.
+                // --------------------------------------------------------
+
+                const Vec3D firstRelative =
+                    mh12010C21HRigidHistoryNodes.front().pos
+                    - requiredSupportAxisFrame.P;
+
+                const double firstAxialCoordinate =
+                    dot(
+                        firstRelative,
+                        rigidAxisDirection
+                    );
+
+                Vec3D previousRadialDirection =
+                    firstRelative
+                    - rigidAxisDirection
+                    * firstAxialCoordinate;
+
+                const double firstRadius =
+                    previousRadialDirection.length();
+
+
+                if (firstRadius > 1e-12)
+                {
+                    previousRadialDirection =
+                        previousRadialDirection
+                        / firstRadius;
+
+                    double accumulatedAngle =
+                        0.0;
+
+
+                    // ----------------------------------------------------
+                    // Walk along history until approximately one complete
+                    // revolution has accumulated.
+                    // ----------------------------------------------------
+
+                    for (
+                        std::size_t i = 1;
+                        i < mh12010C21HRigidHistoryNodes.size();
+                        ++i
+                        )
+                    {
+                        const Vec3D relative =
+                            mh12010C21HRigidHistoryNodes[i].pos
+                            - requiredSupportAxisFrame.P;
+
+                        const double axialCoordinate =
+                            dot(
+                                relative,
+                                rigidAxisDirection
+                            );
+
+                        Vec3D radialDirection =
+                            relative
+                            - rigidAxisDirection
+                            * axialCoordinate;
+
+                        const double radialLength =
+                            radialDirection.length();
+
+                        if (radialLength <= 1e-12)
+                        {
+                            continue;
+                        }
+
+                        radialDirection =
+                            radialDirection
+                            / radialLength;
+
+
+                        // ------------------------------------------------
+                        // Signed angular step about the support axis.
+                        // ------------------------------------------------
+
+                        const Vec3D radialCross =
+                            cross(
+                                previousRadialDirection,
+                                radialDirection
+                            );
+
+                        const double sinAngle =
+                            dot(
+                                radialCross,
+                                rigidAxisDirection
+                            );
+
+                        const double cosAngle =
+                            std::clamp(
+                                dot(
+                                    previousRadialDirection,
+                                    radialDirection
+                                ),
+                                -1.0,
+                                1.0
+                            );
+
+                        const double deltaMeasuredAngle =
+                            std::atan2(
+                                sinAngle,
+                                cosAngle
+                            );
+
+                        accumulatedAngle +=
+                            deltaMeasuredAngle;
+
+                        previousRadialDirection =
+                            radialDirection;
+
+
+                        // ------------------------------------------------
+                        // One complete revolution reached.
+                        // ------------------------------------------------
+
+                        if (std::abs(accumulatedAngle) >= twoPi)
+                        {
+                            rigidAxialAdvance =
+                                axialCoordinate
+                                - firstAxialCoordinate;
+
+                            rigidMeasuredAngle =
+                                accumulatedAngle;
+
+                            if (std::abs(rigidMeasuredAngle) > 1e-12)
+                            {
+                                rigidMeasuredRisePerRadian =
+                                    rigidAxialAdvance
+                                    / rigidMeasuredAngle;
+
+                                rigidMeasuredPitch =
+                                    rigidMeasuredRisePerRadian
+                                    * twoPi;
+
+                                rigidPitchEndIndex =
+                                    i;
+
+                                rigidPitchMeasurementValid =
+                                    std::isfinite(
+                                        rigidMeasuredPitch
+                                    )
+                                    && std::isfinite(
+                                        rigidMeasuredRisePerRadian
+                                    );
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+
+            // --------------------------------------------------------
+            // Compare magnitudes because wrapping direction may reverse
+            // the signs of both angle and axial advance.
+            // --------------------------------------------------------
+
+            const double rigidPitchError =
+                rigidPitchMeasurementValid
+                ? std::abs(
+                    std::abs(rigidMeasuredPitch)
+                    - std::abs(loadedHelixPitch)
+                )
+                : std::numeric_limits<double>::infinity();
+
+
+            const double rigidRisePerRadianError =
+                rigidPitchMeasurementValid
+                ? std::abs(
+                    std::abs(rigidMeasuredRisePerRadian)
+                    - std::abs(loadedHelixRisePerRadian)
+                )
+                : std::numeric_limits<double>::infinity();
+
+
+            const double rigidPitchTolerance =
+                0.01;
+
+            const double rigidRisePerRadianTolerance =
+                0.01;
+
+
+            const bool rigidPitchAccepted =
+                rigidPitchMeasurementValid
+                && rigidPitchError
+                <= rigidPitchTolerance
+                && rigidRisePerRadianError
+                <= rigidRisePerRadianTolerance;
+
+
+            std::cout
+                << "[MH1.20.10C.21H.3 RIGID HISTORY PITCH]"
+                << " theoreticalPitch="
+                << loadedHelixPitch
+                << " measuredPitch="
+                << rigidMeasuredPitch
+                << " pitchError="
+                << rigidPitchError
+                << " theoreticalRisePerRadian="
+                << loadedHelixRisePerRadian
+                << " measuredRisePerRadian="
+                << rigidMeasuredRisePerRadian
+                << " riseError="
+                << rigidRisePerRadianError
+                << " measuredAngle="
+                << rigidMeasuredAngle
+                << " axialAdvance="
+                << rigidAxialAdvance
+                << " endIndex="
+                << rigidPitchEndIndex
+                << " samples="
+                << mh12010C21HRigidHistoryNodes.size()
+                << " valid="
+                << rigidPitchMeasurementValid
+                << " accepted="
+                << rigidPitchAccepted
+                << std::endl;
+        }
+
+
+        // ============================================================
+// MH1.20.10C.21H.4
+//
+// LoadedHold rigid-history axis acceptance.
+//
+// Measure the helix axis from the displacement over
+// approximately one complete revolution.
+//
+// Diagnostic only.
+// Production geometry is NOT modified.
+// ============================================================
+
+        if (
+            mh12010C21HRigidHistoryValid
+            && mh12010C21HRigidHistoryNodes.size() >= 2
+            )
+        {
+            Vec3D expectedAxisDirection =
+                requiredSupportAxisFrame.T;
+
+            bool rigidAxisMeasurementValid =
+                false;
+
+            Vec3D measuredAxisDirection =
+            {
+                0.0,
+                0.0,
+                0.0
+            };
+
+            double rigidAxisDirectionDot =
+                0.0;
+
+            double rigidAxisAngleRadians =
+                0.0;
+
+            double rigidOneTurnRadialClosure =
+                0.0;
+
+            double rigidOneTurnAxialAdvance =
+                0.0;
+
+            std::size_t rigidAxisEndIndex =
+                0;
+
+
+            if (expectedAxisDirection.lengthSquared() > 1e-12)
+            {
+                expectedAxisDirection =
+                    expectedAxisDirection.normalized();
+
+                const double twoPi =
+                    2.0 * 3.14159265358979323846;
+
+
+                // ----------------------------------------------------
+                // Build the initial radial direction.
+                // ----------------------------------------------------
+
+                const Vec3D firstPosition =
+                    mh12010C21HRigidHistoryNodes.front().pos;
+
+                const Vec3D firstRelative =
+                    firstPosition
+                    - requiredSupportAxisFrame.P;
+
+                const double firstAxialCoordinate =
+                    dot(
+                        firstRelative,
+                        expectedAxisDirection
+                    );
+
+                Vec3D previousRadialDirection =
+                    firstRelative
+                    - expectedAxisDirection
+                    * firstAxialCoordinate;
+
+                const double firstRadialLength =
+                    previousRadialDirection.length();
+
+
+                if (firstRadialLength > 1e-12)
+                {
+                    previousRadialDirection =
+                        previousRadialDirection
+                        / firstRadialLength;
+
+                    double accumulatedAngle =
+                        0.0;
+
+
+                    // ------------------------------------------------
+                    // Find approximately one complete revolution.
+                    // ------------------------------------------------
+
+                    for (
+                        std::size_t i = 1;
+                        i < mh12010C21HRigidHistoryNodes.size();
+                        ++i
+                        )
+                    {
+                        const Vec3D currentPosition =
+                            mh12010C21HRigidHistoryNodes[i].pos;
+
+                        const Vec3D relative =
+                            currentPosition
+                            - requiredSupportAxisFrame.P;
+
+                        const double axialCoordinate =
+                            dot(
+                                relative,
+                                expectedAxisDirection
+                            );
+
+                        Vec3D radialDirection =
+                            relative
+                            - expectedAxisDirection
+                            * axialCoordinate;
+
+                        const double radialLength =
+                            radialDirection.length();
+
+                        if (radialLength <= 1e-12)
+                        {
+                            continue;
+                        }
+
+                        radialDirection =
+                            radialDirection
+                            / radialLength;
+
+
+                        const Vec3D radialCross =
+                            cross(
+                                previousRadialDirection,
+                                radialDirection
+                            );
+
+                        const double sinAngle =
+                            dot(
+                                radialCross,
+                                expectedAxisDirection
+                            );
+
+                        const double cosAngle =
+                            std::clamp(
+                                dot(
+                                    previousRadialDirection,
+                                    radialDirection
+                                ),
+                                -1.0,
+                                1.0
+                            );
+
+                        const double deltaMeasuredAngle =
+                            std::atan2(
+                                sinAngle,
+                                cosAngle
+                            );
+
+                        accumulatedAngle +=
+                            deltaMeasuredAngle;
+
+                        previousRadialDirection =
+                            radialDirection;
+
+
+                        // ------------------------------------------------
+                        // One revolution reached.
+                        // ------------------------------------------------
+
+                        if (std::abs(accumulatedAngle) >= twoPi)
+                        {
+                            const Vec3D displacement =
+                                currentPosition
+                                - firstPosition;
+
+
+                            // --------------------------------------------
+                            // Split one-turn displacement into axial
+                            // and radial components relative to expected
+                            // support axis.
+                            // --------------------------------------------
+
+                            rigidOneTurnAxialAdvance =
+                                dot(
+                                    displacement,
+                                    expectedAxisDirection
+                                );
+
+                            const Vec3D radialClosureVector =
+                                displacement
+                                - expectedAxisDirection
+                                * rigidOneTurnAxialAdvance;
+
+                            rigidOneTurnRadialClosure =
+                                radialClosureVector.length();
+
+
+                            // --------------------------------------------
+                            // The full displacement is almost axial.
+                            //
+                            // Because our end node is discrete and may
+                            // lie slightly past 2*pi, there can be a
+                            // small radial closure error.
+                            // --------------------------------------------
+
+                            const double displacementLength =
+                                displacement.length();
+
+                            if (displacementLength > 1e-12)
+                            {
+                                measuredAxisDirection =
+                                    displacement
+                                    / displacementLength;
+
+
+                                // Axis has no meaningful +/- orientation
+                                // for this acceptance test.
+                                rigidAxisDirectionDot =
+                                    std::abs(
+                                        dot(
+                                            measuredAxisDirection,
+                                            expectedAxisDirection
+                                        )
+                                    );
+
+                                rigidAxisDirectionDot =
+                                    std::clamp(
+                                        rigidAxisDirectionDot,
+                                        0.0,
+                                        1.0
+                                    );
+
+                                rigidAxisAngleRadians =
+                                    std::acos(
+                                        rigidAxisDirectionDot
+                                    );
+
+                                rigidAxisEndIndex =
+                                    i;
+
+                                rigidAxisMeasurementValid =
+                                    std::isfinite(
+                                        rigidAxisDirectionDot
+                                    )
+                                    && std::isfinite(
+                                        rigidAxisAngleRadians
+                                    )
+                                    && std::isfinite(
+                                        rigidOneTurnRadialClosure
+                                    );
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+
+            // --------------------------------------------------------
+            // Acceptance.
+            //
+            // IMPORTANT:
+            //
+            // The one-turn end node is discrete, so displacement is
+            // not expected to be mathematically parallel to the axis.
+            //
+            // Therefore use an angular tolerance appropriate to the
+            // sampling test, not floating-point epsilon.
+            // --------------------------------------------------------
+
+            const double rigidAxisMinimumDot =
+                0.999;
+
+            const bool rigidAxisAccepted =
+                rigidAxisMeasurementValid
+                && rigidAxisDirectionDot
+                >= rigidAxisMinimumDot;
+
+
+            std::cout
+                << "[MH1.20.10C.21H.4 RIGID HISTORY AXIS]"
+                << " expectedAxis=("
+                << expectedAxisDirection.x
+                << ","
+                << expectedAxisDirection.y
+                << ","
+                << expectedAxisDirection.z
+                << ")"
+                << " measuredAxis=("
+                << measuredAxisDirection.x
+                << ","
+                << measuredAxisDirection.y
+                << ","
+                << measuredAxisDirection.z
+                << ")"
+                << " directionDot="
+                << rigidAxisDirectionDot
+                << " angleRadians="
+                << rigidAxisAngleRadians
+                << " radialClosure="
+                << rigidOneTurnRadialClosure
+                << " axialAdvance="
+                << rigidOneTurnAxialAdvance
+                << " endIndex="
+                << rigidAxisEndIndex
+                << " valid="
+                << rigidAxisMeasurementValid
+                << " accepted="
+                << rigidAxisAccepted
+                << std::endl;
+        }
+
+
+        // ============================================================
+// MH1.20.10C.21I.2
+//
+// PRODUCTION LOADED-HOLD INVARIANT ACCEPTANCE
+//
+// Validate the REAL production formedHistoryNodes after the
+// rigid-junction replacement.
+//
+// Tests:
+//
+//     I.2A  loaded radius
+//     I.2B  loaded pitch
+//     I.2C  loaded axis
+//
+// IMPORTANT:
+//
+//     Diagnostic only.
+//     Production geometry is NOT modified here.
+//
+// ============================================================
+
+        if (formedHistoryNodes.size() >= 2)
+        {
+            Vec3D productionAxisDirection =
+                requiredSupportAxisFrame.T;
+
+            bool productionAxisUsable =
+                productionAxisDirection.lengthSquared() > 1e-12;
+
+            if (productionAxisUsable)
+            {
+                productionAxisDirection =
+                    productionAxisDirection.normalized();
+            }
+
+
+            // ========================================================
+            // MH1.20.10C.21I.2A
+            //
+            // PRODUCTION RADIUS ACCEPTANCE
+            // ========================================================
+
+            bool productionRadiusValid =
+                false;
+
+            double productionRadiusSum =
+                0.0;
+
+            double productionMinimumRadius =
+                std::numeric_limits<double>::max();
+
+            double productionMaximumRadius =
+                0.0;
+
+            std::size_t productionRadiusSampleCount =
+                0;
+
+
+            if (productionAxisUsable)
+            {
+                for (const PipeNode& node : formedHistoryNodes)
+                {
+                    const Vec3D relative =
+                        node.pos
+                        - requiredSupportAxisFrame.P;
+
+                    const double axialCoordinate =
+                        dot(
+                            relative,
+                            productionAxisDirection
+                        );
+
+                    const Vec3D radialVector =
+                        relative
+                        - productionAxisDirection
+                        * axialCoordinate;
+
+                    const double radius =
+                        radialVector.length();
+
+                    if (!std::isfinite(radius))
+                    {
+                        continue;
+                    }
+
+                    productionRadiusSum +=
+                        radius;
+
+                    productionMinimumRadius =
+                        std::min(
+                            productionMinimumRadius,
+                            radius
+                        );
+
+                    productionMaximumRadius =
+                        std::max(
+                            productionMaximumRadius,
+                            radius
+                        );
+
+                    ++productionRadiusSampleCount;
+                }
+
+
+                productionRadiusValid =
+                    productionRadiusSampleCount > 0;
+            }
+
+
+            double productionAverageRadius =
+                0.0;
+
+            double productionRadiusSpread =
+                0.0;
+
+            double productionAverageRadiusError =
+                std::numeric_limits<double>::infinity();
+
+
+            if (productionRadiusValid)
+            {
+                productionAverageRadius =
+                    productionRadiusSum
+                    / static_cast<double>(
+                        productionRadiusSampleCount
+                        );
+
+                productionRadiusSpread =
+                    productionMaximumRadius
+                    - productionMinimumRadius;
+
+                productionAverageRadiusError =
+                    std::abs(
+                        productionAverageRadius
+                        - loadedHelixRadius
+                    );
+            }
+
+
+            const double productionRadiusTolerance =
+                0.01;
+
+            const double productionRadiusSpreadTolerance =
+                0.01;
+
+
+            const bool productionRadiusAccepted =
+                productionRadiusValid
+                && productionAverageRadiusError
+                <= productionRadiusTolerance
+                && productionRadiusSpread
+                <= productionRadiusSpreadTolerance;
+
+
+            std::cout
+                << "[MH1.20.10C.21I.2A PRODUCTION RADIUS]"
+                << " theoretical="
+                << loadedHelixRadius
+
+                << " measuredAvg="
+                << productionAverageRadius
+
+                << " measuredMin="
+                << productionMinimumRadius
+
+                << " measuredMax="
+                << productionMaximumRadius
+
+                << " averageError="
+                << productionAverageRadiusError
+
+                << " spread="
+                << productionRadiusSpread
+
+                << " samples="
+                << productionRadiusSampleCount
+
+                << " valid="
+                << productionRadiusValid
+
+                << " accepted="
+                << productionRadiusAccepted
+
+                << std::endl;
+
+
+            // ========================================================
+            // MH1.20.10C.21I.2B
+            //
+            // PRODUCTION PITCH ACCEPTANCE
+            //
+            // Measure approximately one complete revolution from the
+            // real production history.
+            // ========================================================
+
+            bool productionPitchValid =
+                false;
+
+            double productionMeasuredAngle =
+                0.0;
+
+            double productionAxialAdvance =
+                0.0;
+
+            double productionMeasuredRisePerRadian =
+                0.0;
+
+            double productionMeasuredPitch =
+                0.0;
+
+            std::size_t productionPitchEndIndex =
+                0;
+
+
+            if (
+                productionAxisUsable
+                && formedHistoryNodes.size() >= 2
+                )
+            {
+                const double twoPi =
+                    2.0 * 3.14159265358979323846;
+
+
+                const Vec3D firstRelative =
+                    formedHistoryNodes.front().pos
+                    - requiredSupportAxisFrame.P;
+
+
+                const double firstAxialCoordinate =
+                    dot(
+                        firstRelative,
+                        productionAxisDirection
+                    );
+
+
+                Vec3D previousRadialDirection =
+                    firstRelative
+                    - productionAxisDirection
+                    * firstAxialCoordinate;
+
+
+                const double firstRadius =
+                    previousRadialDirection.length();
+
+
+                if (firstRadius > 1e-12)
+                {
+                    previousRadialDirection =
+                        previousRadialDirection
+                        / firstRadius;
+
+
+                    double accumulatedAngle =
+                        0.0;
+
+
+                    for (
+                        std::size_t i = 1;
+                        i < formedHistoryNodes.size();
+                        ++i
+                        )
+                    {
+                        const Vec3D relative =
+                            formedHistoryNodes[i].pos
+                            - requiredSupportAxisFrame.P;
+
+
+                        const double axialCoordinate =
+                            dot(
+                                relative,
+                                productionAxisDirection
+                            );
+
+
+                        Vec3D radialDirection =
+                            relative
+                            - productionAxisDirection
+                            * axialCoordinate;
+
+
+                        const double radialLength =
+                            radialDirection.length();
+
+
+                        if (radialLength <= 1e-12)
+                        {
+                            continue;
+                        }
+
+
+                        radialDirection =
+                            radialDirection
+                            / radialLength;
+
+
+                        const double sinAngle =
+                            dot(
+                                cross(
+                                    previousRadialDirection,
+                                    radialDirection
+                                ),
+                                productionAxisDirection
+                            );
+
+
+                        const double cosAngle =
+                            std::clamp(
+                                dot(
+                                    previousRadialDirection,
+                                    radialDirection
+                                ),
+                                -1.0,
+                                1.0
+                            );
+
+
+                        const double deltaMeasuredAngle =
+                            std::atan2(
+                                sinAngle,
+                                cosAngle
+                            );
+
+
+                        accumulatedAngle +=
+                            deltaMeasuredAngle;
+
+
+                        previousRadialDirection =
+                            radialDirection;
+
+
+                        if (std::abs(accumulatedAngle) >= twoPi)
+                        {
+                            productionMeasuredAngle =
+                                accumulatedAngle;
+
+
+                            productionAxialAdvance =
+                                axialCoordinate
+                                - firstAxialCoordinate;
+
+
+                            if (
+                                std::abs(productionMeasuredAngle)
+                        > 1e-12
+                                )
+                            {
+                                productionMeasuredRisePerRadian =
+                                    productionAxialAdvance
+                                    / productionMeasuredAngle;
+
+
+                                productionMeasuredPitch =
+                                    productionMeasuredRisePerRadian
+                                    * twoPi;
+
+
+                                productionPitchEndIndex =
+                                    i;
+
+
+                                productionPitchValid =
+                                    std::isfinite(
+                                        productionMeasuredPitch
+                                    )
+                                    && std::isfinite(
+                                        productionMeasuredRisePerRadian
+                                    );
+                            }
+
+                            break;
+                        }
+                    }
+                }
+            }
+
+
+            const double productionPitchError =
+                productionPitchValid
+                ? std::abs(
+                    std::abs(productionMeasuredPitch)
+                    - std::abs(loadedHelixPitch)
+                )
+                : std::numeric_limits<double>::infinity();
+
+
+            const double productionRiseError =
+                productionPitchValid
+                ? std::abs(
+                    std::abs(productionMeasuredRisePerRadian)
+                    - std::abs(loadedHelixRisePerRadian)
+                )
+                : std::numeric_limits<double>::infinity();
+
+
+            const double productionPitchTolerance =
+                0.01;
+
+            const double productionRiseTolerance =
+                0.01;
+
+
+            const bool productionPitchAccepted =
+                productionPitchValid
+                && productionPitchError
+                <= productionPitchTolerance
+                && productionRiseError
+                <= productionRiseTolerance;
+
+
+            std::cout
+                << "[MH1.20.10C.21I.2B PRODUCTION PITCH]"
+                << " theoreticalPitch="
+                << loadedHelixPitch
+
+                << " measuredPitch="
+                << productionMeasuredPitch
+
+                << " pitchError="
+                << productionPitchError
+
+                << " theoreticalRisePerRadian="
+                << loadedHelixRisePerRadian
+
+                << " measuredRisePerRadian="
+                << productionMeasuredRisePerRadian
+
+                << " riseError="
+                << productionRiseError
+
+                << " measuredAngle="
+                << productionMeasuredAngle
+
+                << " axialAdvance="
+                << productionAxialAdvance
+
+                << " endIndex="
+                << productionPitchEndIndex
+
+                << " valid="
+                << productionPitchValid
+
+                << " accepted="
+                << productionPitchAccepted
+
+                << std::endl;
+
+
+            // ========================================================
+            // MH1.20.10C.21I.2C
+            //
+            // PRODUCTION AXIS ACCEPTANCE
+            //
+            // Use the same approximately-one-turn endpoint found by
+            // the pitch measurement.
+            //
+            // The discrete endpoint may lie slightly past 2*pi, so a
+            // small radial closure error is expected.
+            // ========================================================
+
+            bool productionAxisMeasurementValid =
+                false;
+
+            Vec3D productionMeasuredAxis =
+            {
+                0.0,
+                0.0,
+                0.0
+            };
+
+            double productionAxisDot =
+                0.0;
+
+            double productionAxisAngleRadians =
+                0.0;
+
+            double productionRadialClosure =
+                0.0;
+
+            double productionAxisAxialAdvance =
+                0.0;
+
+
+            if (
+                productionPitchValid
+                && productionPitchEndIndex > 0
+                && productionPitchEndIndex
+                < formedHistoryNodes.size()
+                )
+            {
+                const Vec3D firstPosition =
+                    formedHistoryNodes.front().pos;
+
+
+                const Vec3D endPosition =
+                    formedHistoryNodes[
+                        productionPitchEndIndex
+                    ].pos;
+
+
+                const Vec3D displacement =
+                    endPosition
+                    - firstPosition;
+
+
+                productionAxisAxialAdvance =
+                    dot(
+                        displacement,
+                        productionAxisDirection
+                    );
+
+
+                const Vec3D radialClosureVector =
+                    displacement
+                    - productionAxisDirection
+                    * productionAxisAxialAdvance;
+
+
+                productionRadialClosure =
+                    radialClosureVector.length();
+
+
+                const double displacementLength =
+                    displacement.length();
+
+
+                if (displacementLength > 1e-12)
+                {
+                    productionMeasuredAxis =
+                        displacement
+                        / displacementLength;
+
+
+                    productionAxisDot =
+                        std::abs(
+                            dot(
+                                productionMeasuredAxis,
+                                productionAxisDirection
+                            )
+                        );
+
+
+                    productionAxisDot =
+                        std::clamp(
+                            productionAxisDot,
+                            0.0,
+                            1.0
+                        );
+
+
+                    productionAxisAngleRadians =
+                        std::acos(
+                            productionAxisDot
+                        );
+
+
+                    productionAxisMeasurementValid =
+                        std::isfinite(
+                            productionAxisDot
+                        )
+                        && std::isfinite(
+                            productionAxisAngleRadians
+                        )
+                        && std::isfinite(
+                            productionRadialClosure
+                        );
+                }
+            }
+
+
+            const double productionAxisMinimumDot =
+                0.999;
+
+
+            const bool productionAxisAccepted =
+                productionAxisMeasurementValid
+                && productionAxisDot
+                >= productionAxisMinimumDot;
+
+
+            std::cout
+                << "[MH1.20.10C.21I.2C PRODUCTION AXIS]"
+
+                << " expectedAxis=("
+                << productionAxisDirection.x
+                << ","
+                << productionAxisDirection.y
+                << ","
+                << productionAxisDirection.z
+                << ")"
+
+                << " measuredAxis=("
+                << productionMeasuredAxis.x
+                << ","
+                << productionMeasuredAxis.y
+                << ","
+                << productionMeasuredAxis.z
+                << ")"
+
+                << " directionDot="
+                << productionAxisDot
+
+                << " angleRadians="
+                << productionAxisAngleRadians
+
+                << " radialClosure="
+                << productionRadialClosure
+
+                << " axialAdvance="
+                << productionAxisAxialAdvance
+
+                << " endIndex="
+                << productionPitchEndIndex
+
+                << " valid="
+                << productionAxisMeasurementValid
+
+                << " accepted="
+                << productionAxisAccepted
+
+                << std::endl;
+
+
+            // ========================================================
+            // MH1.20.10C.21I.2 FINAL ACCEPTANCE
+            // ========================================================
+
+            const bool productionLoadedHoldAccepted =
+                productionRadiusAccepted
+                && productionPitchAccepted
+                && productionAxisAccepted;
+
+
+            std::cout
+                << "[MH1.20.10C.21I.2 FINAL ACCEPTANCE]"
+
+                << " radiusAccepted="
+                << productionRadiusAccepted
+
+                << " pitchAccepted="
+                << productionPitchAccepted
+
+                << " axisAccepted="
+                << productionAxisAccepted
+
+                << " accepted="
+                << productionLoadedHoldAccepted
+
+                << std::endl;
+        }
+        // ========================================================
+        // Existing transition
 
         std::cout
             << "[MH1.20.10A WRAPPING SNAPSHOT]"
@@ -5016,7 +6494,6 @@ updateFormedHistory()
     }
 
 
-
     if (!formedHistoryInitialized)
     {
         formedHistoryNodes.clear();
@@ -5026,6 +6503,9 @@ updateFormedHistory()
 
         previousSupportRotationAngle =
             state.supportRotationAngle;
+
+        previousSupportAxialPosition =
+            state.supportAxialPosition;
 
         formedHistoryInitialized =
             true;
@@ -5393,6 +6873,67 @@ updateFormedHistory()
     supportAxisDirection =
         supportAxisDirection.normalized();
 
+    // ============================================================
+    // MH1.20.10C.21E.2
+    //
+    // Compare the radial error stored at the end of the PREVIOUS
+    // update with the same persistent history front at the
+    // beginning of THIS update, before any new rigid motion.
+    //
+    // Diagnostic only.
+    // ============================================================
+
+    if (
+        mh12010C21EStoredFrontRadiusValid
+        && !formedHistoryNodes.empty()
+        )
+    {
+        Vec3D axisDirection =
+            requiredSupportAxisFrame.T;
+
+        if (axisDirection.lengthSquared() > 1e-12)
+        {
+            axisDirection =
+                axisDirection.normalized();
+
+            const Vec3D relative =
+                formedHistoryNodes.front().pos
+                - requiredSupportAxisFrame.P;
+
+            const double axialCoordinate =
+                dot(
+                    relative,
+                    axisDirection
+                );
+
+            const Vec3D radialVector =
+                relative
+                - axisDirection * axialCoordinate;
+
+            const double radiusBeforeMotion =
+                radialVector.length();
+
+            const double radiusErrorBeforeMotion =
+                radiusBeforeMotion
+                - loadedHelixRadius;
+
+            const double persistenceError =
+                radiusErrorBeforeMotion
+                - mh12010C21EStoredFrontRadiusError;
+
+            std::cout
+                << "[MH1.20.10C.21E.2 FRONT BEFORE MOTION]"
+                << " storedRadiusError="
+                << mh12010C21EStoredFrontRadiusError
+                << " currentRadiusError="
+                << radiusErrorBeforeMotion
+                << " persistenceError="
+                << persistenceError
+                << std::endl;
+        }
+    }
+
+
 
     if (std::abs(deltaAngle) > 1e-12)
         for (PipeNode& node :
@@ -5414,6 +6955,90 @@ updateFormedHistory()
         }
 
 
+    // ============================================================
+ // MH1.20.10C.21H.1A
+ //
+ // Transport the diagnostic rigid-history geometry with the
+ // same support screw motion used by production history.
+ //
+ // Diagnostic only.
+ // ============================================================
+
+    if (!mh12010C21HRigidHistoryNodes.empty())
+    {
+        if (std::abs(deltaAngle) > 1e-12)
+        {
+            for (PipeNode& node :
+                mh12010C21HRigidHistoryNodes)
+            {
+                RigidTransformUtils::rotateNodeAroundAxis(
+                    node,
+                    supportAxisPoint,
+                    supportAxisDirection,
+                    deltaAngle
+                );
+
+                node.pos +=
+                    supportAxisDirection
+                    * deltaAxialPosition;
+            }
+        }
+    }
+    // 
+    // 
+    // ============================================================
+    // MH1.20.10C.21E.3
+    //
+    // Measure whether the rigid history transport changes radius.
+    //
+    // Rotation about the support axis plus translation along that
+    // axis should preserve radius exactly.
+    //
+    // Diagnostic only.
+    // ============================================================
+
+    if (!formedHistoryNodes.empty())
+    {
+        Vec3D axisDirection =
+            requiredSupportAxisFrame.T;
+
+        if (axisDirection.lengthSquared() > 1e-12)
+        {
+            axisDirection =
+                axisDirection.normalized();
+
+            const Vec3D relative =
+                formedHistoryNodes.front().pos
+                - requiredSupportAxisFrame.P;
+
+            const double axialCoordinate =
+                dot(
+                    relative,
+                    axisDirection
+                );
+
+            const Vec3D radialVector =
+                relative
+                - axisDirection * axialCoordinate;
+
+            const double radiusAfterMotion =
+                radialVector.length();
+
+            const double radiusErrorAfterMotion =
+                radiusAfterMotion
+                - loadedHelixRadius;
+
+            std::cout
+                << "[MH1.20.10C.21E.3 FRONT AFTER MOTION]"
+                << " radius="
+                << radiusAfterMotion
+                << " radiusError="
+                << radiusErrorAfterMotion
+                << std::endl;
+        }
+    }
+
+
 
 
 
@@ -5431,8 +7056,7 @@ updateFormedHistory()
     }
 
 
-
-
+    
 
     const SpatialCurveIntegrationResult* formingReference =
         &referenceResult;
@@ -5923,6 +7547,632 @@ if (
             node
         );
     }
+
+
+
+    // ============================================================
+    // MH1.20.10C.21H.1B
+    //
+    // Build a diagnostic rigidly-positioned version of the fresh
+    // increment and append it into an independent shadow history.
+    //
+    // Production geometry is NOT modified.
+    // ============================================================
+
+    if (!newIncrementNodes.empty())
+    {
+        std::vector<PipeNode> rigidHistoryIncrement =
+            newIncrementNodes;
+
+        bool rigidPlacementValid = true;
+
+        // --------------------------------------------------------
+        // If diagnostic history already exists, rigidly align the
+        // new increment BACK endpoint to the existing history FRONT.
+        // --------------------------------------------------------
+
+        if (!mh12010C21HRigidHistoryNodes.empty())
+        {
+            const PipeNode& sourceLast =
+                rigidHistoryIncrement.back();
+
+            const PipeNode& targetFirst =
+                mh12010C21HRigidHistoryNodes.front();
+
+            const Vec3D axisPoint =
+                requiredSupportAxisFrame.P;
+
+            Vec3D axisDirection =
+                requiredSupportAxisFrame.T;
+
+            if (axisDirection.lengthSquared() < 1e-12)
+            {
+                rigidPlacementValid = false;
+            }
+            else
+            {
+                axisDirection =
+                    axisDirection.normalized();
+
+                const Vec3D sourceRelative =
+                    sourceLast.pos
+                    - axisPoint;
+
+                const Vec3D targetRelative =
+                    targetFirst.pos
+                    - axisPoint;
+
+                const double sourceAxial =
+                    dot(
+                        sourceRelative,
+                        axisDirection
+                    );
+
+                const double targetAxial =
+                    dot(
+                        targetRelative,
+                        axisDirection
+                    );
+
+                const Vec3D sourceRadial =
+                    sourceRelative
+                    - axisDirection * sourceAxial;
+
+                const Vec3D targetRadial =
+                    targetRelative
+                    - axisDirection * targetAxial;
+
+                const double sourceRadius =
+                    sourceRadial.length();
+
+                const double targetRadius =
+                    targetRadial.length();
+
+                if (sourceRadius <= 1e-12
+                    || targetRadius <= 1e-12)
+                {
+                    rigidPlacementValid = false;
+                }
+                else
+                {
+                    const Vec3D sourceRadialUnit =
+                        sourceRadial / sourceRadius;
+
+                    const Vec3D targetRadialUnit =
+                        targetRadial / targetRadius;
+
+                    const double rotationSin =
+                        dot(
+                            axisDirection,
+                            cross(
+                                sourceRadialUnit,
+                                targetRadialUnit
+                            )
+                        );
+
+                    const double rotationCos =
+                        std::clamp(
+                            dot(
+                                sourceRadialUnit,
+                                targetRadialUnit
+                            ),
+                            -1.0,
+                            1.0
+                        );
+
+                    const double rotationAngle =
+                        std::atan2(
+                            rotationSin,
+                            rotationCos
+                        );
+
+                    const double axialTranslation =
+                        targetAxial
+                        - sourceAxial;
+
+                    for (PipeNode& node :
+                        rigidHistoryIncrement)
+                    {
+                        RigidTransformUtils::rotateNodeAroundAxis(
+                            node,
+                            axisPoint,
+                            axisDirection,
+                            rotationAngle
+                        );
+
+                        node.pos +=
+                            axisDirection
+                            * axialTranslation;
+                    }
+                }
+            }
+        }
+
+        // --------------------------------------------------------
+        // Insert diagnostic increment using the SAME history
+        // topology as production:
+        //
+        //     [new increment] + [older history]
+        //
+        // --------------------------------------------------------
+
+        if (rigidPlacementValid)
+        {
+            mh12010C21HRigidHistoryNodes.insert(
+                mh12010C21HRigidHistoryNodes.begin(),
+                rigidHistoryIncrement.begin(),
+                rigidHistoryIncrement.end()
+            );
+
+            mh12010C21HRigidHistoryValid =
+                !mh12010C21HRigidHistoryNodes.empty();
+
+            std::cout
+                << "[MH1.20.10C.21H.1 RIGID HISTORY]"
+                << " newIncrementNodes="
+                << rigidHistoryIncrement.size()
+                << " historyNodes="
+                << mh12010C21HRigidHistoryNodes.size()
+                << " valid="
+                << mh12010C21HRigidHistoryValid
+                << std::endl;
+        }
+    }
+
+
+
+    // ============================================================
+// MH1.20.10C.21G
+//
+// Compare two diagnostic-only junction constructions:
+//
+//   A. Existing distributed correction
+//   B. Rigid screw alignment
+//
+// Both candidates start from the SAME fresh increment.
+//
+// Production newIncrementNodes is NOT modified here.
+// ============================================================
+
+    if (!newIncrementNodes.empty()
+        && !formedHistoryNodes.empty())
+    {
+        const PipeNode& originalLast =
+            newIncrementNodes.back();
+
+        const PipeNode& targetOldFirst =
+            formedHistoryNodes.front();
+
+        // --------------------------------------------------------
+        // Build independent diagnostic copies.
+        // --------------------------------------------------------
+
+        std::vector<PipeNode> distributedCandidate =
+            newIncrementNodes;
+
+        std::vector<PipeNode> rigidCandidate =
+            newIncrementNodes;
+
+
+        // ========================================================
+        // A. DISTRIBUTED CORRECTION CANDIDATE
+        // ========================================================
+
+        const Vec3D distributedCorrection =
+            targetOldFirst.pos
+            - originalLast.pos;
+
+        const std::size_t distributedCount =
+            distributedCandidate.size();
+
+        if (distributedCount > 1)
+        {
+            for (std::size_t i = 0;
+                i < distributedCount;
+                ++i)
+            {
+                const double fraction =
+                    static_cast<double>(i + 1)
+                    / static_cast<double>(distributedCount);
+
+                distributedCandidate[i].pos +=
+                    distributedCorrection
+                    * fraction;
+            }
+        }
+
+
+        // ========================================================
+        // B. RIGID SCREW CANDIDATE
+        //
+        // Rotate about the support axis until the LAST node has
+        // the same angular coordinate as oldFirst, then translate
+        // axially until the axial coordinates match.
+        //
+        // Radius is intentionally NOT changed.
+        // ========================================================
+
+        Vec3D axisDirection =
+            requiredSupportAxisFrame.T;
+
+        const Vec3D axisPoint =
+            requiredSupportAxisFrame.P;
+
+        bool rigidValid = false;
+
+        double rigidRotationAngle = 0.0;
+        double rigidAxialTranslation = 0.0;
+
+        if (axisDirection.lengthSquared() > 1e-12)
+        {
+            axisDirection =
+                axisDirection.normalized();
+
+            const Vec3D sourceRelative =
+                originalLast.pos
+                - axisPoint;
+
+            const Vec3D targetRelative =
+                targetOldFirst.pos
+                - axisPoint;
+
+            const double sourceAxial =
+                dot(
+                    sourceRelative,
+                    axisDirection
+                );
+
+            const double targetAxial =
+                dot(
+                    targetRelative,
+                    axisDirection
+                );
+
+            const Vec3D sourceRadial =
+                sourceRelative
+                - axisDirection * sourceAxial;
+
+            const Vec3D targetRadial =
+                targetRelative
+                - axisDirection * targetAxial;
+
+            const double sourceRadius =
+                sourceRadial.length();
+
+            const double targetRadius =
+                targetRadial.length();
+
+            if (sourceRadius > 1e-12
+                && targetRadius > 1e-12)
+            {
+                const Vec3D sourceRadialUnit =
+                    sourceRadial / sourceRadius;
+
+                const Vec3D targetRadialUnit =
+                    targetRadial / targetRadius;
+
+                const double rotationSin =
+                    dot(
+                        axisDirection,
+                        cross(
+                            sourceRadialUnit,
+                            targetRadialUnit
+                        )
+                    );
+
+                const double rotationCos =
+                    std::clamp(
+                        dot(
+                            sourceRadialUnit,
+                            targetRadialUnit
+                        ),
+                        -1.0,
+                        1.0
+                    );
+
+                rigidRotationAngle =
+                    std::atan2(
+                        rotationSin,
+                        rotationCos
+                    );
+
+                rigidAxialTranslation =
+                    targetAxial
+                    - sourceAxial;
+
+                for (PipeNode& node :
+                    rigidCandidate)
+                {
+                    RigidTransformUtils::
+                        rotateNodeAroundAxis(
+                            node,
+                            axisPoint,
+                            axisDirection,
+                            rigidRotationAngle
+                        );
+
+                    node.pos +=
+                        axisDirection
+                        * rigidAxialTranslation;
+                }
+
+                rigidValid = true;
+            }
+        }
+
+
+        // ========================================================
+        // COMMON MEASUREMENT HELPERS
+        // ========================================================
+
+        const auto measurePolylineLength =
+            [](
+                const std::vector<PipeNode>& nodes
+                )
+            {
+                double length = 0.0;
+
+                for (std::size_t i = 1;
+                    i < nodes.size();
+                    ++i)
+                {
+                    length +=
+                        (
+                            nodes[i].pos
+                            - nodes[i - 1].pos
+                            ).length();
+                }
+
+                return length;
+            };
+
+
+        const auto measureAverageRadius =
+            [&](
+                const std::vector<PipeNode>& nodes
+                )
+            {
+                double sum = 0.0;
+
+                for (const PipeNode& node :
+                    nodes)
+                {
+                    const Vec3D relative =
+                        node.pos
+                        - axisPoint;
+
+                    const double axial =
+                        dot(
+                            relative,
+                            axisDirection
+                        );
+
+                    const Vec3D radial =
+                        relative
+                        - axisDirection * axial;
+
+                    sum +=
+                        radial.length();
+                }
+
+                if (nodes.empty())
+                    return 0.0;
+
+                return
+                    sum
+                    / static_cast<double>(
+                        nodes.size()
+                        );
+            };
+
+
+        const auto measureMaxSegmentLengthError =
+            [](
+                const std::vector<PipeNode>& original,
+                const std::vector<PipeNode>& candidate
+                )
+            {
+                double maxError = 0.0;
+
+                const std::size_t count =
+                    std::min(
+                        original.size(),
+                        candidate.size()
+                    );
+
+                for (std::size_t i = 1;
+                    i < count;
+                    ++i)
+                {
+                    const double originalLength =
+                        (
+                            original[i].pos
+                            - original[i - 1].pos
+                            ).length();
+
+                    const double candidateLength =
+                        (
+                            candidate[i].pos
+                            - candidate[i - 1].pos
+                            ).length();
+
+                    maxError =
+                        std::max(
+                            maxError,
+                            std::abs(
+                                candidateLength
+                                - originalLength
+                            )
+                        );
+                }
+
+                return maxError;
+            };
+
+
+        // ========================================================
+        // MEASURE ORIGINAL
+        // ========================================================
+
+        const double originalLength =
+            measurePolylineLength(
+                newIncrementNodes
+            );
+
+        const double originalAverageRadius =
+            measureAverageRadius(
+                newIncrementNodes
+            );
+
+
+        // ========================================================
+        // MEASURE DISTRIBUTED CANDIDATE
+        // ========================================================
+
+        const double distributedLength =
+            measurePolylineLength(
+                distributedCandidate
+            );
+
+        const double distributedAverageRadius =
+            measureAverageRadius(
+                distributedCandidate
+            );
+
+        const double distributedLengthError =
+            distributedLength
+            - originalLength;
+
+        const double distributedAverageRadiusError =
+            distributedAverageRadius
+            - originalAverageRadius;
+
+        const double distributedMaxSegmentError =
+            measureMaxSegmentLengthError(
+                newIncrementNodes,
+                distributedCandidate
+            );
+
+        const double distributedJunctionGap =
+            (
+                targetOldFirst.pos
+                - distributedCandidate.back().pos
+                ).length();
+
+        const double distributedTangentDot =
+            dot(
+                distributedCandidate.back().T.normalized(),
+                targetOldFirst.T.normalized()
+            );
+
+
+        // ========================================================
+        // MEASURE RIGID CANDIDATE
+        // ========================================================
+
+        double rigidLength = 0.0;
+        double rigidAverageRadius = 0.0;
+        double rigidLengthError = 0.0;
+        double rigidAverageRadiusError = 0.0;
+        double rigidMaxSegmentError = 0.0;
+        double rigidJunctionGap = 0.0;
+        double rigidTangentDot = 0.0;
+
+        if (rigidValid)
+        {
+            rigidLength =
+                measurePolylineLength(
+                    rigidCandidate
+                );
+
+            rigidAverageRadius =
+                measureAverageRadius(
+                    rigidCandidate
+                );
+
+            rigidLengthError =
+                rigidLength
+                - originalLength;
+
+            rigidAverageRadiusError =
+                rigidAverageRadius
+                - originalAverageRadius;
+
+            rigidMaxSegmentError =
+                measureMaxSegmentLengthError(
+                    newIncrementNodes,
+                    rigidCandidate
+                );
+
+            rigidJunctionGap =
+                (
+                    targetOldFirst.pos
+                    - rigidCandidate.back().pos
+                    ).length();
+
+            rigidTangentDot =
+                dot(
+                    rigidCandidate.back().T.normalized(),
+                    targetOldFirst.T.normalized()
+                );
+        }
+
+
+        // ========================================================
+        // DIAGNOSTIC OUTPUT
+        // ========================================================
+
+        std::cout
+            << "[MH1.20.10C.21G DISTRIBUTED VS RIGID]"
+
+            << " originalLength="
+            << originalLength
+
+            << " distributedLengthError="
+            << distributedLengthError
+
+            << " distributedMaxSegmentError="
+            << distributedMaxSegmentError
+
+            << " distributedAverageRadiusError="
+            << distributedAverageRadiusError
+
+            << " distributedJunctionGap="
+            << distributedJunctionGap
+
+            << " distributedTangentDot="
+            << distributedTangentDot
+
+            << " rigidValid="
+            << rigidValid
+
+            << " rigidLengthError="
+            << rigidLengthError
+
+            << " rigidMaxSegmentError="
+            << rigidMaxSegmentError
+
+            << " rigidAverageRadiusError="
+            << rigidAverageRadiusError
+
+            << " rigidJunctionGap="
+            << rigidJunctionGap
+
+            << " rigidTangentDot="
+            << rigidTangentDot
+
+            << " rigidRotationAngle="
+            << rigidRotationAngle
+
+            << " rigidAxialTranslation="
+            << rigidAxialTranslation
+
+            << std::endl;
+    }
+
+
+
+
 
 
     // ============================================================
@@ -7302,6 +9552,8 @@ if (
                 << cumulativeContinuousAdvance
 
                 << std::endl;
+
+			    
         }
     }
 
@@ -7315,6 +9567,70 @@ if (
 // newLast              oldFirst
 //    *--------------------*
 // =====================================================
+
+    double mh12010C21FFrontRadiusBeforeCorrection = 0.0;
+    double mh12010C21FFrontRadiusAfterCorrection = 0.0;
+
+    bool mh12010C21FBeforeValid = false;
+    bool mh12010C21FAfterValid = false;
+
+    // ============================================================
+// MH1.20.10C.21F.1
+//
+// Measure the radius of the fresh increment FRONT immediately
+// before the production distributed junction correction.
+//
+// Diagnostic only.
+// ============================================================
+
+    if (!newIncrementNodes.empty())
+    {
+        Vec3D axisDirection =
+            requiredSupportAxisFrame.T;
+
+        if (axisDirection.lengthSquared() > 1e-12)
+        {
+            axisDirection =
+                axisDirection.normalized();
+
+            const Vec3D relative =
+                newIncrementNodes.front().pos
+                - requiredSupportAxisFrame.P;
+
+            const double axialCoordinate =
+                dot(
+                    relative,
+                    axisDirection
+                );
+
+            const Vec3D radialVector =
+                relative
+                - axisDirection * axialCoordinate;
+
+            mh12010C21FFrontRadiusBeforeCorrection =
+                radialVector.length();
+
+            mh12010C21FBeforeValid =
+                std::isfinite(
+                    mh12010C21FFrontRadiusBeforeCorrection
+                );
+
+            std::cout
+                << "[MH1.20.10C.21F.1 FRONT BEFORE CORRECTION]"
+                << " radius="
+                << mh12010C21FFrontRadiusBeforeCorrection
+                << " radiusError="
+                << (
+                    mh12010C21FFrontRadiusBeforeCorrection
+                    - loadedHelixRadius
+                    )
+                << " valid="
+                << mh12010C21FBeforeValid
+                << std::endl;
+        }
+    }
+
+
 
     if (!newIncrementNodes.empty()
         && !formedHistoryNodes.empty())
@@ -8954,23 +11270,418 @@ if (
         const std::size_t count =
             newIncrementNodes.size();
 
-        if (count > 1)
-        {
-            for (std::size_t i = 0;
-                i < count;
-                ++i)
-            {
-                const double fraction =
-                    static_cast<double>(i + 1)
-                    / static_cast<double>(count);
+       // if (count > 1)
+       // {
+         //   for (std::size_t i = 0;
+           //     i < count;
+           //     ++i)
+           // {
+            //    const double fraction =
+            //        static_cast<double>(i + 1)
+            //        / static_cast<double>(count);
 
-                newIncrementNodes[i].pos +=
-                    junctionCorrection
-                    * fraction;
-            }
+              //  newIncrementNodes[i].pos +=
+                //    junctionCorrection
+                  //  * fraction;
+            //}
+       // }
+
+
+        // ============================================================
+// MH1.20.10C.21I.1
+//
+// PRODUCTION RIGID-JUNCTION REPLACEMENT
+//
+// OLD production behavior:
+//
+//     newIncrementNodes[i].pos +=
+//         junctionCorrection * fraction;
+//
+// distributed the endpoint correction through the fresh
+// increment and therefore DEFORMED its helix geometry.
+//
+// NEW production behavior:
+//
+//     apply ONE rigid screw transform to the entire fresh
+//     increment:
+//
+//         1. rotation about loaded support / helix axis
+//         2. translation along the same axis
+//
+// This preserves:
+//
+//     - every segment length
+//     - local curvature
+//     - local torsion
+//     - loaded helix radius
+//     - node spacing
+//
+// The source endpoint is:
+//
+//     newIncrementNodes.back()
+//
+// The target endpoint is:
+//
+//     formedHistoryNodes.front()
+//
+// IMPORTANT:
+//
+// A rigid screw transform cannot change radius.
+// Therefore a tiny radial junction gap may remain.
+// C21C already proved that this residual is extremely small.
+//
+// ============================================================
+
+
+// ------------------------------------------------------------
+// Support / helix axis.
+//
+// Use the SAME authoritative loaded support axis that all
+// previous diagnostics and rigid-shadow reconstruction use.
+// ------------------------------------------------------------
+
+        Vec3D rigidJunctionAxisDirection =
+            requiredSupportAxisFrame.T;
+
+        const Vec3D rigidJunctionAxisPoint =
+            requiredSupportAxisFrame.P;
+
+
+        if (rigidJunctionAxisDirection.lengthSquared() < 1e-12)
+        {
+            return false;
+        }
+
+        rigidJunctionAxisDirection =
+            rigidJunctionAxisDirection.normalized();
+
+
+        // ------------------------------------------------------------
+        // SOURCE:
+        //
+        // Junction-side endpoint of the fresh local increment.
+        // ------------------------------------------------------------
+
+        const Vec3D rigidSourceRelative =
+            newLast.pos
+            - rigidJunctionAxisPoint;
+
+        const double rigidSourceAxialCoordinate =
+            dot(
+                rigidSourceRelative,
+                rigidJunctionAxisDirection
+            );
+
+        const Vec3D rigidSourceRadial =
+            rigidSourceRelative
+            - rigidJunctionAxisDirection
+            * rigidSourceAxialCoordinate;
+
+
+        // ------------------------------------------------------------
+        // TARGET:
+        //
+        // Persistent front of already-formed history.
+        // ------------------------------------------------------------
+
+        const Vec3D rigidTargetRelative =
+            oldFirst.pos
+            - rigidJunctionAxisPoint;
+
+        const double rigidTargetAxialCoordinate =
+            dot(
+                rigidTargetRelative,
+                rigidJunctionAxisDirection
+            );
+
+        const Vec3D rigidTargetRadial =
+            rigidTargetRelative
+            - rigidJunctionAxisDirection
+            * rigidTargetAxialCoordinate;
+
+
+        // ------------------------------------------------------------
+        // Validate radial directions.
+        // ------------------------------------------------------------
+
+        if (
+            rigidSourceRadial.lengthSquared() < 1e-12
+            || rigidTargetRadial.lengthSquared() < 1e-12
+            )
+        {
+            return false;
         }
 
 
+        const double rigidSourceRadius =
+            rigidSourceRadial.length();
+
+        const double rigidTargetRadius =
+            rigidTargetRadial.length();
+
+
+        const Vec3D rigidSourceRadialUnit =
+            rigidSourceRadial
+            / rigidSourceRadius;
+
+        const Vec3D rigidTargetRadialUnit =
+            rigidTargetRadial
+            / rigidTargetRadius;
+
+
+        // ------------------------------------------------------------
+        // Signed angular correction around support axis.
+        //
+        // atan2:
+        //
+        //     sin = axis · (source × target)
+        //     cos = source · target
+        //
+        // gives the signed rotation needed to move source radial
+        // direction toward target radial direction.
+        // ------------------------------------------------------------
+
+        const double rigidRotationSin =
+            dot(
+                rigidJunctionAxisDirection,
+                cross(
+                    rigidSourceRadialUnit,
+                    rigidTargetRadialUnit
+                )
+            );
+
+        const double rigidRotationCos =
+            std::clamp(
+                dot(
+                    rigidSourceRadialUnit,
+                    rigidTargetRadialUnit
+                ),
+                -1.0,
+                1.0
+            );
+
+        const double rigidJunctionRotationAngle =
+            std::atan2(
+                rigidRotationSin,
+                rigidRotationCos
+            );
+
+
+        // ------------------------------------------------------------
+        // Axial correction.
+        //
+        // Rotation handles circumferential alignment.
+        // Translation handles position along helix axis.
+        // ------------------------------------------------------------
+
+        const double rigidJunctionAxialTranslation =
+            rigidTargetAxialCoordinate
+            - rigidSourceAxialCoordinate;
+
+
+        if (
+            !std::isfinite(rigidJunctionRotationAngle)
+            || !std::isfinite(rigidJunctionAxialTranslation)
+            )
+        {
+            return false;
+        }
+
+
+        // ------------------------------------------------------------
+        // PRODUCTION CHANGE.
+        //
+        // Apply exactly the SAME transform to every fresh node.
+        //
+        // This is the critical difference from the deleted distributed
+        // correction:
+        //
+        // OLD:
+        //
+        //     each node moved by a different amount
+        //
+        // NEW:
+        //
+        //     every node receives one identical rigid transform
+        //
+        // ------------------------------------------------------------
+
+        for (PipeNode& node : newIncrementNodes)
+        {
+            RigidTransformUtils::rotateNodeAroundAxis(
+                node,
+                rigidJunctionAxisPoint,
+                rigidJunctionAxisDirection,
+                rigidJunctionRotationAngle
+            );
+
+            node.pos +=
+                rigidJunctionAxisDirection
+                * rigidJunctionAxialTranslation;
+        }
+
+
+        // ============================================================
+        // MH1.20.10C.21I.1
+        //
+        // Immediate production acceptance diagnostic.
+        //
+        // Check:
+        //
+        //     - residual endpoint gap
+        //     - radial compatibility
+        //     - tangent continuity
+        //
+        // Do NOT force residual gap to zero.
+        // A rigid screw transform preserves radius, so any tiny
+        // source/target radius difference remains.
+        // ============================================================
+
+        const PipeNode& rigidCorrectedLast =
+            newIncrementNodes.back();
+
+
+        const double rigidProductionJunctionGap =
+            (
+                oldFirst.pos
+                - rigidCorrectedLast.pos
+                ).length();
+
+
+        double rigidProductionTangentDot =
+            0.0;
+
+        if (
+            rigidCorrectedLast.T.lengthSquared() > 1e-12
+            && oldFirst.T.lengthSquared() > 1e-12
+            )
+        {
+            rigidProductionTangentDot =
+                dot(
+                    rigidCorrectedLast.T.normalized(),
+                    oldFirst.T.normalized()
+                );
+        }
+
+
+        const double rigidProductionRadiusMismatch =
+            std::abs(
+                rigidTargetRadius
+                - rigidSourceRadius
+            );
+
+
+        const bool rigidProductionJunctionValid =
+            std::isfinite(rigidProductionJunctionGap)
+            && std::isfinite(rigidProductionTangentDot)
+            && std::isfinite(rigidProductionRadiusMismatch);
+
+
+        std::cout
+            << "[MH1.20.10C.21I.1 PRODUCTION RIGID JUNCTION]"
+
+            << " rotationAngle="
+            << rigidJunctionRotationAngle
+
+            << " axialTranslation="
+            << rigidJunctionAxialTranslation
+
+            << " sourceRadius="
+            << rigidSourceRadius
+
+            << " targetRadius="
+            << rigidTargetRadius
+
+            << " radiusMismatch="
+            << rigidProductionRadiusMismatch
+
+            << " junctionGap="
+            << rigidProductionJunctionGap
+
+            << " tangentDot="
+            << rigidProductionTangentDot
+
+            << " valid="
+            << rigidProductionJunctionValid
+
+            << std::endl;
+
+
+
+        // ============================================================
+        // MH1.20.10C.21F.2
+        //
+        // Measure the SAME increment front after the production
+        // distributed junction correction, but before insertion into
+        // persistent history.
+        //
+        // Diagnostic only.
+        // ============================================================
+
+        if (
+            mh12010C21FBeforeValid
+            && !newIncrementNodes.empty()
+            )
+        {
+            Vec3D axisDirection =
+                requiredSupportAxisFrame.T;
+
+            if (axisDirection.lengthSquared() > 1e-12)
+            {
+                axisDirection =
+                    axisDirection.normalized();
+
+                const Vec3D relative =
+                    newIncrementNodes.front().pos
+                    - requiredSupportAxisFrame.P;
+
+                const double axialCoordinate =
+                    dot(
+                        relative,
+                        axisDirection
+                    );
+
+                const Vec3D radialVector =
+                    relative
+                    - axisDirection * axialCoordinate;
+
+                mh12010C21FFrontRadiusAfterCorrection =
+                    radialVector.length();
+
+                mh12010C21FAfterValid =
+                    std::isfinite(
+                        mh12010C21FFrontRadiusAfterCorrection
+                    );
+
+                const double radiusBeforeError =
+                    mh12010C21FFrontRadiusBeforeCorrection
+                    - loadedHelixRadius;
+
+                const double radiusAfterError =
+                    mh12010C21FFrontRadiusAfterCorrection
+                    - loadedHelixRadius;
+
+                const double radiusMutation =
+                    mh12010C21FFrontRadiusAfterCorrection
+                    - mh12010C21FFrontRadiusBeforeCorrection;
+
+                std::cout
+                    << "[MH1.20.10C.21F.2 FRONT AFTER CORRECTION]"
+                    << " radiusBefore="
+                    << mh12010C21FFrontRadiusBeforeCorrection
+                    << " radiusBeforeError="
+                    << radiusBeforeError
+                    << " radiusAfter="
+                    << mh12010C21FFrontRadiusAfterCorrection
+                    << " radiusAfterError="
+                    << radiusAfterError
+                    << " radiusMutation="
+                    << radiusMutation
+                    << " valid="
+                    << mh12010C21FAfterValid
+                    << std::endl;
+            }
+        }
 
 
         const Vec3D positionDelta =
@@ -9052,6 +11763,64 @@ if (
     );
 
     // ============================================================
+// MH1.20.10C.21E.1
+//
+// Store the radial error of the NEW persistent history front
+// immediately after insertion.
+//
+// This tells us what radial state is born at insertion time.
+//
+// Diagnostic only.
+// ============================================================
+
+    if (!formedHistoryNodes.empty())
+    {
+        Vec3D axisDirection =
+            requiredSupportAxisFrame.T;
+
+        if (axisDirection.lengthSquared() > 1e-12)
+        {
+            axisDirection =
+                axisDirection.normalized();
+
+            const Vec3D relative =
+                formedHistoryNodes.front().pos
+                - requiredSupportAxisFrame.P;
+
+            const double axialCoordinate =
+                dot(
+                    relative,
+                    axisDirection
+                );
+
+            const Vec3D radialVector =
+                relative
+                - axisDirection * axialCoordinate;
+
+            const double radius =
+                radialVector.length();
+
+            mh12010C21EStoredFrontRadiusError =
+                radius - loadedHelixRadius;
+
+            mh12010C21EStoredFrontRadiusValid =
+                std::isfinite(
+                    mh12010C21EStoredFrontRadiusError
+                );
+
+            std::cout
+                << "[MH1.20.10C.21E.1 FRONT AFTER INSERT]"
+                << " radius="
+                << radius
+                << " radiusError="
+                << mh12010C21EStoredFrontRadiusError
+                << " valid="
+                << mh12010C21EStoredFrontRadiusValid
+                << std::endl;
+        }
+    }
+
+    // ============================================================
     // MH1.20.10C.19C
     //
     // Record the semantic origin of the node that has NOW become
@@ -9063,8 +11832,15 @@ if (
     // Diagnostic only.
     // ============================================================
 
+
+
     if (!formedHistoryNodes.empty())
     {
+
+       
+
+
+
         mh12010C19FrontLocalSourceIndex = 1;
 
         mh12010C19FrontRepresentedLocalLength =
@@ -9409,7 +12185,7 @@ rebuildRequiredSupportGeometry()
     constexpr double tolerance =
         1e-9;
 
-    const bool accepted =
+    const bool accepted =  
         supportRadiusError <= tolerance;
 
     std::cout

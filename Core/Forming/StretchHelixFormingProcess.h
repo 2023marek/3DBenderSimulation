@@ -204,6 +204,12 @@ private:
     StretchBendingEvaluationResult
         stretchEvaluation;
 
+    double mh12010C21EStoredFrontRadiusError = 0.0;
+    bool mh12010C21EStoredFrontRadiusValid = false;
+
+    std::vector<PipeNode> mh12010C21HRigidHistoryNodes;
+
+    bool mh12010C21HRigidHistoryValid = false;
 
 
 
