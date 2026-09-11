@@ -189,27 +189,16 @@ private:
     // Diagnostic only.
     // ------------------------------------------------------------
 
-    std::size_t mh12010C19FrontLocalSourceIndex = 0;
-
-    double mh12010C19FrontRepresentedLocalLength = 0.0;
-
-    double mh12010C19FrontActualDeltaLength = 0.0;
-
-    bool mh12010C19FrontOriginValid = false;
+    
 
 
-    Vec3D mh12010C18PreviousHistoryFrontPosition;
+   // Vec3D mh12010C18PreviousHistoryFrontPosition;
 
-    bool mh12010C18PreviousHistoryFrontValid = false;
+  //  bool mh12010C18PreviousHistoryFrontValid = false;
     StretchBendingEvaluationResult
         stretchEvaluation;
 
-    double mh12010C21EStoredFrontRadiusError = 0.0;
-    bool mh12010C21EStoredFrontRadiusValid = false;
-
-   // std::vector<PipeNode> mh12010C21HRigidHistoryNodes;
-  //  bool mh12010C21HRigidHistoryValid = false;
-
+ 
 
     double targetFinalCurvature =
         0.0;
