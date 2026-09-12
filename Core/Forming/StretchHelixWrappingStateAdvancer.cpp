@@ -196,26 +196,9 @@ void StretchHelixWrappingStateAdvancer::advance(
         formingRisePerRadian
         * deltaAngle;
 
-    const double measuredRisePerRadian =
-        std::abs(deltaAngle) > 1e-12
-        ? deltaAxial / deltaAngle
-        : 0.0;
+   
 
-    std::cout
-        << "[MH1.20.8B FORMING PITCH]"
-        << " deltaAngle="
-        << deltaAngle
-        << " deltaAxial="
-        << deltaAxial
-        << " risePerRadian="
-        << measuredRisePerRadian
-        << " formingRisePerRadian="
-        << formingRisePerRadian
-        << " inputAxialSpeed="
-        << input.axialSpeed
-        << " inputRotationSpeed="
-        << input.rotationSpeed
-        << std::endl;
+   
 
     state.supportRotationAngle +=
         deltaAngle;
@@ -247,21 +230,5 @@ void StretchHelixWrappingStateAdvancer::advance(
             1.0;
     }
 
-    std::cout
-        << "[STRETCH HELIX MACHINE STATE]"
-        << " dtRequested="
-        << dt
-        << " dtActual="
-        << actualDt
-        << " wrappedLength="
-        << state.wrappedLength
-        << " rotationAngle="
-        << state.supportRotationAngle
-        << " axialPosition="
-        << state.supportAxialPosition
-        << " progress="
-        << state.progress
-        << " complete="
-        << state.complete
-        << std::endl;
+    
 }

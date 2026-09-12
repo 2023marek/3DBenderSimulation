@@ -5797,12 +5797,7 @@ advanceDebugStretchHelixWrappingTime(
 
     if (debugStretchHelixProcess.isComplete())
     {
-        std::cout
-            << "[STRETCH HELIX TIME STEP]"
-            << " ignored=1"
-            << " reason=AlreadyComplete"
-            << std::endl;
-
+        
         return;
     }
 
@@ -5810,46 +5805,9 @@ advanceDebugStretchHelixWrappingTime(
         dt
     );
 
-    // Temporary I didn't see current orangegeometry
-    const auto& currentNodes =
-        debugStretchHelixProcess.getCurrentNodes();
-
-    const auto& referenceNodes =
-        debugStretchHelixProcess
-        .getReferenceResult()
-        .nodes;
-
-    std::cout
-        << "[STRETCH HELIX PROCESS GEOMETRY]"
-        << " currentNodes="
-        << currentNodes.size()
-        << " referenceNodes="
-        << referenceNodes.size()
-        << std::endl;
    
-
-
-
-    const StretchHelixWrappingState& state =
-        debugStretchHelixProcess.getState();
-
-    std::cout
-        << "[STRETCH HELIX TIME STEP]"
-        << " dt="
-        << dt
-        << " elapsedTime="
-        << state.elapsedTime
-        << " wrappedLength="
-        << state.wrappedLength
-        << " frontS="
-        << state.contactFrontS
-        << " progress="
-        << state.progress
-        << " complete="
-        << state.complete
-        << " geometryValid="
-        << debugStretchHelixProcess.isValid()
-        << std::endl;
+   
+     
 }
 
 
